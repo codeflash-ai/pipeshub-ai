@@ -25,13 +25,14 @@ class SyncPoint(ISyncPoint):
 
 
     def _get_full_sync_point_key(self, sync_point_key: str) -> str:
-        return f"{self.org_id}/{self.connector_name}/{self.sync_data_point_type.value}/{sync_point_key}"
+        return f"{self._sync_point_key_prefix}{sync_point_key}"
 
     def __init__(self, connector_name: Connectors, org_id: str, sync_data_point_type: SyncDataPointType, data_store_provider: DataStoreProvider) -> None:
         self.connector_name = connector_name.value
         self.org_id = org_id
         self.data_store_provider = data_store_provider
         self.sync_data_point_type = sync_data_point_type
+        self._sync_point_key_prefix = f"{self.org_id}/{self.connector_name}/{self.sync_data_point_type.value}/"
 
     async def create_sync_point(self, sync_point_key: str, sync_point_data: Dict[str, Any]) -> Dict[str, Any]:
         full_sync_point_key = self._get_full_sync_point_key(sync_point_key)
