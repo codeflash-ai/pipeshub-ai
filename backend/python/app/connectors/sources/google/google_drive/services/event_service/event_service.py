@@ -176,12 +176,17 @@ class GoogleDriveEventService(BaseEventService):
             if not org_id:
                 raise ValueError("orgId is required")
 
-            org_apps = await self.arango_service.get_org_apps(org_id)
-            self.logger.info(f"Org apps: {org_apps}")
-            if Connectors.GOOGLE_DRIVE.value in org_apps:
+            # Use set for fast membership testing (O(1)) instead of linear search (O(n))
+            # We need to use either appId or _key depending on the collection schema and client usage.
+            org_apps_set = await self.arango_service.get_org_apps_set(org_id)
+            self.logger.info(f"Org apps: {org_apps_set}")
+            if Connectors.GOOGLE_DRIVE.value in org_apps_set:
                 await self._handle_resync_drive(payload)
             else:
-                self.logger.info(f"Google Drive app not enabled for org {org_id}. Skipping resync_drive for connector_public_url_changed event.")
+                # Only log for skipped case, avoids interpolating on every transaction
+                self.logger.info(
+                    f"Google Drive app not enabled for org {org_id}. Skipping resync_drive for connector_public_url_changed event."
+                )
             return True
         except Exception as e:
             self.logger.error(
