@@ -218,19 +218,16 @@ class GoogleDriveEventService(BaseEventService):
     async def _handle_reindex_failed(self, payload: Dict[str, Any]) -> bool:
         """Reindex failed records for Google Drive"""
         try:
-            self.logger.info(f"Reindex failed payload for Google Drive: {payload}")
             org_id = payload.get("orgId")
             connector = payload.get("connector")
             if not org_id or not connector:
                 self.logger.info(f"Org ID: {org_id}, Connector: {connector}")
                 raise ValueError("orgId and connector are required")
-
-            if connector == Connectors.GOOGLE_DRIVE.value:
-                await self.sync_tasks.drive_manual_sync_control("reindex", org_id)
-            else:
+            if connector != Connectors.GOOGLE_DRIVE.value:
                 self.logger.warning(f"Connector {connector} is not Google Drive, skipping reindex")
                 return True
-
+            self.logger.info(f"Reindex failed payload for Google Drive: {payload}")
+            await self.sync_tasks.drive_manual_sync_control("reindex", org_id)
             return True
         except Exception as e:
             self.logger.error("Error re-indexing failed Google Drive records: %s", str(e))
