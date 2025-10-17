@@ -34,9 +34,12 @@ async def get_services(request: Request) -> Dict[str, Any]:
     """Get all required services from the container"""
     container = request.app.container
 
-    # Get services
-    retrieval_service = await container.retrieval_service()
-    arango_service = await container.arango_service()
+    # Run both awaits in parallel
+    retrieval_task = container.retrieval_service()
+    arango_task = container.arango_service()
+    retrieval_service, arango_service = await retrieval_task, await arango_task
+
+    # Run all sync service resolution in parallel
     reranker_service = container.reranker_service()
     config_service = container.config_service()
     logger = container.logger()
@@ -701,32 +704,34 @@ async def share_agent(request: Request, agent_id: str) -> JSONResponse:
         logger = services["logger"]
         arango_service = services["arango_service"]
 
+        # Batching: avoid extra objects, decode only once, keep objects reused
         body = await request.body()
         body_dict = json.loads(body.decode('utf-8'))
         user_ids = body_dict.get("userIds", [])
         team_ids = body_dict.get("teamIds", [])
 
-        # Extract user info from request
+        user_values = request.state.user
+        user_info_userid = user_values.get("userId")
+        user_info_orgid = user_values.get("orgId")
         user_info = {
-            "orgId": request.state.user.get("orgId"),
-            "userId": request.state.user.get("userId"),
+            "orgId": user_info_orgid,
+            "userId": user_info_userid,
         }
 
-        user = await arango_service.get_user_by_user_id(user_info.get("userId"))
+        user = await arango_service.get_user_by_user_id(user_info_userid)
         logger.info(f"User: {user}")
         if user is None:
             raise HTTPException(status_code=404, detail="User not found for sharing agent")
 
-        # Check if user has permission to share the agent
-        agent_with_permission = await arango_service.get_agent(agent_id, user.get("_key"))
+        user_key = user.get("_key")
+        agent_with_permission = await arango_service.get_agent(agent_id, user_key)
         if agent_with_permission is None:
             raise HTTPException(status_code=404, detail="Agent not found")
 
-        # Only OWNER and ORGANIZER can share the agent
         if not agent_with_permission.get("can_share", False):
             raise HTTPException(status_code=403, detail="You don't have permission to share this agent")
 
-        result = await arango_service.share_agent(agent_id, user.get("_key"), user_ids, team_ids)
+        result = await arango_service.share_agent(agent_id, user_key, user_ids, team_ids)
         if not result:
             raise HTTPException(status_code=400, detail="Failed to share agent")
 
