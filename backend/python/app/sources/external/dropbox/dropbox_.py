@@ -43,25 +43,37 @@ class DropboxDataSource:
             dropboxClient (DropboxClient): Dropbox client instance
         """
         self._dropbox_client = dropboxClient
-        self._user_client = None
-        self._team_client = None
+        self._user_client: Optional[Dropbox] = None
+        self._team_client: Optional[DropboxTeam] = None
 
     async def _get_user_client(self, team_member_id: Optional[str] = None, as_admin: bool = False) -> Union[Dropbox, DropboxTeam]:
         """
         Gets a Dropbox client scoped to a specific user or admin.
         """
+        # Cache user and team clients to avoid repeated costly construction.
+        if team_member_id is None and not as_admin:
+            # Cache single-user or team-level clients
+            if self._user_client is not None:
+                return self._user_client
+            if self._team_client is not None:
+                return self._team_client
+
         base_client = self._dropbox_client.get_client().create_client()
 
         # If this is a team client and a member ID is provided, scope it
         if isinstance(base_client, DropboxTeam) and team_member_id:
             if as_admin:
-                # Return a client scoped as an Admin
+                # Return a client scoped as an Admin (no caching: per-member)
                 return base_client.as_admin(team_member_id)
             else:
-                # Return a client scoped as a User
+                # Return a client scoped as a User (no caching: per-member)
                 return base_client.as_user(team_member_id)
 
-        # Otherwise, return the base client (either non-team or team-level)
+        # Otherwise, cache and return the base client (either non-team or team-level)
+        if isinstance(base_client, DropboxTeam):
+            self._team_client = base_client
+        else:
+            self._user_client = base_client
         return base_client
 
 
@@ -192,10 +204,12 @@ class DropboxDataSource:
             :param str query: The string that you'd like to be echoed back to you.
             :rtype: :class:`dropbox.check.EchoResult`
         """
-        client = await self._get_user_client()
+        # Cache asyncio.get_running_loop() for minor performance gain on repeated calls
+        loop = asyncio.get_running_loop()
         try:
-            loop = asyncio.get_running_loop()
-            response = await loop.run_in_executor(None, lambda: client.check_app(query=query))
+            # _get_user_client may be slow; cache result if possible
+            client = await self._get_user_client()
+            response = await loop.run_in_executor(None, client.check_app, query)
             return DropboxResponse(success=True, data=response)
         except Exception as e:
             return DropboxResponse(success=False, error=str(e))
