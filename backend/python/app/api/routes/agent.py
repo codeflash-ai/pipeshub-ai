@@ -485,8 +485,7 @@ async def create_agent(request: Request) -> JSONResponse:
             "userId": request.state.user.get("userId"),
         }
         time = get_epoch_timestamp_in_ms()
-        body = await request.body()
-        body_dict = json.loads(body.decode('utf-8'))
+        body_dict = await request.json()
         user = await arango_service.get_user_by_user_id(user_info.get("userId"))
         logger.info(f"User: {user}")
         if user is None:
