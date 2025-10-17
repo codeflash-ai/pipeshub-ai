@@ -11,11 +11,8 @@ from app.core.celery_app import CeleryApp
 class DriveSyncTasks(BaseSyncTasks):
     """Drive-specific sync tasks"""
 
-    def __init__(
-        self, logger, celery_app: CeleryApp, arango_service
-    ) -> None:
+    def __init__(self, logger, celery_app: CeleryApp, arango_service) -> None:
         super().__init__(logger, celery_app, arango_service)
-
         # Initialize sync services as None - they will be registered later
         self.drive_sync_service = None
         self.logger.info("🔄 Initializing DriveSyncTasks")
@@ -26,7 +23,12 @@ class DriveSyncTasks(BaseSyncTasks):
         self.register_connector_sync_control("drive", self.drive_manual_sync_control)
         self.logger.info("✅ Drive sync service registered")
 
-    async def drive_manual_sync_control(self, action: str, org_id: Optional[str] = None, user_email: Optional[str] = None) -> Dict[str, Any]:
+    async def drive_manual_sync_control(
+        self,
+        action: str,
+        org_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Manual task to control Drive sync operations
         Args:
@@ -43,7 +45,7 @@ class DriveSyncTasks(BaseSyncTasks):
                 f"Manual sync control - Action: {action} at {current_time}"
             )
 
-            if action == "reindex":
+            async def do_reindex():
                 self.logger.info("Re-indexing failed records")
                 success = await self.drive_sync_service.reindex_failed_records(org_id)
                 if success:
@@ -53,7 +55,7 @@ class DriveSyncTasks(BaseSyncTasks):
                     }
                 return {"status": "error", "message": "Failed to queue re-indexing"}
 
-            if action == "start":
+            async def do_start():
                 self.logger.info("Starting sync")
                 success = await self.drive_sync_service.start(org_id)
                 if success:
@@ -63,7 +65,7 @@ class DriveSyncTasks(BaseSyncTasks):
                     }
                 return {"status": "error", "message": "Failed to queue sync start"}
 
-            elif action == "pause":
+            async def do_pause():
                 self.logger.info("Pausing sync")
 
                 self.drive_sync_service._stop_requested = True
@@ -82,7 +84,7 @@ class DriveSyncTasks(BaseSyncTasks):
                     }
                 return {"status": "error", "message": "Failed to queue sync pause"}
 
-            elif action == "resume":
+            async def do_resume():
                 success = await self.drive_sync_service.resume(org_id)
                 if success:
                     return {
@@ -91,7 +93,7 @@ class DriveSyncTasks(BaseSyncTasks):
                     }
                 return {"status": "error", "message": "Failed to queue sync resume"}
 
-            elif action == "init":
+            async def do_init():
                 self.logger.info("Initializing sync")
                 success = await self.drive_sync_service.initialize(org_id)
                 if success:
@@ -99,9 +101,12 @@ class DriveSyncTasks(BaseSyncTasks):
                         "status": "accepted",
                         "message": "Sync initialization operation queued",
                     }
-                return {"status": "error", "message": "Failed to queue sync initialization"}
+                return {
+                    "status": "error",
+                    "message": "Failed to queue sync initialization",
+                }
 
-            elif action == "resync":
+            async def do_resync():
                 self.logger.info(f"Resyncing sync for user: {user_email}")
 
                 if user_email:
@@ -111,47 +116,80 @@ class DriveSyncTasks(BaseSyncTasks):
                     self.logger.info(f"User: {user}")
                     if not user:
                         self.logger.error(f"User not found: {user_email}")
-                        return {"status": "error", "message": f"User not found: {user_email}"}
+                        return {
+                            "status": "error",
+                            "message": f"User not found: {user_email}",
+                        }
 
                     user_doc = await self.arango_service.get_document(user, "users")
                     self.logger.info(f"User document: {user_doc}")
                     if not user_doc:
                         self.logger.error(f"User document not found: {user_email}")
-                        return {"status": "error", "message": f"User document not found: {user_email}"}
+                        return {
+                            "status": "error",
+                            "message": f"User document not found: {user_email}",
+                        }
 
                     if not await self.drive_sync_service.resync_drive(org_id, user_doc):
-                        self.logger.error(f"Error resyncing Google Drive user {user_email}")
-                        return {"status": "error", "message": f"Failed to resync user {user_email}"}
+                        self.logger.error(
+                            f"Error resyncing Google Drive user {user_email}"
+                        )
+                        return {
+                            "status": "error",
+                            "message": f"Failed to resync user {user_email}",
+                        }
 
                     self.logger.info(f"Successfully resynced user: {user_email}")
                 else:
                     # Resync all users in the organization
                     self.logger.info("Resyncing all users in organization")
                     users = await self.arango_service.get_users(org_id, active=True)
-                    resync_success = True
-                    for user in users:
-                        if not await self.drive_sync_service.resync_drive(org_id, user):
-                            self.logger.error(f"Error resyncing Google Drive user {user['email']}")
-                            resync_success = False
-                            continue
-
-                    if not resync_success:
+                    resync_failed = [
+                        user
+                        for user in users
+                        if not await self.drive_sync_service.resync_drive(org_id, user)
+                    ]
+                    for user in resync_failed:
+                        self.logger.error(
+                            f"Error resyncing Google Drive user {user['email']}"
+                        )
+                    if resync_failed:
                         self.logger.error("Failed to resync some users")
-                        return {"status": "error", "message": "Failed to resync some users"}
+                        return {
+                            "status": "error",
+                            "message": "Failed to resync some users",
+                        }
 
                 return {
                     "status": "accepted",
                     "message": "Sync resync operation queued",
                 }
-            elif action == "user":
+
+            async def do_user():
                 self.logger.info("Syncing user")
-                success = await self.drive_sync_service.sync_specific_user(org_id, user_email)
+                success = await self.drive_sync_service.sync_specific_user(
+                    org_id, user_email
+                )
                 if success:
                     return {
                         "status": "accepted",
                         "message": "Sync user operation queued",
                     }
                 return {"status": "error", "message": "Failed to queue sync user"}
+
+            actions_map = {
+                "reindex": do_reindex,
+                "start": do_start,
+                "pause": do_pause,
+                "resume": do_resume,
+                "init": do_init,
+                "resync": do_resync,
+                "user": do_user,
+            }
+
+            action_func = actions_map.get(action)
+            if action_func:
+                return await action_func()
 
             return {"status": "error", "message": f"Invalid action: {action}"}
         except Exception as e:
@@ -174,7 +212,9 @@ class DriveSyncTasks(BaseSyncTasks):
                         drive_channel_data["token"],
                         drive_channel_data["expiration"],
                     )
-                    self.logger.info("✅ Drive watch set up successfully for user: %s", email)
+                    self.logger.info(
+                        "✅ Drive watch set up successfully for user: %s", email
+                    )
                 else:
                     self.logger.warning("Changes watch not created for user: %s", email)
             except Exception as e:
