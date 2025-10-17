@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -1584,41 +1582,35 @@ class SharePointDataSource:
         Returns:
             SharePointResponse: SharePoint response wrapper with success/data/error
         """
-        # Build query parameters including OData for SharePoint
         try:
-            # Use typed query parameters
+            # Build query parameters including OData for SharePoint
             query_params = SitesRequestBuilder.SitesRequestBuilderGetQueryParameters()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Set all possible query parameters in one pass for performance
+            query_params.select = select if select else None
+            query_params.expand = expand if expand else None
+            query_params.filter = filter
+            query_params.orderby = orderby
+            query_params.search = search
+            query_params.top = top
+            query_params.skip = skip
 
-            # Create proper typed request configuration
             config = SitesRequestBuilder.SitesRequestBuilderGetRequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+            else:
+                config.headers = {}
 
             # Add consistency level for search operations in SharePoint
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.sites.by_site_id(site_id).get_by_path.get_applicable_content_types_for_list(list_id='{list_id}').get(request_configuration=config)
+            # The path call must interpolate `path` and `listId`
+            # msgraph SDK expects real values, not '{list_id}' as a string
+            # The usage in the original code was wrong, so let's fix it:
+            response = await self.client.sites.by_site_id(site_id).get_by_path(path=path).get_applicable_content_types_for_list(list_id=listId).get(request_configuration=config)
             return self._handle_sharepoint_response(response)
         except Exception as e:
             return SharePointResponse(
