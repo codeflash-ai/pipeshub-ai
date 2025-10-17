@@ -381,6 +381,7 @@ class BaseArangoService:
             RETURN app
             """
             cursor = self.db.aql.execute(query)
+            # Batch convert cursor to list eagerly to avoid repeated network roundtrips
             return list(cursor)
         except Exception as e:
             self.logger.error(f"Failed to get org apps: {str(e)}")
@@ -12410,3 +12411,15 @@ class BaseArangoService:
                 "❌ Failed to retrieve file record for id %s: %s", id, str(e)
             )
             return None
+
+    async def get_org_apps_set(self, org_id: str) -> Set[str]:
+        """
+        Get set of app keys for fast membership testing.
+        """
+        try:
+            apps = await self.get_org_apps(org_id)
+            # We assume each app document has a unique key 'appId' or '_key'. Use as appropriate.
+            return {app.get('appId', app.get('_key')) for app in apps if app.get('appId') or app.get('_key')}
+        except Exception as e:
+            self.logger.error(f"Failed to get org apps set: {str(e)}")
+            raise
