@@ -817,26 +817,40 @@ class JiraDataSource:
         startingAfter: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get available transitions\n\nHTTP GET /rest/api/3/bulk/issues/transition\nQuery params:\n  - issueIdsOrKeys (str, required)\n  - endingBefore (str, optional)\n  - startingAfter (str, optional)"""
+        """Auto-generated from OpenAPI: Get available transitions
+
+HTTP GET /rest/api/3/bulk/issues/transition
+Query params:
+  - issueIdsOrKeys (str, required)
+  - endingBefore (str, optional)
+  - startingAfter (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _query['issueIdsOrKeys'] = issueIdsOrKeys
+        _headers: Dict[str, Any] = dict(headers) if headers else {}  # micro-optimization
+        # Avoid repeated dict empty construction
+        _path = {}
+        _query = {
+            'issueIdsOrKeys': issueIdsOrKeys
+        }
         if endingBefore is not None:
             _query['endingBefore'] = endingBefore
         if startingAfter is not None:
             _query['startingAfter'] = startingAfter
         _body = None
         rel_path = '/rest/api/3/bulk/issues/transition'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Fast path: skip URL formatting if no path params
+        if not _path:
+            url = f"{self.base_url}{rel_path}"
+        else:
+            url = self.base_url + _safe_format_url(rel_path, _path)
+        # Use local refs for hot helpers
+        as_str_dict = _as_str_dict
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=as_str_dict(_headers),
+            path_params=as_str_dict(_path),
+            query_params=as_str_dict(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20095,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
