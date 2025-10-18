@@ -4,6 +4,8 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+_empty_str_dict: Dict[str, str] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -1315,7 +1317,7 @@ class JiraDataSource:
         """Auto-generated from OpenAPI: Get component\n\nHTTP GET /rest/api/3/component/{id}\nPath params:\n  - id (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers = headers if headers is not None else {}
         _path: Dict[str, Any] = {
             'id': id,
         }
@@ -20081,9 +20083,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20101,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return _empty_str_dict
+    return {str(k): _serialize_value(v) for k, v in d.items()}
