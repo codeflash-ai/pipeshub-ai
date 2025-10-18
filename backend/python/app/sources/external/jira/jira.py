@@ -2121,23 +2121,36 @@ class JiraDataSource:
         id: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get dashboard\n\nHTTP GET /rest/api/3/dashboard/{id}\nPath params:\n  - id (str)"""
+        """Auto-generated from OpenAPI: Get dashboard
+
+HTTP GET /rest/api/3/dashboard/{id}
+Path params:
+  - id (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
+
+        # Optimize trivial dict handling
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        # Only one path param, shortcut
+        _path: Dict[str, Any] = {'id': id}
+        # No query params, use empty dict literal
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/rest/api/3/dashboard/{id}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Fast-path for a single 'id' param replacement
+        # This avoids dict construction and .format_map overhead for this common case.
+        if rel_path == '/rest/api/3/dashboard/{id}' and len(_path) == 1 and 'id' in _path:
+            url = f"{self.base_url}/rest/api/3/dashboard/{_path['id']}"
+        else:
+            url = self.base_url + _safe_format_url(rel_path, _path)
+
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params={'id': str(id)},   # single path param, avoid helper cost
+            query_params={},               # no query params
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,6 +20094,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # Fast path: single param replacement for specific dashboard URLs
+    if template == '/rest/api/3/dashboard/{id}' and 'id' in params and len(params) == 1:
+        return template.replace('{id}', str(params['id']))
     class _SafeDict(dict):
         def __missing__(self, key: str) -> str:
             return '{' + key + '}'
@@ -20102,4 +20118,12 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Empty dict shortcut
+    if not d:
+        return {}
+    # Singleton fast path (path params always {'id': value})
+    if len(d) == 1:
+        k, v = next(iter(d.items()))
+        return {str(k): _serialize_value(v)}
+    # General case
+    return {str(k): _serialize_value(v) for k, v in d.items()}
