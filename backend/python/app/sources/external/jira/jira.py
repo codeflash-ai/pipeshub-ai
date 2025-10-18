@@ -1903,10 +1903,15 @@ class JiraDataSource:
         gadgetId: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Remove gadget from dashboard\n\nHTTP DELETE /rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}\nPath params:\n  - dashboardId (int)\n  - gadgetId (int)"""
+        """Auto-generated from OpenAPI: Remove gadget from dashboard
+
+HTTP DELETE /rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}
+Path params:
+  - dashboardId (int)
+  - gadgetId (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _path: Dict[str, Any] = {
             'dashboardId': dashboardId,
             'gadgetId': gadgetId,
@@ -20081,9 +20086,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Now uses _SafeDict as a static class
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20105,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
+    # No major optimization possible without rewriting _serialize_value
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
