@@ -4,6 +4,9 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+# Singleton empty dicts for (str,str) mapping to avoid repeated allocation
+_EMPTY_STR_DICT: Dict[str, str] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -447,22 +450,29 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get Jira attachment settings\n\nHTTP GET /rest/api/3/attachment/meta"""
+        """Auto-generated from OpenAPI: Get Jira attachment settings
+
+HTTP GET /rest/api/3/attachment/meta"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body = None
+
+        # Use singleton empty dicts when possible to minimize allocations
+        _headers: Dict[str, Any] = dict(headers) if headers else None
+
         rel_path = '/rest/api/3/attachment/meta'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # _safe_format_url returns either rel_path or a formatted string; and _path is always empty
+        url = self.base_url + rel_path  # No need to call _safe_format_url with an empty dict
+
+        # _as_str_dict on empty dict returns singleton; otherwise, converts as before
+        h = _as_str_dict(_headers) if _headers else _EMPTY_STR_DICT
+
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=h,
+            path_params=_EMPTY_STR_DICT,
+            query_params=_EMPTY_STR_DICT,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20102,4 +20112,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast-path for empty or None dict: return module-level singleton
+    if not d:
+        return _EMPTY_STR_DICT
+    return {str(k): _serialize_value(v) for k, v in d.items()}
