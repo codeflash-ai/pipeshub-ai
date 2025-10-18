@@ -2767,26 +2767,33 @@ class JiraDataSource:
         defaultValues: Optional[list[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Set custom field contexts default values\n\nHTTP PUT /rest/api/3/field/{fieldId}/context/defaultValue\nPath params:\n  - fieldId (str)\nBody (application/json) fields:\n  - defaultValues (list[Dict[str, Any]], optional)"""
+        """Auto-generated from OpenAPI: Set custom field contexts default values
+
+HTTP PUT /rest/api/3/field/{fieldId}/context/defaultValue
+Path params:
+  - fieldId (str)
+Body (application/json) fields:
+  - defaultValues (list[Dict[str, Any]], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'fieldId': fieldId,
-        }
+        # Inline and reduce overhead in header preparation
+        _headers: Dict[str, Any] = {} if headers is None else dict(headers)
+        _headers['Content-Type'] = 'application/json'
+        _path: Dict[str, Any] = {'fieldId': fieldId}
         _query: Dict[str, Any] = {}
         _body: Dict[str, Any] = {}
         if defaultValues is not None:
             _body['defaultValues'] = defaultValues
         rel_path = '/rest/api/3/field/{fieldId}/context/defaultValue'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}{_safe_format_url(rel_path, _path)}"
+        # Use local references for helper functions that are hotspots
+        as_str_dict = _as_str_dict
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=as_str_dict(_headers),
+            path_params=as_str_dict(_path),
+            query_params=as_str_dict(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20088,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
