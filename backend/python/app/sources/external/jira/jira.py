@@ -4,6 +4,10 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+_REL_PATH = '/rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}'
+
+_EMPTY_DICT: Dict[str, Any] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -1935,16 +1939,25 @@ class JiraDataSource:
         title: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update gadget on dashboard\n\nHTTP PUT /rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}\nPath params:\n  - dashboardId (int)\n  - gadgetId (int)\nBody (application/json) fields:\n  - color (str, optional)\n  - position (Dict[str, Any], optional)\n  - title (str, optional)"""
+        """Auto-generated from OpenAPI: Update gadget on dashboard
+
+HTTP PUT /rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}
+Path params:
+  - dashboardId (int)
+  - gadgetId (int)
+Body (application/json) fields:
+  - color (str, optional)
+  - position (Dict[str, Any], optional)
+  - title (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
         _path: Dict[str, Any] = {
             'dashboardId': dashboardId,
             'gadgetId': gadgetId,
         }
-        _query: Dict[str, Any] = {}
+        _query: Dict[str, Any] = _EMPTY_DICT
         _body: Dict[str, Any] = {}
         if color is not None:
             _body['color'] = color
@@ -1952,8 +1965,7 @@ class JiraDataSource:
             _body['position'] = position
         if title is not None:
             _body['title'] = title
-        rel_path = '/rest/api/3/dashboard/{dashboardId}/gadget/{gadgetId}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(_REL_PATH, _path)
         req = HTTPRequest(
             method='PUT',
             url=url,
@@ -20081,9 +20093,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20111,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
