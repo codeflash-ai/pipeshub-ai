@@ -12,7 +12,7 @@ class JiraDataSource:
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         try:
-            self.base_url = self._client.get_base_url().rstrip('/') # type: ignore [valid method]
+            self.base_url = self._client.get_base_url().rstrip('/')  # type: ignore [valid method]
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
 
@@ -2462,16 +2462,19 @@ class JiraDataSource:
         fields: list[Dict[str, Any]],
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Remove associations\n\nHTTP DELETE /rest/api/3/field/association\nBody (application/json) fields:\n  - associationContexts (list[Dict[str, Any]], required)\n  - fields (list[Dict[str, Any]], required)"""
+        """Auto-generated from OpenAPI: Remove associations
+
+HTTP DELETE /rest/api/3/field/association
+Body (application/json) fields:
+  - associationContexts (list[Dict[str, Any]], required)
+  - fields (list[Dict[str, Any]], required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['associationContexts'] = associationContexts
-        _body['fields'] = fields
+        _body: Dict[str, Any] = {'associationContexts': associationContexts, 'fields': fields}
         rel_path = '/rest/api/3/field/association'
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
@@ -20081,9 +20084,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20102,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
