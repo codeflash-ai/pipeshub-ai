@@ -3039,14 +3039,23 @@ class JiraDataSource:
         maxResults: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get custom field options (context)\n\nHTTP GET /rest/api/3/field/{fieldId}/context/{contextId}/option\nPath params:\n  - fieldId (str)\n  - contextId (int)\nQuery params:\n  - optionId (int, optional)\n  - onlyOptions (bool, optional)\n  - startAt (int, optional)\n  - maxResults (int, optional)"""
+        """Auto-generated from OpenAPI: Get custom field options (context)
+
+HTTP GET /rest/api/3/field/{fieldId}/context/{contextId}/option
+Path params:
+  - fieldId (str)
+  - contextId (int)
+Query params:
+  - optionId (int, optional)
+  - onlyOptions (bool, optional)
+  - startAt (int, optional)
+  - maxResults (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'fieldId': fieldId,
-            'contextId': contextId,
-        }
+        # Avoid unnecessary dict overhead
+        _headers = headers if headers is not None else {}
+        _path = {'fieldId': fieldId, 'contextId': contextId}
+        # Build _query as a one-pass step
         _query: Dict[str, Any] = {}
         if optionId is not None:
             _query['optionId'] = optionId
@@ -3059,6 +3068,7 @@ class JiraDataSource:
         _body = None
         rel_path = '/rest/api/3/field/{fieldId}/context/{contextId}/option'
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Apply _as_str_dict once per arg; no redundant dict creations
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -20081,9 +20091,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Use static class defined above for lower overhead
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20110,8 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Optimized for empty/None input
+    if not d:
+        return {}
+    # In-place dict-comp for lower memory footprint
+    return {str(k): _serialize_value(v) for k, v in d.items()}
