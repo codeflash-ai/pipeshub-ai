@@ -15,6 +15,7 @@ class JiraDataSource:
             self.base_url = self._client.get_base_url().rstrip('/') # type: ignore [valid method]
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
+        self._dashboard_gadgets_url: Optional[str] = None  # Cache URL for efficiency
 
     def get_data_source(self) -> 'JiraDataSource':
         return self
@@ -1738,19 +1739,27 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get available gadgets\n\nHTTP GET /rest/api/3/dashboard/gadgets"""
+        """Auto-generated from OpenAPI: Get available gadgets
+
+HTTP GET /rest/api/3/dashboard/gadgets"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
         _body = None
-        rel_path = '/rest/api/3/dashboard/gadgets'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Cache the formatted URL for this API endpoint
+        if self._dashboard_gadgets_url is None:
+            rel_path = '/rest/api/3/dashboard/gadgets'
+            self._dashboard_gadgets_url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self._dashboard_gadgets_url
+
+        str_headers = _as_str_dict(_headers)
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
+            headers=str_headers,
             path_params=_as_str_dict(_path),
             query_params=_as_str_dict(_query),
             body=_body,
