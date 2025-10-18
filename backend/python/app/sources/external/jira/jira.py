@@ -1054,17 +1054,24 @@ class JiraDataSource:
         commentId: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get comment property keys\n\nHTTP GET /rest/api/3/comment/{commentId}/properties\nPath params:\n  - commentId (str)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Get comment property keys
+
+HTTP GET /rest/api/3/comment/{commentId}/properties
+Path params:
+  - commentId (str)"""
+        client = self._client  # one local lookup only
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'commentId': commentId,
-        }
-        _query: Dict[str, Any] = {}
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        # Build the path dictionary directly
+        _path = {'commentId': commentId}
+        # For these OpenAPI-generated methods, queries are almost always empty
+        _query = {}
         _body = None
         rel_path = '/rest/api/3/comment/{commentId}/properties'
+        # Use local for base_url for reduced attribute lookup
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Inline variables for speedier mapping in the most called parts
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -1073,7 +1080,7 @@ class JiraDataSource:
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def delete_comment_property(
@@ -20081,9 +20088,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # _SafeDict is now defined at the module scope for performance
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20107,10 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Pre-size the dict and use a for-loop for reduced overhead in tight path
+    items = d.items() if d else ()
+    n = len(d) if d else 0
+    result = {} if n == 0 else dict.__new__(dict)
+    for k, v in items:
+        result[str(k)] = _serialize_value(v)
+    return result
