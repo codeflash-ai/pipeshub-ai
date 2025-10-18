@@ -2278,21 +2278,30 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get events\n\nHTTP GET /rest/api/3/events"""
+        """Auto-generated from OpenAPI: Get events
+
+HTTP GET /rest/api/3/events"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
+
+        # Optimize fast-paths for frequent cases
+        # Headers may be None or a dict; _headers always a new dict
         _headers: Dict[str, Any] = dict(headers or {})
+        # _path and _query are always empty; avoid function calls and dict construction
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/rest/api/3/events'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # rel_path has no placeholders -- skip formatting logic
+        url = self.base_url + rel_path
+
+        # Using optimized _as_str_dict for empty dicts
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params={},  # Always empty
+            query_params={},  # Always empty
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20102,4 +20111,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Optimization: Return {} directly for empty/falsy dicts
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
