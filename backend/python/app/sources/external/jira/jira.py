@@ -1265,7 +1265,8 @@ class JiraDataSource:
         if self_ is not None:
             _body['self'] = self_
         rel_path = '/rest/api/3/component'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + rel_path
+
         req = HTTPRequest(
             method='POST',
             url=url,
