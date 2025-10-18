@@ -213,28 +213,41 @@ class JiraDataSource:
         configurations: list[Dict[str, Any]],
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update custom field configurations\n\nHTTP PUT /rest/api/3/app/field/{fieldIdOrKey}/context/configuration\nPath params:\n  - fieldIdOrKey (str)\nBody (application/json) fields:\n  - configurations (list[Dict[str, Any]], required)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Update custom field configurations
+
+HTTP PUT /rest/api/3/app/field/{fieldIdOrKey}/context/configuration
+Path params:
+  - fieldIdOrKey (str)
+Body (application/json) fields:
+  - configurations (list[Dict[str, Any]], required)"""
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'fieldIdOrKey': fieldIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['configurations'] = configurations
+
+        # Preallocate and batch dict construction for improved speed
+        if headers:
+            _headers = dict(headers)
+            if 'Content-Type' not in _headers:
+                _headers['Content-Type'] = 'application/json'
+        else:
+            _headers = {'Content-Type': 'application/json'}
+
+        _path = {'fieldIdOrKey': fieldIdOrKey}
         rel_path = '/rest/api/3/app/field/{fieldIdOrKey}/context/configuration'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        _body = {'configurations': configurations}
+
+        # Minimize allocations of empty dicts
         req = HTTPRequest(
             method='PUT',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            query_params={},  # `_query` is always empty
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def update_custom_field_value(
@@ -20081,9 +20094,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20112,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast path for empty dict
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
