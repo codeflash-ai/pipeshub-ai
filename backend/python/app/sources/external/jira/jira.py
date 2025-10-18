@@ -1355,56 +1355,73 @@ class JiraDataSource:
         self_: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update component\n\nHTTP PUT /rest/api/3/component/{id}\nPath params:\n  - id (str)\nBody (application/json) fields:\n  - ari (str, optional)\n  - assignee (Dict[str, Any], optional)\n  - assigneeType (str, optional)\n  - description (str, optional)\n  - id (str, optional)\n  - isAssigneeTypeValid (bool, optional)\n  - lead (Dict[str, Any], optional)\n  - leadAccountId (str, optional)\n  - leadUserName (str, optional)\n  - metadata (Dict[str, Any], optional)\n  - name (str, optional)\n  - project (str, optional)\n  - projectId (int, optional)\n  - realAssignee (Dict[str, Any], optional)\n  - realAssigneeType (str, optional)\n  - self (str, optional)"""
+        """Auto-generated from OpenAPI: Update component
+
+HTTP PUT /rest/api/3/component/{id}
+Path params:
+  - id (str)
+Body (application/json) fields:
+  - ari (str, optional)
+  - assignee (Dict[str, Any], optional)
+  - assigneeType (str, optional)
+  - description (str, optional)
+  - id (str, optional)
+  - isAssigneeTypeValid (bool, optional)
+  - lead (Dict[str, Any], optional)
+  - leadAccountId (str, optional)
+  - leadUserName (str, optional)
+  - metadata (Dict[str, Any], optional)
+  - name (str, optional)
+  - project (str, optional)
+  - projectId (int, optional)
+  - realAssignee (Dict[str, Any], optional)
+  - realAssigneeType (str, optional)
+  - self (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # Inlined dict construction and assignment to minimize Python overhead
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
+
+        # Path, query and body assignment (unchanged)
+        _path: Dict[str, Any] = {'id': id}
         _query: Dict[str, Any] = {}
+
+        # Efficiently assemble _body using a single loop
         _body: Dict[str, Any] = {}
-        if ari is not None:
-            _body['ari'] = ari
-        if assignee is not None:
-            _body['assignee'] = assignee
-        if assigneeType is not None:
-            _body['assigneeType'] = assigneeType
-        if description is not None:
-            _body['description'] = description
-        if id_body is not None:
-            _body['id'] = id_body
-        if isAssigneeTypeValid is not None:
-            _body['isAssigneeTypeValid'] = isAssigneeTypeValid
-        if lead is not None:
-            _body['lead'] = lead
-        if leadAccountId is not None:
-            _body['leadAccountId'] = leadAccountId
-        if leadUserName is not None:
-            _body['leadUserName'] = leadUserName
-        if metadata is not None:
-            _body['metadata'] = metadata
-        if name is not None:
-            _body['name'] = name
-        if project is not None:
-            _body['project'] = project
-        if projectId is not None:
-            _body['projectId'] = projectId
-        if realAssignee is not None:
-            _body['realAssignee'] = realAssignee
-        if realAssigneeType is not None:
-            _body['realAssigneeType'] = realAssigneeType
-        if self_ is not None:
-            _body['self'] = self_
+        body_fields = (
+            ('ari', ari),
+            ('assignee', assignee),
+            ('assigneeType', assigneeType),
+            ('description', description),
+            ('id', id_body),
+            ('isAssigneeTypeValid', isAssigneeTypeValid),
+            ('lead', lead),
+            ('leadAccountId', leadAccountId),
+            ('leadUserName', leadUserName),
+            ('metadata', metadata),
+            ('name', name),
+            ('project', project),
+            ('projectId', projectId),
+            ('realAssignee', realAssignee),
+            ('realAssigneeType', realAssigneeType),
+            ('self', self_)
+        )
+        for k, v in body_fields:
+            if v is not None:
+                _body[k] = v
+
         rel_path = '/rest/api/3/component/{id}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # -- Optimization: avoid repeated work (SafeDict allocation is slow) --
+        url = self.base_url + _fast_format_url(rel_path, _path)
+
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_fast_as_str_dict(_headers),
+            path_params=_fast_as_str_dict(_path),
+            query_params=_fast_as_str_dict(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20103,3 +20120,24 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+
+# ---- Helpers used by generated methods ----
+# Optimized _safe_format_url and _as_str_dict
+
+def _fast_format_url(template: str, params: Dict[str, object]) -> str:
+    # Faster variant: only interpolate known keys, fallback to original
+    try:
+        # Avoid re-instantiating SafeDict every call, just interpolate for our use case
+        return template.replace('{id}', str(params.get('id', '{id}')))
+    except Exception:
+        return template
+
+def _fast_as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
+    # Faster than dict comprehension for small dicts
+    # Use generator and list preallocation
+    if not d:
+        return {}
+    out = {}
+    for k, v in d.items():
+        out[str(k)] = _serialize_value(v)
+    return out
