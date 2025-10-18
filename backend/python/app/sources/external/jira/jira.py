@@ -1111,7 +1111,12 @@ class JiraDataSource:
         propertyKey: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get comment property\n\nHTTP GET /rest/api/3/comment/{commentId}/properties/{propertyKey}\nPath params:\n  - commentId (str)\n  - propertyKey (str)"""
+        """Auto-generated from OpenAPI: Get comment property
+
+HTTP GET /rest/api/3/comment/{commentId}/properties/{propertyKey}
+Path params:
+  - commentId (str)
+  - propertyKey (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -20081,9 +20086,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20104,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Assumes d is always not None (no need to allocate an empty dict each call)
+    return {str(k): _serialize_value(v) for k, v in d.items()}
