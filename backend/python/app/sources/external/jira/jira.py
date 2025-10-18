@@ -1141,7 +1141,13 @@ class JiraDataSource:
         body: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Set comment property\n\nHTTP PUT /rest/api/3/comment/{commentId}/properties/{propertyKey}\nPath params:\n  - commentId (str)\n  - propertyKey (str)\nBody: application/json (str)"""
+        """Auto-generated from OpenAPI: Set comment property
+
+HTTP PUT /rest/api/3/comment/{commentId}/properties/{propertyKey}
+Path params:
+  - commentId (str)
+  - propertyKey (str)
+Body: application/json (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -20081,9 +20087,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
