@@ -4,6 +4,12 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+# ---- Helpers used by generated methods ----
+
+# Preallocate _empty_dict and _empty_str_dict for repeated use to avoid allocation overhead
+_empty_dict: Dict[str, Any] = {}
+_empty_str_dict: Dict[str, str] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -1705,30 +1711,44 @@ class JiraDataSource:
         permissionDetails: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Bulk edit dashboards\n\nHTTP PUT /rest/api/3/dashboard/bulk/edit\nBody (application/json) fields:\n  - action (str, required)\n  - changeOwnerDetails (Dict[str, Any], optional)\n  - entityIds (list[int], required)\n  - extendAdminPermissions (bool, optional)\n  - permissionDetails (Dict[str, Any], optional)"""
+        """Auto-generated from OpenAPI: Bulk edit dashboards
+
+HTTP PUT /rest/api/3/dashboard/bulk/edit
+Body (application/json) fields:
+  - action (str, required)
+  - changeOwnerDetails (Dict[str, Any], optional)
+  - entityIds (list[int], required)
+  - extendAdminPermissions (bool, optional)
+  - permissionDetails (Dict[str, Any], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # Use {} directly if headers is None to avoid extra dict copying
+        _headers: Dict[str, Any] = {} if headers is None else dict(headers)
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['action'] = action
+
+        # Path and query params allocations omitted as they're always empty dicts
+        _body: Dict[str, Any] = {
+            'action': action,
+            'entityIds': entityIds,
+        }
         if changeOwnerDetails is not None:
             _body['changeOwnerDetails'] = changeOwnerDetails
-        _body['entityIds'] = entityIds
         if extendAdminPermissions is not None:
             _body['extendAdminPermissions'] = extendAdminPermissions
         if permissionDetails is not None:
             _body['permissionDetails'] = permissionDetails
+
         rel_path = '/rest/api/3/dashboard/bulk/edit'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, _empty_dict)
+
+        str_headers = _as_str_dict(_headers)
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=str_headers,
+            path_params=_empty_str_dict,
+            query_params=_empty_str_dict,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20101,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20119,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Skip the overhead of (d or {}) as d is never None in usage
+    return {str(k): _serialize_value(v) for k, v in d.items()}
