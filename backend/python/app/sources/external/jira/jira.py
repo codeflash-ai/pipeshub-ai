@@ -4,6 +4,9 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+# Define empty dict as a constant for reuse
+_EMPTY_DICT: Dict[str, Any] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -1633,11 +1636,17 @@ class JiraDataSource:
         maxResults: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get all dashboards\n\nHTTP GET /rest/api/3/dashboard\nQuery params:\n  - filter (str, optional)\n  - startAt (int, optional)\n  - maxResults (int, optional)"""
+        """Auto-generated from OpenAPI: Get all dashboards
+
+HTTP GET /rest/api/3/dashboard
+Query params:
+  - filter (str, optional)
+  - startAt (int, optional)
+  - maxResults (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
+        _headers: Dict[str, Any] = dict(headers) if headers is not None else _EMPTY_DICT
+        _path: Dict[str, Any] = _EMPTY_DICT
         _query: Dict[str, Any] = {}
         if filter is not None:
             _query['filter'] = filter
@@ -20081,9 +20090,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20108,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if d is None:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
