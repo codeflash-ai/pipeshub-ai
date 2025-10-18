@@ -3214,16 +3214,21 @@ class JiraDataSource:
         jql: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Replace custom field options\n\nHTTP DELETE /rest/api/3/field/{fieldId}/context/{contextId}/option/{optionId}/issue\nPath params:\n  - fieldId (str)\n  - optionId (int)\n  - contextId (int)\nQuery params:\n  - replaceWith (int, optional)\n  - jql (str, optional)"""
+        """Auto-generated from OpenAPI: Replace custom field options
+
+HTTP DELETE /rest/api/3/field/{fieldId}/context/{contextId}/option/{optionId}/issue
+Path params:
+  - fieldId (str)
+  - optionId (int)
+  - contextId (int)
+Query params:
+  - replaceWith (int, optional)
+  - jql (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'fieldId': fieldId,
-            'optionId': optionId,
-            'contextId': contextId,
-        }
-        _query: Dict[str, Any] = {}
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        _path = {'fieldId': fieldId, 'optionId': optionId, 'contextId': contextId}
+        _query = {}
         if replaceWith is not None:
             _query['replaceWith'] = replaceWith
         if jql is not None:
@@ -20081,9 +20086,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20104,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Using list comprehension for better performance in CPython.
+    return dict([(str(k), _serialize_value(v)) for k, v in (d or {}).items()])
