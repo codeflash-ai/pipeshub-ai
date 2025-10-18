@@ -1,3 +1,4 @@
+from collections import defaultdict
 from typing import Any, Dict, Optional, Union
 
 from app.sources.client.http.http_request import HTTPRequest
@@ -1465,21 +1466,27 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get selected time tracking provider\n\nHTTP GET /rest/api/3/configuration/timetracking"""
+        """Auto-generated from OpenAPI: Get selected time tracking provider
+
+HTTP GET /rest/api/3/configuration/timetracking"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # Avoid unnecessary dict allocation if headers is None
+        _headers: Dict[str, Any] = headers if headers else {}
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/rest/api/3/configuration/timetracking'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}{_safe_format_url(rel_path, _path)}"
+
+        # Only convert dicts if non-empty to save allocations.
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict(_headers) if _headers else {},
+            path_params=_as_str_dict(_path) if _path else {},
+            query_params=_as_str_dict(_query) if _query else {},
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,11 +20088,11 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Use defaultdict to avoid per-call class creation cost
+    missing_format = lambda key: '{' + key + '}'
     try:
-        return template.format_map(_SafeDict(params))
+        dct = defaultdict(missing_format, params)
+        return template.format_map(dct)
     except Exception:
         return template
 
@@ -20102,4 +20109,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Shortcut for empty dicts
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
