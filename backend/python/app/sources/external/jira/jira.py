@@ -2401,22 +2401,19 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get fields\n\nHTTP GET /rest/api/3/field"""
+        """Auto-generated from OpenAPI: Get fields
+
+HTTP GET /rest/api/3/field"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body = None
-        rel_path = '/rest/api/3/field'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url('/rest/api/3/field', None)
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_as_str_dict(headers),
+            path_params=_as_str_dict(None),
+            query_params=_as_str_dict(None),
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,11 +20078,19 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Cache SafeDict class definition for repeated use
+    if not hasattr(_safe_format_url, "_SafeDict"):
+        class _SafeDict(dict):
+            def __missing__(self, key: str) -> str:
+                return '{' + key + '}'
+        _safe_format_url._SafeDict = _SafeDict
+    SafeDict = _safe_format_url._SafeDict
+
+    # If no params, avoid formatting
+    if not params:
+        return template
     try:
-        return template.format_map(_SafeDict(params))
+        return template.format_map(SafeDict(params))
     except Exception:
         return template
 
@@ -20102,4 +20107,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
