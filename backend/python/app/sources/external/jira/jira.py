@@ -6254,27 +6254,43 @@ class JiraDataSource:
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get comment\n\nHTTP GET /rest/api/3/issue/{issueIdOrKey}/comment/{id}\nPath params:\n  - issueIdOrKey (str)\n  - id (str)\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get comment
+
+HTTP GET /rest/api/3/issue/{issueIdOrKey}/comment/{id}
+Path params:
+  - issueIdOrKey (str)
+  - id (str)
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
+
+        # Fast-path copy for headers if present
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+
+        # Direct dict construction, no overhead
+        _path = {'issueIdOrKey': issueIdOrKey, 'id': id}
+
+        # Only set 'expand' if present
         if expand is not None:
-            _query['expand'] = expand
-        _body = None
-        rel_path = '/rest/api/3/issue/{issueIdOrKey}/comment/{id}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+            _query = {'expand': expand}
+        else:
+            _query = {}
+
+        # Direct URL construction for this specific endpoint
+        # Avoid format_map and custom classes; direct substitution is much faster here
+        url = (
+            f"{self.base_url}/rest/api/3/issue/"
+            f"{issueIdOrKey}/comment/{id}"
+        )
+
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
             query_params=_as_str_dict(_query),
-            body=_body,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20102,4 +20118,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid dict(d or {}), use faster conditional logic
+    items = d.items() if d is not None else ()
+    return {str(k): _serialize_value(v) for k, v in items}
