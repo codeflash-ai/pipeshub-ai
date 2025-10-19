@@ -5817,10 +5817,16 @@ class JiraDataSource:
         deleteSubtasks: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Delete issue\n\nHTTP DELETE /rest/api/3/issue/{issueIdOrKey}\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - deleteSubtasks (str, optional)"""
+        """Auto-generated from OpenAPI: Delete issue
+
+HTTP DELETE /rest/api/3/issue/{issueIdOrKey}
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - deleteSubtasks (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
         _path: Dict[str, Any] = {
             'issueIdOrKey': issueIdOrKey,
         }
@@ -5829,7 +5835,7 @@ class JiraDataSource:
             _query['deleteSubtasks'] = deleteSubtasks
         _body = None
         rel_path = '/rest/api/3/issue/{issueIdOrKey}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f'{self.base_url}{_safe_format_url(rel_path, _path)}'
         req = HTTPRequest(
             method='DELETE',
             url=url,
@@ -20081,9 +20087,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20105,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Using generator to avoid unnecessary temporary list allocation
+    return {str(k): _serialize_value(v) for k, v in d.items()} if d else {}
