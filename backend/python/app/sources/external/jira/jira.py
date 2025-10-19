@@ -5051,22 +5051,32 @@ class JiraDataSource:
         maxResults: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get users from group\n\nHTTP GET /rest/api/3/group/member\nQuery params:\n  - groupname (str, optional)\n  - groupId (str, optional)\n  - includeInactiveUsers (bool, optional)\n  - startAt (int, optional)\n  - maxResults (int, optional)"""
+        """Auto-generated from OpenAPI: Get users from group
+
+HTTP GET /rest/api/3/group/member
+Query params:
+  - groupname (str, optional)
+  - groupId (str, optional)
+  - includeInactiveUsers (bool, optional)
+  - startAt (int, optional)
+  - maxResults (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
+
+        # Efficient header copy
         _headers: Dict[str, Any] = dict(headers or {})
+
+        # Construct _query dict using a single loop over parameters
+        query_params = (
+            ('groupname', groupname),
+            ('groupId', groupId),
+            ('includeInactiveUsers', includeInactiveUsers),
+            ('startAt', startAt),
+            ('maxResults', maxResults)
+        )
+        _query: Dict[str, Any] = {k: v for k, v in query_params if v is not None}
+
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if groupname is not None:
-            _query['groupname'] = groupname
-        if groupId is not None:
-            _query['groupId'] = groupId
-        if includeInactiveUsers is not None:
-            _query['includeInactiveUsers'] = includeInactiveUsers
-        if startAt is not None:
-            _query['startAt'] = startAt
-        if maxResults is not None:
-            _query['maxResults'] = maxResults
         _body = None
         rel_path = '/rest/api/3/group/member'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20091,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20109,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    _sv = _serialize_value  # local reference for micro-optimization
+    return {str(k): _sv(v) for k, v in (d or {}).items()}
