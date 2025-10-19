@@ -20,6 +20,7 @@ class GoogleSheetsDataSource:
             client: Google Sheets API client from build('sheets', 'v4', credentials=credentials)
         """
         self.client = client
+        self._spreadsheets_values_batch_update = self.client.spreadsheets_values().batchUpdate
 
     async def spreadsheets_create(self) -> Dict[str, Any]:
         """Google Sheets API: Creates a spreadsheet, returning the newly created spreadsheet.
@@ -343,12 +344,7 @@ class GoogleSheetsDataSource:
         if spreadsheetId is not None:
             kwargs['spreadsheetId'] = spreadsheetId
 
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.spreadsheets_values().batchUpdate(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.spreadsheets_values().batchUpdate(**kwargs) # type: ignore
+        request = self._spreadsheets_values_batch_update(**kwargs) # type: ignore
         return request.execute()
 
     async def spreadsheets_values_batch_clear(
