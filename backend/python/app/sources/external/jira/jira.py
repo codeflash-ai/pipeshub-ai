@@ -4313,16 +4313,19 @@ class JiraDataSource:
         scope: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Set default share scope\n\nHTTP PUT /rest/api/3/filter/defaultShareScope\nBody (application/json) fields:\n  - scope (str, required)"""
+        """Auto-generated from OpenAPI: Set default share scope
+
+HTTP PUT /rest/api/3/filter/defaultShareScope
+Body (application/json) fields:
+  - scope (str, required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        # Use fast multipack assignment for empty dicts
+        _headers, _path, _query, _body = dict(headers or {}), {}, {}, {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
         _body['scope'] = scope
         rel_path = '/rest/api/3/filter/defaultShareScope'
+        # _safe_format_url is now more efficient for empty _path
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='PUT',
@@ -20081,9 +20084,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # If no params, just return the template (fastpath, avoids dict overhead)
+    if not params:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20105,8 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast return for None/empty
+    if not d:
+        return {}
+    items = d.items()
+    return {str(k): _serialize_value(v) for k, v in items}
