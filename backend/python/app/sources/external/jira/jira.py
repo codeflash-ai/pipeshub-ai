@@ -5761,24 +5761,24 @@ class JiraDataSource:
         issueIdsOrKeys: Optional[list[str]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Unarchive issue(s) by issue keys/ID\n\nHTTP PUT /rest/api/3/issue/unarchive\nBody (application/json) fields:\n  - issueIdsOrKeys (list[str], optional)"""
+        """Auto-generated from OpenAPI: Unarchive issue(s) by issue keys/ID
+
+HTTP PUT /rest/api/3/issue/unarchive
+Body (application/json) fields:
+  - issueIdsOrKeys (list[str], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        if issueIdsOrKeys is not None:
-            _body['issueIdsOrKeys'] = issueIdsOrKeys
+        _body = {'issueIdsOrKeys': issueIdsOrKeys} if issueIdsOrKeys is not None else {}
         rel_path = '/rest/api/3/issue/unarchive'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, {})
         req = HTTPRequest(
             method='PUT',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params={},
+            query_params={},
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,6 +20081,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # Early exit for empty params to avoid unnecessary format_map calls
+    if not params:
+        return template
     class _SafeDict(dict):
         def __missing__(self, key: str) -> str:
             return '{' + key + '}'
@@ -20102,4 +20105,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
