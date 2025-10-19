@@ -3347,7 +3347,15 @@ class JiraDataSource:
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get screens for a field\n\nHTTP GET /rest/api/3/field/{fieldId}/screens\nPath params:\n  - fieldId (str)\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get screens for a field
+
+HTTP GET /rest/api/3/field/{fieldId}/screens
+Path params:
+  - fieldId (str)
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -20081,6 +20089,27 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # Fast path: if all required keys are present, avoid _SafeDict and exception overhead
+    template_keys = []
+    i, n = 0, len(template)
+    while i < n:
+        if template[i] == '{':
+            # Find end of the placeholder
+            j = i + 1
+            while j < n and template[j] != '}':
+                j += 1
+            if j < n:
+                key = template[i+1:j]
+                if key and not key.startswith('{') and not key.endswith('}'):  # ignore '{{' or '}}'
+                    template_keys.append(key)
+                i = j
+        i += 1
+    if all(k in params for k in template_keys):
+        try:
+            return template.format(**params)
+        except Exception:
+            pass  # fallback to slow path
+
     class _SafeDict(dict):
         def __missing__(self, key: str) -> str:
             return '{' + key + '}'
@@ -20102,4 +20131,8 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    s = str
+    sv = _serialize_value
+    return {s(k): sv(v) for k, v in d.items()}
