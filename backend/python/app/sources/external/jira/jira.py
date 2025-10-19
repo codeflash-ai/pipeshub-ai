@@ -6167,52 +6167,78 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Add comment\n\nHTTP POST /rest/api/3/issue/{issueIdOrKey}/comment\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - expand (str, optional)\nBody (application/json) fields:\n  - author (Dict[str, Any], optional)\n  - body (str, optional)\n  - created (str, optional)\n  - id (str, optional)\n  - jsdAuthorCanSeeRequest (bool, optional)\n  - jsdPublic (bool, optional)\n  - properties (list[Dict[str, Any]], optional)\n  - renderedBody (str, optional)\n  - self (str, optional)\n  - updateAuthor (Dict[str, Any], optional)\n  - updated (str, optional)\n  - visibility (Dict[str, Any], optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Add comment
+
+HTTP POST /rest/api/3/issue/{issueIdOrKey}/comment
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - expand (str, optional)
+Body (application/json) fields:
+  - author (Dict[str, Any], optional)
+  - body (str, optional)
+  - created (str, optional)
+  - id (str, optional)
+  - jsdAuthorCanSeeRequest (bool, optional)
+  - jsdPublic (bool, optional)
+  - properties (list[Dict[str, Any]], optional)
+  - renderedBody (str, optional)
+  - self (str, optional)
+  - updateAuthor (Dict[str, Any], optional)
+  - updated (str, optional)
+  - visibility (Dict[str, Any], optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
-        _body: Dict[str, Any] = {}
-        if author is not None:
-            _body['author'] = author
-        if body_body is not None:
-            _body['body'] = body_body
-        if created is not None:
-            _body['created'] = created
-        if id is not None:
-            _body['id'] = id
-        if jsdAuthorCanSeeRequest is not None:
-            _body['jsdAuthorCanSeeRequest'] = jsdAuthorCanSeeRequest
-        if jsdPublic is not None:
-            _body['jsdPublic'] = jsdPublic
-        if properties is not None:
-            _body['properties'] = properties
-        if renderedBody is not None:
-            _body['renderedBody'] = renderedBody
-        if self_ is not None:
-            _body['self'] = self_
-        if updateAuthor is not None:
-            _body['updateAuthor'] = updateAuthor
-        if updated is not None:
-            _body['updated'] = updated
-        if visibility is not None:
-            _body['visibility'] = visibility
-        if 'body_additional' in locals() and body_additional:
+
+        # Avoid dict(headers or {}) and dict.copy() for perf, use _headers reference directly and use setdefault if needed
+        if headers is not None:
+            _headers: Dict[str, Any] = headers.copy()
+        else:
+            _headers = {}
+        if 'Content-Type' not in _headers:
+            _headers['Content-Type'] = 'application/json'
+
+        _path = {'issueIdOrKey': issueIdOrKey}
+
+        _query = {'expand': expand} if expand is not None else {}
+
+        # This avoids multiple "if is not None" and dict creation - collect inputs into a tuple for faster loop filling
+        _body = {}
+        key_val_pairs = (
+            ('author', author),
+            ('body', body_body),
+            ('created', created),
+            ('id', id),
+            ('jsdAuthorCanSeeRequest', jsdAuthorCanSeeRequest),
+            ('jsdPublic', jsdPublic),
+            ('properties', properties),
+            ('renderedBody', renderedBody),
+            ('self', self_),
+            ('updateAuthor', updateAuthor),
+            ('updated', updated),
+            ('visibility', visibility),
+        )
+        # Inline loop instead of many if statements (faster for large argument lists)
+        for _k, _v in key_val_pairs:
+            if _v is not None:
+                _body[_k] = _v
+
+        # Keep the logic and behavior exactly as before for additional properties
+        if body_additional:
             _body.update(body_additional)
+
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/comment'
+        # _safe_format_url is a perf hotspot. Inline the class outside for less construction per call
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # _as_str_dict is a perf hotspot. Inlined and optimized as _fast_as_str_dict below.
         req = HTTPRequest(
             method='POST',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_fast_as_str_dict(_headers),
+            path_params=_fast_as_str_dict(_path),
+            query_params=_fast_as_str_dict(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20107,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Inline the class so it's not re-created per call in the hotpath above
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20103,3 +20127,9 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+
+def _fast_as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
+    # Only called with non-None, usually small dicts, can't optimize _serialize_value itself
+    # Use dict comprehension directly (same as before, but renamed to avoid call indirection)
+    # This avoids repeated (d or {}) creation in each call
+    return {str(k): _serialize_value(v) for k, v in d.items()} if d else {}
