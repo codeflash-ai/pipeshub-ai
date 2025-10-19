@@ -3313,20 +3313,32 @@ class JiraDataSource:
         maxResults: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get contexts for a field\n\nHTTP GET /rest/api/3/field/{fieldId}/contexts\nPath params:\n  - fieldId (str)\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)"""
+        """Auto-generated from OpenAPI: Get contexts for a field
+
+HTTP GET /rest/api/3/field/{fieldId}/contexts
+Path params:
+  - fieldId (str)
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'fieldId': fieldId,
-        }
-        _query: Dict[str, Any] = {}
-        if startAt is not None:
-            _query['startAt'] = startAt
-        if maxResults is not None:
-            _query['maxResults'] = maxResults
-        _body = None
+
+        # Fast path: avoid dict(headers or {}) allocation if headers is None or already a dict
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+        _path: Dict[str, Any] = {'fieldId': fieldId}
+        # Use static pre-allocation for query
+        if startAt is not None and maxResults is not None:
+            _query: Dict[str, Any] = {'startAt': startAt, 'maxResults': maxResults}
+        elif startAt is not None:
+            _query: Dict[str, Any] = {'startAt': startAt}
+        elif maxResults is not None:
+            _query: Dict[str, Any] = {'maxResults': maxResults}
+        else:
+            _query: Dict[str, Any] = {}
+
         rel_path = '/rest/api/3/field/{fieldId}/contexts'
+        # Precompute formatted URL
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='GET',
@@ -3334,7 +3346,7 @@ class JiraDataSource:
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
             query_params=_as_str_dict(_query),
-            body=_body,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20093,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20111,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    # Fast-path, avoids repeated calls and handles empty input.
+    return {str(k): _serialize_value(v) for k, v in d.items()}
