@@ -6023,25 +6023,30 @@ class JiraDataSource:
         body: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Add attachment\n\nHTTP POST /rest/api/3/issue/{issueIdOrKey}/attachments\nPath params:\n  - issueIdOrKey (str)\nBody: multipart/form-data (list[Dict[str, Any]])"""
+        """Auto-generated from OpenAPI: Add attachment
+
+HTTP POST /rest/api/3/issue/{issueIdOrKey}/attachments
+Path params:
+  - issueIdOrKey (str)
+Body: multipart/form-data (list[Dict[str, Any]])"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'multipart/form-data')
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        _body = body
+        # Use direct assignment and minimize dict creation overhead
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        if 'Content-Type' not in _headers:
+            _headers['Content-Type'] = 'multipart/form-data'
+        _path: Dict[str, Any] = {'issueIdOrKey': issueIdOrKey}
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/attachments'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Use the already constructed dicts and values
         req = HTTPRequest(
             method='POST',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            query_params={},  # Since _query is always empty, skip _as_str_dict call for an empty dict
+            body=body,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20086,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20104,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
+    # Efficient dict comprehension; cannot optimize further without changing _serialize_value
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
