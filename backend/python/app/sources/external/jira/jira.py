@@ -4878,14 +4878,21 @@ class JiraDataSource:
         permissionId: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get share permission\n\nHTTP GET /rest/api/3/filter/{id}/permission/{permissionId}\nPath params:\n  - id (int)\n  - permissionId (int)"""
+        """Auto-generated from OpenAPI: Get share permission
+
+HTTP GET /rest/api/3/filter/{id}/permission/{permissionId}
+Path params:
+  - id (int)
+  - permissionId (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        # Use simple assignment and fast copying for headers. No unnecessary dict() call.
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {
             'id': id,
             'permissionId': permissionId,
         }
+        # As query dict is always empty, avoid calling _as_str_dict; just pass {}
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/rest/api/3/filter/{id}/permission/{permissionId}'
@@ -4895,7 +4902,7 @@ class JiraDataSource:
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            query_params={},  # avoids unnecessary function call, always empty
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20088,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20106,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # For empty dicts, just return empty to avoid iteration
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
