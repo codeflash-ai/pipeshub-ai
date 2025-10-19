@@ -4,6 +4,9 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+_EMPTY_DICT: Dict[str, Any] = {}
+_EMPTY_STR_DICT: Dict[str, str] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -5594,26 +5597,41 @@ class JiraDataSource:
         showSubTaskParent: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue picker suggestions\n\nHTTP GET /rest/api/3/issue/picker\nQuery params:\n  - query (str, optional)\n  - currentJQL (str, optional)\n  - currentIssueKey (str, optional)\n  - currentProjectId (str, optional)\n  - showSubTasks (bool, optional)\n  - showSubTaskParent (bool, optional)"""
+        """Auto-generated from OpenAPI: Get issue picker suggestions
+
+HTTP GET /rest/api/3/issue/picker
+Query params:
+  - query (str, optional)
+  - currentJQL (str, optional)
+  - currentIssueKey (str, optional)
+  - currentProjectId (str, optional)
+  - showSubTasks (bool, optional)
+  - showSubTaskParent (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
+
+        # Use static empty dict if headers is None or empty to avoid redundant allocations
+        _headers: Dict[str, Any] = _EMPTY_DICT if not headers else dict(headers)
+
+        # Path params are always empty for this endpoint
+        _path: Dict[str, Any] = _EMPTY_DICT
+
+        # Build query dict efficiently
         _query: Dict[str, Any] = {}
-        if query is not None:
-            _query['query'] = query
-        if currentJQL is not None:
-            _query['currentJQL'] = currentJQL
-        if currentIssueKey is not None:
-            _query['currentIssueKey'] = currentIssueKey
-        if currentProjectId is not None:
-            _query['currentProjectId'] = currentProjectId
-        if showSubTasks is not None:
-            _query['showSubTasks'] = showSubTasks
-        if showSubTaskParent is not None:
-            _query['showSubTaskParent'] = showSubTaskParent
+        for k, v in (
+            ('query', query),
+            ('currentJQL', currentJQL),
+            ('currentIssueKey', currentIssueKey),
+            ('currentProjectId', currentProjectId),
+            ('showSubTasks', showSubTasks),
+            ('showSubTaskParent', showSubTaskParent),
+        ):
+            if v is not None:
+                _query[k] = v
+
         _body = None
         rel_path = '/rest/api/3/issue/picker'
+        # For this endpoint, _path is always empty, so return rel_path directly
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='GET',
@@ -20081,6 +20099,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # For this endpoint (issue picker), params is always empty, so return template (perf critical path)
+    if not params:
+        return template
     class _SafeDict(dict):
         def __missing__(self, key: str) -> str:
             return '{' + key + '}'
@@ -20102,4 +20123,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return _EMPTY_STR_DICT
+    # Inline comprehension, saving lookups for empty dict
+    return {str(k): _serialize_value(v) for k, v in d.items()}
