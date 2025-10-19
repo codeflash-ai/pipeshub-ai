@@ -4,6 +4,9 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+_EMPTY_STR_DICT: Dict[str, str] = {}
+_EMPTY_OBJ_DICT: Dict[str, object] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -5662,24 +5665,30 @@ class JiraDataSource:
         issues: Optional[list[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Bulk set issue properties by issue\n\nHTTP POST /rest/api/3/issue/properties/multi\nBody (application/json) fields:\n  - issues (list[Dict[str, Any]], optional)"""
+        """Auto-generated from OpenAPI: Bulk set issue properties by issue
+
+HTTP POST /rest/api/3/issue/properties/multi
+Body (application/json) fields:
+  - issues (list[Dict[str, Any]], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+        if not isinstance(_headers, dict):
+            _headers = dict(_headers)
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
+
         _body: Dict[str, Any] = {}
         if issues is not None:
             _body['issues'] = issues
         rel_path = '/rest/api/3/issue/properties/multi'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Optimize: _path is always empty
+        url = self.base_url + _safe_format_url(rel_path, _EMPTY_OBJ_DICT)
         req = HTTPRequest(
             method='POST',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params=_EMPTY_STR_DICT,
+            query_params=_EMPTY_STR_DICT,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,6 +20090,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # Fast path: skip formatting for empty dict (most frequent case)
+    if not params:
+        return template
     class _SafeDict(dict):
         def __missing__(self, key: str) -> str:
             return '{' + key + '}'
@@ -20102,4 +20114,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return _EMPTY_STR_DICT
+    return {str(k): _serialize_value(v) for k, v in d.items()}
