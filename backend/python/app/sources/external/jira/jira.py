@@ -4,6 +4,8 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+_EMPTY_DICT: Dict[str, Any] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -4909,29 +4911,46 @@ class JiraDataSource:
         swapGroupId: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Remove group\n\nHTTP DELETE /rest/api/3/group\nQuery params:\n  - groupname (str, optional)\n  - groupId (str, optional)\n  - swapGroup (str, optional)\n  - swapGroupId (str, optional)"""
+        """Auto-generated from OpenAPI: Remove group
+
+HTTP DELETE /rest/api/3/group
+Query params:
+  - groupname (str, optional)
+  - groupId (str, optional)
+  - swapGroup (str, optional)
+  - swapGroupId (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if groupname is not None:
-            _query['groupname'] = groupname
-        if groupId is not None:
-            _query['groupId'] = groupId
-        if swapGroup is not None:
-            _query['swapGroup'] = swapGroup
-        if swapGroupId is not None:
-            _query['swapGroupId'] = swapGroupId
+        _headers = headers if headers is not None else _EMPTY_DICT
+
+        # Dynamically build _query with less overhead
+        param_items = (
+            ('groupname', groupname),
+            ('groupId', groupId),
+            ('swapGroup', swapGroup),
+            ('swapGroupId', swapGroupId)
+        )
+        _query = {k: v for k, v in param_items if v is not None}
+
+        # _path is always empty for this endpoint
+        _path = _EMPTY_DICT
         _body = None
         rel_path = '/rest/api/3/group'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Static url formatting for empty params, skip _safe_format_url logic
+        url = f"{self.base_url}{rel_path}"
+
+        # Batch dict conversions
+        headers_str = _as_str_dict(_headers)
+        path_str = _EMPTY_DICT  # _path is always empty
+        query_str = _as_str_dict(_query)
+
         req = HTTPRequest(
             method='DELETE',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=headers_str,
+            path_params=path_str,
+            query_params=query_str,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20102,4 +20121,4 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
