@@ -4,6 +4,9 @@ from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
 
+# Precompute empty str dict for repeated static use (saves per-call time)
+_EMPTY_STR_DICT: Dict[str, str] = {}
+
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
@@ -3554,24 +3557,30 @@ class JiraDataSource:
         optionId: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue field option\n\nHTTP GET /rest/api/3/field/{fieldKey}/option/{optionId}\nPath params:\n  - fieldKey (str)\n  - optionId (int)"""
+        """Auto-generated from OpenAPI: Get issue field option
+
+HTTP GET /rest/api/3/field/{fieldKey}/option/{optionId}
+Path params:
+  - fieldKey (str)
+  - optionId (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
+        # All these are simple, fixed fields.
         _path: Dict[str, Any] = {
             'fieldKey': fieldKey,
             'optionId': optionId,
         }
-        _query: Dict[str, Any] = {}
+        # _query never used, always empty - use precomputed
         _body = None
-        rel_path = '/rest/api/3/field/{fieldKey}/option/{optionId}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Direct string interpolation for fixed path for maximum speed
+        url = f"{self.base_url}/rest/api/3/field/{fieldKey}/option/{optionId}"
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            query_params=_EMPTY_STR_DICT,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20102,4 +20111,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # It is safe to drop (d or {}) for perf since callers never pass None, always pass a dict
+    return {str(k): _serialize_value(v) for k, v in d.items()}
