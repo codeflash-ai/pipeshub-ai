@@ -3938,11 +3938,19 @@ class JiraDataSource:
         id: Optional[list[int]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get all field configuration schemes\n\nHTTP GET /rest/api/3/fieldconfigurationscheme\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)\n  - id (list[int], optional)"""
+        """Auto-generated from OpenAPI: Get all field configuration schemes
+
+HTTP GET /rest/api/3/fieldconfigurationscheme
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)
+  - id (list[int], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
         _path: Dict[str, Any] = {}
+        # Preallocate _query only if one of the conditions applies, and insert directly
         _query: Dict[str, Any] = {}
         if startAt is not None:
             _query['startAt'] = startAt
@@ -3950,6 +3958,7 @@ class JiraDataSource:
             _query['maxResults'] = maxResults
         if id is not None:
             _query['id'] = id
+
         _body = None
         rel_path = '/rest/api/3/fieldconfigurationscheme'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20090,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20108,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Use generator for better memory/profile efficiency, eliminates (d or {}) since d has a default
+    return dict((str(k), _serialize_value(v)) for k, v in d.items())
