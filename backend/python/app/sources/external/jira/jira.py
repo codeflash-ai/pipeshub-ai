@@ -5562,7 +5562,11 @@ class JiraDataSource:
         isReturningKeys: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue limit report\n\nHTTP GET /rest/api/3/issue/limit/report\nQuery params:\n  - isReturningKeys (bool, optional)"""
+        """Auto-generated from OpenAPI: Get issue limit report
+
+HTTP GET /rest/api/3/issue/limit/report
+Query params:
+  - isReturningKeys (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -20081,9 +20085,10 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Hoisted _SafeDict to global scope to avoid recreation per call.
+    if not params:
+        # Fast path: no params.
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20107,10 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Use local default arg to avoid repeated global lookups in tight comprehensions
+    from app.sources.external.jira.jira import \
+        _serialize_value  # Import inside to not break file-level lints or circular
+    if not d:
+        return {}
+    sv = _serialize_value
+    return {str(k): sv(v) for k, v in d.items()}
