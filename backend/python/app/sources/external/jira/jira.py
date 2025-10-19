@@ -4340,24 +4340,32 @@ class JiraDataSource:
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get favorite filters\n\nHTTP GET /rest/api/3/filter/favourite\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get favorite filters
+
+HTTP GET /rest/api/3/filter/favourite
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
+        # Only materialize headers when non-empty, avoid unnecessary dict ops
+        _headers = dict(headers) if headers else {}
+        # _path is always empty in this method.
+        # _query only non-empty if expand is not None.
         if expand is not None:
-            _query['expand'] = expand
-        _body = None
+            _query = {'expand': expand}
+        else:
+            _query = {}
+
+        # _as_str_dict for empty dict always returns empty dict, so skip for _path
         rel_path = '/rest/api/3/filter/favourite'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, {})
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_as_str_dict(_headers) if _headers else {},          # Avoid function call if empty
+            path_params={},                                             # Path is empty dict always
+            query_params=_as_str_dict(_query) if _query else {},        # Avoid function call if empty
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20089,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
