@@ -87,16 +87,7 @@ class GoogleSheetsDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if spreadsheetId is not None:
-            kwargs['spreadsheetId'] = spreadsheetId
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.spreadsheets().getByDataFilter(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.spreadsheets().getByDataFilter(**kwargs) # type: ignore
+        request = self.client.spreadsheets().getByDataFilter(spreadsheetId=spreadsheetId) # type: ignore
         return request.execute()
 
     async def spreadsheets_batch_update(
