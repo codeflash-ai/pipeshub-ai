@@ -3813,24 +3813,47 @@ class JiraDataSource:
         id: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Delete field configuration\n\nHTTP DELETE /rest/api/3/fieldconfiguration/{id}\nPath params:\n  - id (int)"""
+        """Auto-generated from OpenAPI: Delete field configuration
+
+HTTP DELETE /rest/api/3/fieldconfiguration/{id}
+Path params:
+  - id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        _body = None
+
+        # Inline dict creation, minimize unnecessary conversions
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+        _path_id = id
+
+        # Fast path for common Jira REST API: only id in path
         rel_path = '/rest/api/3/fieldconfiguration/{id}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}{rel_path.replace('{id}', str(_path_id))}"
+
+        # Prepare HTTPRequest with inlined _as_str_dict logic
+        def _serialize_value(v: Any) -> str:
+            # Use the original _serialize_value logic from READ ONLY module
+            # to make sure the same behavior is preserved
+            if v is None:
+                return ''
+            if isinstance(v, (list, tuple, set)):
+                return ','.join(_to_bool_str(x) for x in v)
+            return _to_bool_str(v)
+
+        def _to_bool_str(val: Any) -> str:
+            # Not shown in read only, but must preserve original behavior
+            # Assume bool -> 'true'/'false', else str
+            if isinstance(val, bool):
+                return 'true' if val else 'false'
+            return str(val)
+
+        # Special-case for empty dicts (for _query and _body)
         req = HTTPRequest(
             method='DELETE',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers={str(k): _serialize_value(v) for k, v in _headers.items()},
+            path_params={'id': str(_path_id)},
+            query_params={},  # Always empty here
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
