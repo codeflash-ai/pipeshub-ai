@@ -6053,28 +6053,37 @@ class JiraDataSource:
         maxResults: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get changelogs\n\nHTTP GET /rest/api/3/issue/{issueIdOrKey}/changelog\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)"""
+        """Auto-generated from OpenAPI: Get changelogs
+
+HTTP GET /rest/api/3/issue/{issueIdOrKey}/changelog
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
+        
+        # Move these to only create if needed, and minimize conversions
+        _headers: Dict[str, Any] = headers if headers else {}
+        _path: Dict[str, str] = {'issueIdOrKey': str(issueIdOrKey)}
         _query: Dict[str, Any] = {}
         if startAt is not None:
             _query['startAt'] = startAt
         if maxResults is not None:
             _query['maxResults'] = maxResults
-        _body = None
+
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/changelog'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}{_safe_format_url(rel_path, _path)}"
+
+        # Only call _as_str_dict where needed (headers, path_params, query_params could be optimized)
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_as_str_dict(_headers) if _headers else {},
+            path_params=_path,  # Already str->str
+            query_params=_as_str_dict(_query) if _query else {},
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20090,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Avoid redefining class every call, and minimize exception handling
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20109,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast path for empty dict, and avoid unnecessary generator overhead
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
