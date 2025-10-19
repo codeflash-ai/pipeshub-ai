@@ -5852,29 +5852,39 @@ class JiraDataSource:
         failFast: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue\n\nHTTP GET /rest/api/3/issue/{issueIdOrKey}\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - fields (list[str], optional)\n  - fieldsByKeys (bool, optional)\n  - expand (str, optional)\n  - properties (list[str], optional)\n  - updateHistory (bool, optional)\n  - failFast (bool, optional)"""
+        """Auto-generated from OpenAPI: Get issue
+
+HTTP GET /rest/api/3/issue/{issueIdOrKey}
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - fields (list[str], optional)
+  - fieldsByKeys (bool, optional)
+  - expand (str, optional)
+  - properties (list[str], optional)
+  - updateHistory (bool, optional)
+  - failFast (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
+
+        # Use dict comprehension to build _query in a single step for efficiency
+        _query: Dict[str, Any] = {
+            k: v for k, v in [
+                ('fields', fields),
+                ('fieldsByKeys', fieldsByKeys),
+                ('expand', expand),
+                ('properties', properties),
+                ('updateHistory', updateHistory),
+                ('failFast', failFast),
+            ] if v is not None
         }
-        _query: Dict[str, Any] = {}
-        if fields is not None:
-            _query['fields'] = fields
-        if fieldsByKeys is not None:
-            _query['fieldsByKeys'] = fieldsByKeys
-        if expand is not None:
-            _query['expand'] = expand
-        if properties is not None:
-            _query['properties'] = properties
-        if updateHistory is not None:
-            _query['updateHistory'] = updateHistory
-        if failFast is not None:
-            _query['failFast'] = failFast
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        _path: Dict[str, Any] = {'issueIdOrKey': issueIdOrKey}
         _body = None
         rel_path = '/rest/api/3/issue/{issueIdOrKey}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Convert dictionaries to string-keyed using the optimized helper
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -20081,9 +20091,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20109,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Remove 'or {}' as d is always a dict
+    return {str(k): _serialize_value(v) for k, v in d.items()}
