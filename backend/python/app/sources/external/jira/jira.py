@@ -5289,10 +5289,21 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Create issue\n\nHTTP POST /rest/api/3/issue\nQuery params:\n  - updateHistory (bool, optional)\nBody (application/json) fields:\n  - fields (Dict[str, Any], optional)\n  - historyMetadata (Dict[str, Any], optional)\n  - properties (list[Dict[str, Any]], optional)\n  - transition (Dict[str, Any], optional)\n  - update (Dict[str, Any], optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Create issue
+
+HTTP POST /rest/api/3/issue
+Query params:
+  - updateHistory (bool, optional)
+Body (application/json) fields:
+  - fields (Dict[str, Any], optional)
+  - historyMetadata (Dict[str, Any], optional)
+  - properties (list[Dict[str, Any]], optional)
+  - transition (Dict[str, Any], optional)
+  - update (Dict[str, Any], optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {'Content-Type': 'application/json'}
         _headers.setdefault('Content-Type', 'application/json')
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
@@ -5309,7 +5320,7 @@ class JiraDataSource:
             _body['transition'] = transition
         if update is not None:
             _body['update'] = update
-        if 'body_additional' in locals() and body_additional:
+        if body_additional:
             _body.update(body_additional)
         rel_path = '/rest/api/3/issue'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20102,4 +20113,4 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    return {str(k): _serialize_value(v) for k, v in d.items()} if d else {}
