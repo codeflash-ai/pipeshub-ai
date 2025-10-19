@@ -5258,10 +5258,13 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get license\n\nHTTP GET /rest/api/3/instance/license"""
+        """Auto-generated from OpenAPI: Get license
+
+HTTP GET /rest/api/3/instance/license"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        # Use the fast-path for empty dict creation
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
         _body = None
@@ -20081,9 +20084,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Use the class defined above, not within the function for better performance
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20103,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast-path for empty dict to avoid generator overhead
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
