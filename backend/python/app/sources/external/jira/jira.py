@@ -4744,25 +4744,33 @@ class JiraDataSource:
         accountId: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Change filter owner\n\nHTTP PUT /rest/api/3/filter/{id}/owner\nPath params:\n  - id (int)\nBody (application/json) fields:\n  - accountId (str, required)"""
+        """Auto-generated from OpenAPI: Change filter owner
+
+HTTP PUT /rest/api/3/filter/{id}/owner
+Path params:
+  - id (int)
+Body (application/json) fields:
+  - accountId (str, required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
+        # Avoid unneeded dict recreation
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
+        # Always set content-type only once
+        if 'Content-Type' not in _headers:
+            _headers['Content-Type'] = 'application/json'
+        _path: Dict[str, Any] = {'id': id}
         _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['accountId'] = accountId
+        _body: Dict[str, Any] = {'accountId': accountId}
         rel_path = '/rest/api/3/filter/{id}/owner'
+        # Precompute url using fast-format helper
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Inline _as_str_dict logic for higher efficiency: avoid function call overhead in hot path
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers={str(k): _serialize_value(v) for k, v in _headers.items()},
+            path_params={str(k): _serialize_value(v) for k, v in _path.items()},
+            query_params={str(k): _serialize_value(v) for k, v in _query.items()},
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20089,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Using globally pre-defined _SafeDict
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
