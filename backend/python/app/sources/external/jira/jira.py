@@ -4123,27 +4123,43 @@ class JiraDataSource:
         description: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update field configuration scheme\n\nHTTP PUT /rest/api/3/fieldconfigurationscheme/{id}\nPath params:\n  - id (int)\nBody (application/json) fields:\n  - description (str, optional)\n  - name (str, required)"""
+        """Auto-generated from OpenAPI: Update field configuration scheme
+
+HTTP PUT /rest/api/3/fieldconfigurationscheme/{id}
+Path params:
+  - id (int)
+Body (application/json) fields:
+  - description (str, optional)
+  - name (str, required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # --- Optimize: Combine dict conversions before passing to HTTPRequest ---
+        # Make headers and params as mutable only if needed, use single conversions for efficiency
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
+
+        _path = {'id': id}
+        # Use unpacking to construct body dict more efficiently
+        _body = {'name': name}
         if description is not None:
             _body['description'] = description
-        _body['name'] = name
+
         rel_path = '/rest/api/3/fieldconfigurationscheme/{id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Compute dict translations just once
+        str_headers = _as_str_dict(_headers)
+        str_path = _as_str_dict(_path)
+        # Query is always empty, just pass {} literal
+        str_query = {}
+
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=str_headers,
+            path_params=str_path,
+            query_params=str_query,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,10 +20097,8 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
+        # Now _SafeDict is global and not re-created every function call
         return template.format_map(_SafeDict(params))
     except Exception:
         return template
@@ -20102,4 +20116,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Items is only called if d is not empty, which is already the case
+    return {str(k): _serialize_value(v) for k, v in d.items()}
