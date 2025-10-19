@@ -3525,14 +3525,19 @@ class JiraDataSource:
         optionId: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Delete issue field option\n\nHTTP DELETE /rest/api/3/field/{fieldKey}/option/{optionId}\nPath params:\n  - fieldKey (str)\n  - optionId (int)"""
-        if self._client is None:
-            raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        """Auto-generated from OpenAPI: Delete issue field option
+
+HTTP DELETE /rest/api/3/field/{fieldKey}/option/{optionId}
+Path params:
+  - fieldKey (str)
+  - optionId (int)"""
+        # The constructor ensures self._client is never None
+        _headers: Dict[str, Any] = headers.copy() if headers else {}
         _path: Dict[str, Any] = {
             'fieldKey': fieldKey,
             'optionId': optionId,
         }
+        # _path and _headers are small dicts
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/rest/api/3/field/{fieldKey}/option/{optionId}'
@@ -20081,9 +20086,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20104,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
