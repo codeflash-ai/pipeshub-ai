@@ -4368,26 +4368,39 @@ class JiraDataSource:
         includeFavourites: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get my filters\n\nHTTP GET /rest/api/3/filter/my\nQuery params:\n  - expand (str, optional)\n  - includeFavourites (bool, optional)"""
+        """Auto-generated from OpenAPI: Get my filters
+
+HTTP GET /rest/api/3/filter/my
+Query params:
+  - expand (str, optional)
+  - includeFavourites (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary copying by only making a shallow copy if headers is not None
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+        # Only create _query if any parameters provided
+        _query: Dict[str, Any] = (
+            {'expand': expand} if expand is not None else {}
+        )
         if includeFavourites is not None:
-            _query['includeFavourites'] = includeFavourites
-        _body = None
+            # Use direct mutation to avoid double dict allocation
+            if _query:
+                _query['includeFavourites'] = includeFavourites
+            else:
+                _query = {'includeFavourites': includeFavourites}
+        _path: Dict[str, Any] = {}  # This is always empty for this endpoint
+
+        # Skip assignment of _body and rel_path unless logic changes in future endpoints
         rel_path = '/rest/api/3/filter/my'
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Only run the comprehensions if dict is actually non-empty to avoid overhead
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
             query_params=_as_str_dict(_query),
-            body=_body,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,6 +20094,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # Fast path for empty params; avoid creating new class/object
+    if not params:
+        return template
     class _SafeDict(dict):
         def __missing__(self, key: str) -> str:
             return '{' + key + '}'
@@ -20102,4 +20118,8 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        # Avoid unnecessary dict comprehension/allocation for empty case
+        return {}
+    # Dict comprehension is already fast, but we ensure it's called only when needed
+    return {str(k): _serialize_value(v) for k, v in d.items()}
