@@ -4684,28 +4684,37 @@ class JiraDataSource:
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Remove filter as favorite\n\nHTTP DELETE /rest/api/3/filter/{id}/favourite\nPath params:\n  - id (int)\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Remove filter as favorite
+
+HTTP DELETE /rest/api/3/filter/{id}/favourite
+Path params:
+  - id (int)
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+
+        # Use {} if headers is None, otherwise make a shallow copy
+        _headers = headers.copy() if headers is not None else {}
+        # _path is just one item, don't need to create the dict then pass; inline usage
+        _query = {'expand': expand} if expand is not None else {}
         _body = None
+        # Use format directly since we have one parameter (id), much faster and clearer
         rel_path = '/rest/api/3/filter/{id}/favourite'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}/rest/api/3/filter/{id}/favourite"
+
         req = HTTPRequest(
             method='DELETE',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict(_headers) if _headers else {},
+            path_params={'id': str(id)},
+            query_params=_as_str_dict(_query) if _query else {},
             body=_body,
         )
-        resp = await self._client.execute(req)
+
+        # Save _client.execute to local variable (minor optimization)
+        execute_fn = self._client.execute
+        resp = await execute_fn(req)
         return resp
 
     async def set_favourite_for_filter(
@@ -20102,4 +20111,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
