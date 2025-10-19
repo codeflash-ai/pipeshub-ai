@@ -3748,25 +3748,41 @@ class JiraDataSource:
         query: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get all field configurations\n\nHTTP GET /rest/api/3/fieldconfiguration\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)\n  - id (list[int], optional)\n  - isDefault (bool, optional)\n  - query (str, optional)"""
+        """Auto-generated from OpenAPI: Get all field configurations
+
+HTTP GET /rest/api/3/fieldconfiguration
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)
+  - id (list[int], optional)
+  - isDefault (bool, optional)
+  - query (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
+
+        # Avoid unnecessary dict construction; only copy headers if present
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+
+        # Group query parameters into a tuple to avoid repeated statements
         _query: Dict[str, Any] = {}
-        if startAt is not None:
-            _query['startAt'] = startAt
-        if maxResults is not None:
-            _query['maxResults'] = maxResults
-        if id is not None:
-            _query['id'] = id
-        if isDefault is not None:
-            _query['isDefault'] = isDefault
-        if query is not None:
-            _query['query'] = query
+        for key, val in (
+            ('startAt', startAt),
+            ('maxResults', maxResults),
+            ('id', id),
+            ('isDefault', isDefault),
+            ('query', query)
+        ):
+            if val is not None:
+                _query[key] = val
+
+        # Path dictionary is unused but kept for compatibility
+        _path: Dict[str, Any] = {}
+
         _body = None
         rel_path = '/rest/api/3/fieldconfiguration'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Compose HTTPRequest; helpers are only called if dicts are non-empty
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -20081,9 +20097,11 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Fast path for no params, which is common in this usage.
+    if not params:
+        return template
+    # Local reference to avoid repeated lookups.
+    _SafeDict = type('_SafeDict', (dict,), {'__missing__': lambda self, k: '{' + k + '}'})
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20120,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Microoptimization: avoid .items() on empty or None
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
