@@ -5902,15 +5902,40 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Edit issue\n\nHTTP PUT /rest/api/3/issue/{issueIdOrKey}\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - notifyUsers (bool, optional)\n  - overrideScreenSecurity (bool, optional)\n  - overrideEditableFlag (bool, optional)\n  - returnIssue (bool, optional)\n  - expand (str, optional)\nBody (application/json) fields:\n  - fields (Dict[str, Any], optional)\n  - historyMetadata (Dict[str, Any], optional)\n  - properties (list[Dict[str, Any]], optional)\n  - transition (Dict[str, Any], optional)\n  - update (Dict[str, Any], optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Edit issue
+
+HTTP PUT /rest/api/3/issue/{issueIdOrKey}
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - notifyUsers (bool, optional)
+  - overrideScreenSecurity (bool, optional)
+  - overrideEditableFlag (bool, optional)
+  - returnIssue (bool, optional)
+  - expand (str, optional)
+Body (application/json) fields:
+  - fields (Dict[str, Any], optional)
+  - historyMetadata (Dict[str, Any], optional)
+  - properties (list[Dict[str, Any]], optional)
+  - transition (Dict[str, Any], optional)
+  - update (Dict[str, Any], optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # Efficient header creation
+        if headers:
+            _headers = headers.copy()
+        else:
+            _headers = {}
+
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
+
+        # Path params (no change, only one param)
+        _path = {'issueIdOrKey': issueIdOrKey}
+
+        # Efficiently construct query dict
+        _query = {}
         if notifyUsers is not None:
             _query['notifyUsers'] = notifyUsers
         if overrideScreenSecurity is not None:
@@ -5921,7 +5946,10 @@ class JiraDataSource:
             _query['returnIssue'] = returnIssue
         if expand is not None:
             _query['expand'] = expand
-        _body: Dict[str, Any] = {}
+
+        # Efficiently construct body dict using direct assignment
+        _body = {}
+        # These checks occur rarely, so keep branch structure for clarity, but fast by local
         if fields is not None:
             _body['fields'] = fields
         if historyMetadata is not None:
@@ -5932,16 +5960,19 @@ class JiraDataSource:
             _body['transition'] = transition
         if update is not None:
             _body['update'] = update
-        if 'body_additional' in locals() and body_additional:
+        if body_additional:
             _body.update(body_additional)
+
         rel_path = '/rest/api/3/issue/{issueIdOrKey}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        _as_str_dict_ref = _as_str_dict  # For micro-optimization in closure (dict compr)
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict_ref(_headers),
+            path_params=_as_str_dict_ref(_path),
+            query_params=_as_str_dict_ref(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,11 +20112,15 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Cache the _SafeDict class to avoid redefining every call
+    if not hasattr(_safe_format_url, '_SafeDict'):
+        class _SafeDict(dict):
+            def __missing__(self, key: str) -> str:
+                return '{' + key + '}'
+        _safe_format_url._SafeDict = _SafeDict
+
     try:
-        return template.format_map(_SafeDict(params))
+        return template.format_map(_safe_format_url._SafeDict(params))
     except Exception:
         return template
 
