@@ -5459,22 +5459,30 @@ class JiraDataSource:
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get create issue metadata\n\nHTTP GET /rest/api/3/issue/createmeta\nQuery params:\n  - projectIds (list[str], optional)\n  - projectKeys (list[str], optional)\n  - issuetypeIds (list[str], optional)\n  - issuetypeNames (list[str], optional)\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get create issue metadata
+
+HTTP GET /rest/api/3/issue/createmeta
+Query params:
+  - projectIds (list[str], optional)
+  - projectKeys (list[str], optional)
+  - issuetypeIds (list[str], optional)
+  - issuetypeNames (list[str], optional)
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        # Use a single dictionary update to avoid multiple if branches
+        _headers: Dict[str, Any] = {} if headers is None else dict(headers)
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
-        if projectIds is not None:
-            _query['projectIds'] = projectIds
-        if projectKeys is not None:
-            _query['projectKeys'] = projectKeys
-        if issuetypeIds is not None:
-            _query['issuetypeIds'] = issuetypeIds
-        if issuetypeNames is not None:
-            _query['issuetypeNames'] = issuetypeNames
-        if expand is not None:
-            _query['expand'] = expand
+        for param_name, param_value in (
+            ('projectIds', projectIds),
+            ('projectKeys', projectKeys),
+            ('issuetypeIds', issuetypeIds),
+            ('issuetypeNames', issuetypeNames),
+            ('expand', expand),
+        ):
+            if param_value is not None:
+                _query[param_name] = param_value
         _body = None
         rel_path = '/rest/api/3/issue/createmeta'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,10 +20089,8 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
+        # Use the pre-defined _SafeDict to avoid redeclaring class on every call
         return template.format_map(_SafeDict(params))
     except Exception:
         return template
@@ -20102,4 +20108,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Early exit to avoid unnecessary dict comprehension for empty dict
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
