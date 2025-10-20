@@ -20,6 +20,10 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        # Cache the bound method to avoid attribute lookup and repeated method binding per request
+        self._batch_delete_print_servers = (
+            self.client.customers_chrome_printServers().batchDeletePrintServers
+        )
 
     async def chromeosdevices_action(
         self,
@@ -890,12 +894,8 @@ class GoogleAdminDataSource:
         if parent is not None:
             kwargs['parent'] = parent
 
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.customers_chrome_printServers().batchDeletePrintServers(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.customers_chrome_printServers().batchDeletePrintServers(**kwargs) # type: ignore
+        # Avoid the redundant 'if "body" in kwargs' branch, as it will always be False
+        request = self._batch_delete_print_servers(**kwargs)  # type: ignore
         return request.execute()
 
     async def domain_aliases_delete(
