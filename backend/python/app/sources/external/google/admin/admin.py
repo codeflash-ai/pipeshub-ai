@@ -783,6 +783,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
+        # Cache the service to avoid repeated expensive calls
+        if not hasattr(self, '_chrome_print_servers'):
+            self._chrome_print_servers = self.client.customers_chrome_printServers()
+
         kwargs = {}
         if parent is not None:
             kwargs['parent'] = parent
@@ -790,9 +794,9 @@ class GoogleAdminDataSource:
         # Handle request body if needed
         if 'body' in kwargs:
             body = kwargs.pop('body')
-            request = self.client.customers_chrome_printServers().create(**kwargs, body=body) # type: ignore
+            request = self._chrome_print_servers.create(**kwargs, body=body) # type: ignore
         else:
-            request = self.client.customers_chrome_printServers().create(**kwargs) # type: ignore
+            request = self._chrome_print_servers.create(**kwargs) # type: ignore
         return request.execute()
 
     async def customers_chrome_print_servers_batch_create_print_servers(
