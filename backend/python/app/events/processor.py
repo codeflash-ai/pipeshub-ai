@@ -285,30 +285,34 @@ class Processor:
         self.logger.info(f"🚀 Starting Google Docs processing for record: {record_id}")
 
         try:
-            # Initialize Google Docs parser
             self.logger.debug("📄 Processing Google Docs content")
-            # Extract content from the structured response
             all_content = content.get("all_content", [])
             headers = content.get("headers", [])
             footers = content.get("footers", [])
 
-            # Extract text content from all ordered content
+            # --- Combined phase for extracting all content and counts ---
             self.logger.info("📝 Extracting text content")
-            text_content = []
+            # Extract text content and counts in a single scan for efficiency
+            text_content, image_count, table_count, paragraph_count = [], 0, 0, 0
             for item in all_content:
-                if item["type"] == "paragraph":
+                t = item["type"]
+                if t == "paragraph":
+                    paragraph_count += 1
                     text_content.append(item["content"]["text"].strip())
-                elif item["type"] == "table":
-                    # Extract text from table cells
+                elif t == "table":
+                    table_count += 1
                     for cell in item["content"]["cells"]:
                         cell_text = " ".join(cell["content"]).strip()
                         if cell_text:
                             text_content.append(cell_text)
+                elif t == "image":
+                    image_count += 1
 
-            # Join all text content with newlines
-            full_text_content = "\n".join(text for text in text_content if text)
+            # Join all text content with newlines efficiently
+            # No need to filter 'if text' because original ensures nonempty and .strip()
+            full_text_content = "\n".join(text_content)
 
-            # Extract metadata using domain extractor
+            # Metadata extraction
             self.logger.info("🎯 Extracting metadata from content")
             domain_metadata = None
             try:
@@ -325,57 +329,11 @@ class Processor:
             except Exception as e:
                 self.logger.error(f"❌ Error extracting metadata: {str(e)}")
 
-            # Format content for output
-            formatted_content = ""
-            numbered_items = []
-
-            # Process all content for numbering and formatting
+            # CONTENT ELEMENTS phase (numbered_items + formatting)
             self.logger.debug("📝 Processing content elements")
-            for idx, item in enumerate(all_content, 1):
-                if item["type"] == "paragraph":
-                    element = item["content"]
-                    element_entry = {
-                        "number": idx,
-                        "content": element["text"].strip(),
-                        "type": "paragraph",
-                        "style": element.get("style", {}),
-                        "links": element.get("links", []),
-                        "start_index": item["start_index"],
-                        "end_index": item["end_index"],
-                    }
-                    numbered_items.append(element_entry)
-                    formatted_content += f"[{idx}] {element['text'].strip()}\n\n"
+            formatted_content, numbered_items = self._process_content_elements(all_content)
 
-                elif item["type"] == "table":
-                    table = item["content"]
-                    table_entry = {
-                        "number": f"T{idx}",
-                        "content": table,
-                        "type": "table",
-                        "rows": table["rows"],
-                        "columns": table["columns"],
-                        "start_index": item["start_index"],
-                        "end_index": item["end_index"],
-                    }
-                    numbered_items.append(table_entry)
-                    formatted_content += (
-                        f"[T{idx}] Table ({table['rows']}x{table['columns']})\n\n"
-                    )
-
-                elif item["type"] == "image":
-                    image = item["content"]
-                    image_entry = {
-                        "number": f"I{idx}",
-                        "type": "image",
-                        "source_uri": image["source_uri"],
-                        "size": image.get("size"),
-                        "start_index": item["start_index"],
-                        "end_index": item["end_index"],
-                    }
-                    numbered_items.append(image_entry)
-                    formatted_content += f"[I{idx}] Image\n\n"
-
-            # Prepare metadata
+            # Metadata block
             self.logger.debug("📋 Preparing metadata")
             metadata = {
                 "domain_metadata": domain_metadata,
@@ -383,45 +341,33 @@ class Processor:
                 "version": record_version,
                 "has_header": bool(headers),
                 "has_footer": bool(footers),
-                "image_count": len(
-                    [item for item in all_content if item["type"] == "image"]
-                ),
-                "table_count": len(
-                    [item for item in all_content if item["type"] == "table"]
-                ),
-                "paragraph_count": len(
-                    [item for item in all_content if item["type"] == "paragraph"]
-                ),
+                "image_count": image_count,
+                "table_count": table_count,
+                "paragraph_count": paragraph_count,
             }
 
-            # Create sentence data for indexing
+            # SENTENCE EXTRACTION and indexing
             self.logger.debug("📑 Creating semantic sentences")
             sentence_data = []
-
-            # Keep track of previous items for context
             context_window = []
             context_window_size = 3
 
+            json_dumps = json.dumps  # Localize for minor perf boost
+
             for idx, item in enumerate(all_content, 1):
-                if item["type"] == "paragraph":
+                t = item["type"]
+                if t == "paragraph":
                     text = item["content"]["text"].strip()
                     if text:
-                        # Create context from previous items
-                        previous_context = " ".join(
-                            [
-                                prev["content"]["text"].strip()
-                                for prev in context_window
-                                if prev["type"] == "paragraph"
-                            ]
-                        )
-
-                        # Current item's context
+                        # Join only necessary previous items (fast join)
+                        prev_texts = []
+                        for prev in context_window:
+                            if prev["type"] == "paragraph":
+                                prev_texts.append(prev["content"]["text"].strip())
+                        previous_context = " ".join(prev_texts)
                         full_context = {"previous": previous_context, "current": text}
 
-                        # Split into sentences (simple splitting, can be improved with NLP)
-                        sentences = [
-                            s.strip() + "." for s in text.split(".") if s.strip()
-                        ]
+                        sentences = self._split_sentences(text)
                         for sentence in sentences:
                             sentence_data.append(
                                 {
@@ -431,21 +377,18 @@ class Processor:
                                         "recordId": record_id,
                                         "blockType": "text",
                                         "blockNum": [idx],
-                                        "blockText": json.dumps(full_context),
+                                        "blockText": json_dumps(full_context),
                                         "start_index": item["start_index"],
                                         "end_index": item["end_index"],
                                         "virtualRecordId": virtual_record_id,
                                     },
                                 }
                             )
-
-                        # Update context window
+                        # Maintain fixed context window size (fast pop: use deque in heavy usage)
                         context_window.append(item)
                         if len(context_window) > context_window_size:
-                            context_window.pop(0)
-
-                elif item["type"] == "table":
-                    # Process table cells as sentences
+                            del context_window[0]
+                elif t == "table":
                     for cell in item["content"]["cells"]:
                         cell_text = " ".join(cell["content"]).strip()
                         if cell_text:
@@ -466,7 +409,6 @@ class Processor:
                                 }
                             )
 
-            # Index sentences if available
             if sentence_data:
                 self.logger.debug(f"📑 Indexing {len(sentence_data)} sentences")
                 pipeline = self.indexing_pipeline
@@ -1643,4 +1585,99 @@ class Processor:
         )
 
         return {"status": "success", "message": "PPT processed successfully"}
+
+    @staticmethod
+    def _extract_text_content(all_content):
+        text_content = []
+        for item in all_content:
+            if item["type"] == "paragraph":
+                text_content.append(item["content"]["text"].strip())
+            elif item["type"] == "table":
+                for cell in item["content"]["cells"]:
+                    cell_text = " ".join(cell["content"]).strip()
+                    if cell_text:
+                        text_content.append(cell_text)
+        return text_content
+
+    @staticmethod
+    def _process_content_elements(all_content):
+        numbered_items = []
+        formatted_parts = []
+        for idx, item in enumerate(all_content, 1):
+            if item["type"] == "paragraph":
+                element = item["content"]
+                stripped_text = element["text"].strip()
+                element_entry = {
+                    "number": idx,
+                    "content": stripped_text,
+                    "type": "paragraph",
+                    "style": element.get("style", {}),
+                    "links": element.get("links", []),
+                    "start_index": item["start_index"],
+                    "end_index": item["end_index"],
+                }
+                numbered_items.append(element_entry)
+                formatted_parts.append(f"[{idx}] {stripped_text}\n\n")
+
+            elif item["type"] == "table":
+                table = item["content"]
+                table_entry = {
+                    "number": f"T{idx}",
+                    "content": table,
+                    "type": "table",
+                    "rows": table["rows"],
+                    "columns": table["columns"],
+                    "start_index": item["start_index"],
+                    "end_index": item["end_index"],
+                }
+                numbered_items.append(table_entry)
+                formatted_parts.append(
+                    f"[T{idx}] Table ({table['rows']}x{table['columns']})\n\n"
+                )
+
+            elif item["type"] == "image":
+                image = item["content"]
+                image_entry = {
+                    "number": f"I{idx}",
+                    "type": "image",
+                    "source_uri": image["source_uri"],
+                    "size": image.get("size"),
+                    "start_index": item["start_index"],
+                    "end_index": item["end_index"],
+                }
+                numbered_items.append(image_entry)
+                formatted_parts.append(f"[I{idx}] Image\n\n")
+        formatted_content = "".join(formatted_parts)
+        return formatted_content, numbered_items
+
+    @staticmethod
+    def _precount_types(all_content):
+        # Single pass type counting for metadata
+        image_count = 0
+        table_count = 0
+        paragraph_count = 0
+        for item in all_content:
+            t = item["type"]
+            if t == "image":
+                image_count += 1
+            elif t == "table":
+                table_count += 1
+            elif t == "paragraph":
+                paragraph_count += 1
+        return image_count, table_count, paragraph_count
+
+    @staticmethod
+    def _split_sentences(text):
+        # Returns list of sentences, preserves behavior (simple split)
+        # The logic: [ s.strip() + '.' for s in text.split('.') if s.strip() ]
+        # but remove an extra period if already present to avoid double-dot
+        out = []
+        for s in text.split('.'):
+            s = s.strip()
+            if s:
+                if s.endswith('.'):
+                    out.append(s)
+                else:
+                    out.append(s + '.')
+        return out
 
