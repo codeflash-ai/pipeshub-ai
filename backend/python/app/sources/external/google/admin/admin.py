@@ -20,6 +20,8 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        # Cache the bound orgunits().get method for performance
+        self._orgunits_get = self.client.orgunits().get
 
     async def chromeosdevices_action(
         self,
@@ -1698,13 +1700,15 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
+        # Direct dict creation for fewer Python opcode dispatches
         kwargs = {}
         if customerId is not None:
             kwargs['customerId'] = customerId
         if orgUnitPath is not None:
             kwargs['orgUnitPath'] = orgUnitPath
 
-        request = self.client.orgunits().get(**kwargs) # type: ignore
+        # Use the cached method, avoiding redundant orgunits() lookups and attribute dispatch
+        request = self._orgunits_get(**kwargs)  # type: ignore
         return request.execute()
 
     async def orgunits_insert(
