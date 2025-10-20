@@ -20,6 +20,7 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        self._resources_buildings = client.resources_buildings()
 
     async def chromeosdevices_action(
         self,
@@ -2001,13 +2002,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customer is not None:
-            kwargs['customer'] = customer
-        if buildingId is not None:
-            kwargs['buildingId'] = buildingId
-
-        request = self.client.resources_buildings().get(**kwargs) # type: ignore
+        request = self._resources_buildings.get(
+            customer=customer,
+            buildingId=buildingId
+        ) # type: ignore
         return request.execute()
 
     async def resources_buildings_insert(
