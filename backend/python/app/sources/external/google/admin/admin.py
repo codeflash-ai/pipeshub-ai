@@ -3135,16 +3135,9 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.users().undelete(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.users().undelete(**kwargs) # type: ignore
+        # Directly pass userKey to the method call, avoiding extra dict/branching
+        # If userKey is None, Google API client will raise the same exceptions as before
+        request = self.client.users().undelete(userKey=userKey)  # type: ignore
         return request.execute()
 
     async def users_update(
