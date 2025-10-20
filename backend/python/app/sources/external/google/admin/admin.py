@@ -1047,7 +1047,9 @@ class GoogleAdminDataSource:
             kwargs['domainName'] = domainName
 
         request = self.client.domains().get(**kwargs) # type: ignore
-        return request.execute()
+        # The execute() method is synchronous and CPU/network-bound.
+        # To avoid blocking the event loop, run it in a thread.
+        return await asyncio.to_thread(request.execute)
 
     async def domains_insert(
         self,
