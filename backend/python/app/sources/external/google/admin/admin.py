@@ -20,6 +20,7 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        self._print_servers_resource = self.client.customers_chrome_printServers()
 
     async def chromeosdevices_action(
         self,
@@ -843,12 +844,7 @@ class GoogleAdminDataSource:
         if updateMask is not None:
             kwargs['updateMask'] = updateMask
 
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.customers_chrome_printServers().patch(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.customers_chrome_printServers().patch(**kwargs) # type: ignore
+        request = self._print_servers_resource.patch(**kwargs) # type: ignore
         return request.execute()
 
     async def customers_chrome_print_servers_delete(
