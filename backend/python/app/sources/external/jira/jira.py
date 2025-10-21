@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -6621,24 +6624,31 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Create or update remote issue link\n\nHTTP POST /rest/api/3/issue/{issueIdOrKey}/remotelink\nPath params:\n  - issueIdOrKey (str)\nBody (application/json) fields:\n  - application (Dict[str, Any], optional)\n  - globalId (str, optional)\n  - object (Dict[str, Any], required)\n  - relationship (str, optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Create or update remote issue link
+
+HTTP POST /rest/api/3/issue/{issueIdOrKey}/remotelink
+Path params:
+  - issueIdOrKey (str)
+Body (application/json) fields:
+  - application (Dict[str, Any], optional)
+  - globalId (str, optional)
+  - object (Dict[str, Any], required)
+  - relationship (str, optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers = dict(headers) if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
+        _path = {'issueIdOrKey': issueIdOrKey}
+        _query = {}
+        _body = {'object': object}
         if application is not None:
             _body['application'] = application
         if globalId is not None:
             _body['globalId'] = globalId
-        _body['object'] = object
         if relationship is not None:
             _body['relationship'] = relationship
-        if 'body_additional' in locals() and body_additional:
+        if body_additional:
             _body.update(body_additional)
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/remotelink'
         url = self.base_url + _safe_format_url(rel_path, _path)
