@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8779,30 +8782,38 @@ class JiraDataSource:
         description: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Create issue type scheme\n\nHTTP POST /rest/api/3/issuetypescheme\nBody (application/json) fields:\n  - defaultIssueTypeId (str, optional)\n  - description (str, optional)\n  - issueTypeIds (list[str], required)\n  - name (str, required)"""
+        """Auto-generated from OpenAPI: Create issue type scheme
+
+HTTP POST /rest/api/3/issuetypescheme
+Body (application/json) fields:
+  - defaultIssueTypeId (str, optional)
+  - description (str, optional)
+  - issueTypeIds (list[str], required)
+  - name (str, required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
+        # Only build the body once, no unnecessary dict copying
+        _body: Dict[str, Any] = {
+            'issueTypeIds': issueTypeIds,
+            'name': name
+        }
         if defaultIssueTypeId is not None:
             _body['defaultIssueTypeId'] = defaultIssueTypeId
         if description is not None:
             _body['description'] = description
-        _body['issueTypeIds'] = issueTypeIds
-        _body['name'] = name
         rel_path = '/rest/api/3/issuetypescheme'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, {})
         req = HTTPRequest(
             method='POST',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params={},
+            query_params={},
             body=_body,
         )
+        # Await the HTTP request execution (no batching opportunities here)
         resp = await self._client.execute(req)
         return resp
 
