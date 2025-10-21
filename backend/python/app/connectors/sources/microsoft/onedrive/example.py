@@ -17,7 +17,10 @@ from app.utils.logger import create_logger
 
 
 def is_valid_email(email: str) -> bool:
-    return email is not None and email != "" and "@" in email
+    # Avoid unnecessary comparisons and use short-circuit logic for speed
+    if not email:
+        return False
+    return "@" in email
 
 async def test_run() -> None:
     user_email = os.getenv("TEST_USER_EMAIL")
