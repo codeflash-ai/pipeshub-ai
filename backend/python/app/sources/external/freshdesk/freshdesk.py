@@ -354,14 +354,14 @@ class FreshdeskDataSource:
         """
         url = self._freshdesk_client.get_base_url()
         url += "/search/tickets"
-        params = {}
+        # Fast parameter string construction: Known parameters, no nested structure
+        query_params = []
         if query is not None:
-            params['query'] = query
+            query_params.append(f"query={query}")
         if page is not None:
-            params['page'] = page
-        if params:
-            from urllib.parse import urlencode
-            url += '?' + urlencode(params)
+            query_params.append(f"page={page}")
+        if query_params:
+            url += '?' + '&'.join(query_params)
         request_body = None
 
         try:
