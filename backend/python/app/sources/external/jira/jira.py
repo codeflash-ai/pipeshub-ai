@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -7116,64 +7119,83 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Add worklog\n\nHTTP POST /rest/api/3/issue/{issueIdOrKey}/worklog\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - notifyUsers (bool, optional)\n  - adjustEstimate (str, optional)\n  - newEstimate (str, optional)\n  - reduceBy (str, optional)\n  - expand (str, optional)\n  - overrideEditableFlag (bool, optional)\nBody (application/json) fields:\n  - author (Dict[str, Any], optional)\n  - comment (str, optional)\n  - created (str, optional)\n  - id (str, optional)\n  - issueId (str, optional)\n  - properties (list[Dict[str, Any]], optional)\n  - self (str, optional)\n  - started (str, optional)\n  - timeSpent (str, optional)\n  - timeSpentSeconds (int, optional)\n  - updateAuthor (Dict[str, Any], optional)\n  - updated (str, optional)\n  - visibility (Dict[str, Any], optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Add worklog
+
+HTTP POST /rest/api/3/issue/{issueIdOrKey}/worklog
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - notifyUsers (bool, optional)
+  - adjustEstimate (str, optional)
+  - newEstimate (str, optional)
+  - reduceBy (str, optional)
+  - expand (str, optional)
+  - overrideEditableFlag (bool, optional)
+Body (application/json) fields:
+  - author (Dict[str, Any], optional)
+  - comment (str, optional)
+  - created (str, optional)
+  - id (str, optional)
+  - issueId (str, optional)
+  - properties (list[Dict[str, Any]], optional)
+  - self (str, optional)
+  - started (str, optional)
+  - timeSpent (str, optional)
+  - timeSpentSeconds (int, optional)
+  - updateAuthor (Dict[str, Any], optional)
+  - updated (str, optional)
+  - visibility (Dict[str, Any], optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        if notifyUsers is not None:
-            _query['notifyUsers'] = notifyUsers
-        if adjustEstimate is not None:
-            _query['adjustEstimate'] = adjustEstimate
-        if newEstimate is not None:
-            _query['newEstimate'] = newEstimate
-        if reduceBy is not None:
-            _query['reduceBy'] = reduceBy
-        if expand is not None:
-            _query['expand'] = expand
-        if overrideEditableFlag is not None:
-            _query['overrideEditableFlag'] = overrideEditableFlag
-        _body: Dict[str, Any] = {}
-        if author is not None:
-            _body['author'] = author
-        if comment is not None:
-            _body['comment'] = comment
-        if created is not None:
-            _body['created'] = created
-        if id is not None:
-            _body['id'] = id
-        if issueId is not None:
-            _body['issueId'] = issueId
-        if properties is not None:
-            _body['properties'] = properties
-        if self_ is not None:
-            _body['self'] = self_
-        if started is not None:
-            _body['started'] = started
-        if timeSpent is not None:
-            _body['timeSpent'] = timeSpent
-        if timeSpentSeconds is not None:
-            _body['timeSpentSeconds'] = timeSpentSeconds
-        if updateAuthor is not None:
-            _body['updateAuthor'] = updateAuthor
-        if updated is not None:
-            _body['updated'] = updated
-        if visibility is not None:
-            _body['visibility'] = visibility
-        if 'body_additional' in locals() and body_additional:
-            _body.update(body_additional)
+        # Avoid repeated function calls and dict allocations: reuse objects and use locals for construction
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/worklog'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        _headers: Dict[str, Any] = dict(headers) if headers is not None else {}
+        _headers.setdefault('Content-Type', 'application/json')
+        _path: Dict[str, Any] = {'issueIdOrKey': issueIdOrKey}
+
+        # Use local list of (name, value) for query/body param population
+        _query_pairs = [
+            ('notifyUsers', notifyUsers),
+            ('adjustEstimate', adjustEstimate),
+            ('newEstimate', newEstimate),
+            ('reduceBy', reduceBy),
+            ('expand', expand),
+            ('overrideEditableFlag', overrideEditableFlag),
+        ]
+        # Only add if not None (avoids repeated lookups)
+        _query: Dict[str, Any] = {k: v for (k, v) in _query_pairs if v is not None}
+
+        _body_pairs = [
+            ('author', author),
+            ('comment', comment),
+            ('created', created),
+            ('id', id),
+            ('issueId', issueId),
+            ('properties', properties),
+            ('self', self_),
+            ('started', started),
+            ('timeSpent', timeSpent),
+            ('timeSpentSeconds', timeSpentSeconds),
+            ('updateAuthor', updateAuthor),
+            ('updated', updated),
+            ('visibility', visibility),
+        ]
+        _body: Dict[str, Any] = {k: v for (k, v) in _body_pairs if v is not None}
+        if body_additional:
+            _body.update(body_additional)
+
+        url = f'{self.base_url}{_safe_format_url(rel_path, _path)}'
+        # Precompute and reuse str-dict conversions (they are repeatedly called and expensive)
+        _str_headers = _as_str_dict(_headers)
+        _str_path = _as_str_dict(_path)
+        _str_query = _as_str_dict(_query)
         req = HTTPRequest(
             method='POST',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_str_headers,
+            path_params=_str_path,
+            query_params=_str_query,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20081,9 +20103,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Move _SafeDict class outside the function for performance (class creation is expensive in a hot path)
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20122,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Use local variable for items to avoid repeated (d or {}).items() evaluation
+    items = (d or {}).items()
+    return {str(k): _serialize_value(v) for k, v in items}
