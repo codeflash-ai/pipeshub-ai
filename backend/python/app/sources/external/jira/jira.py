@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -6587,26 +6590,38 @@ class JiraDataSource:
         globalId: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get remote issue links\n\nHTTP GET /rest/api/3/issue/{issueIdOrKey}/remotelink\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - globalId (str, optional)"""
+        """Auto-generated from OpenAPI: Get remote issue links
+
+HTTP GET /rest/api/3/issue/{issueIdOrKey}/remotelink
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - globalId (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        if globalId is not None:
-            _query['globalId'] = globalId
-        _body = None
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/remotelink'
+        _path = {'issueIdOrKey': issueIdOrKey}
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Immediately convert to str headers/path/query only if non-empty -- reduces calls to _as_str_dict
+        _headers = None
+        if headers:
+            _headers = _as_str_dict(headers)
+        _path_str = _as_str_dict(_path)
+
+        if globalId is not None:
+            _query = {'globalId': globalId}
+            _query_str = _as_str_dict(_query)
+        else:
+            _query_str = {}
+
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_headers or {},
+            path_params=_path_str,
+            query_params=_query_str,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20096,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20114,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid constructing new dict if d is empty
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
