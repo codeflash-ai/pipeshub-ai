@@ -2670,14 +2670,15 @@ class FreshdeskDataSource:
             response: HTTPResponse = await self.http_client.execute(request)
 
             # Debug logging
+            status = response.response.status_code
             response_text = response.text()
-            if response.status >= HTTP_ERROR_THRESHOLD:
-                logger.debug(f"list_software_licenses: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}")
+            if status >= HTTP_ERROR_THRESHOLD:
+                logger.debug(f"list_software_licenses: Status={status}, Response={response_text[:200] if response_text else 'Empty'}")
 
             return FreshDeskResponse(
-                success=response.status < HTTP_ERROR_THRESHOLD,
+                success=status < HTTP_ERROR_THRESHOLD,
                 data=response.json() if response_text else None,
-                message="Successfully executed list_software_licenses" if response.status < HTTP_ERROR_THRESHOLD else f"Failed with status {response.status}"
+                message="Successfully executed list_software_licenses" if status < HTTP_ERROR_THRESHOLD else f"Failed with status {status}"
             )
         except Exception as e:
             logger.debug(f"Error in list_software_licenses: {e}")
