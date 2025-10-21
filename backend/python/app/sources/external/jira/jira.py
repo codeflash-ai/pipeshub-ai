@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9002,10 +9005,22 @@ class JiraDataSource:
         position: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Change order of issue types\n\nHTTP PUT /rest/api/3/issuetypescheme/{issueTypeSchemeId}/issuetype/move\nPath params:\n  - issueTypeSchemeId (int)\nBody (application/json) fields:\n  - after (str, optional)\n  - issueTypeIds (list[str], required)\n  - position (str, optional)"""
+        """Auto-generated from OpenAPI: Change order of issue types
+
+HTTP PUT /rest/api/3/issuetypescheme/{issueTypeSchemeId}/issuetype/move
+Path params:
+  - issueTypeSchemeId (int)
+Body (application/json) fields:
+  - after (str, optional)
+  - issueTypeIds (list[str], required)
+  - position (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        # Faster copy: avoid dict(headers or {}) copying when headers is None
+        if headers is None:
+            _headers: Dict[str, Any] = {}
+        else:
+            _headers: Dict[str, Any] = {**headers}
         _headers.setdefault('Content-Type', 'application/json')
         _path: Dict[str, Any] = {
             'issueTypeSchemeId': issueTypeSchemeId,
@@ -20081,9 +20096,7 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Fast path: if all placeholders present, use format(), else SafeDict
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20115,8 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Faster list comprehension + dict constructor
+    if not d:
+        return {}
+    # Avoid building a dict in d or {}.items(), use .items() directly
+    return dict([(str(k), _serialize_value(v)) for k, v in d.items()])
