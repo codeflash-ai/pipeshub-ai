@@ -573,7 +573,7 @@ class User(BaseModel):
         }
 
     def validate(self) -> bool:
-        return self.email is not None and self.email != ""
+        return bool(self.email)
 
     def key(self) -> str:
         return self.email
