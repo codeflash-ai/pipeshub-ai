@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -7867,22 +7870,32 @@ class JiraDataSource:
         onlyDefault: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue security levels\n\nHTTP GET /rest/api/3/issuesecurityschemes/level\nQuery params:\n  - startAt (str, optional)\n  - maxResults (str, optional)\n  - id (list[str], optional)\n  - schemeId (list[str], optional)\n  - onlyDefault (bool, optional)"""
+        """Auto-generated from OpenAPI: Get issue security levels
+
+HTTP GET /rest/api/3/issuesecurityschemes/level
+Query params:
+  - startAt (str, optional)
+  - maxResults (str, optional)
+  - id (list[str], optional)
+  - schemeId (list[str], optional)
+  - onlyDefault (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
+
+        # Explicit serialization to minimize repeated work
         if startAt is not None:
             _query['startAt'] = startAt
         if maxResults is not None:
             _query['maxResults'] = maxResults
         if id is not None:
-            _query['id'] = id
+            _query['id'] = _serialize_value(id)
         if schemeId is not None:
-            _query['schemeId'] = schemeId
+            _query['schemeId'] = _serialize_value(schemeId)
         if onlyDefault is not None:
-            _query['onlyDefault'] = onlyDefault
+            _query['onlyDefault'] = _serialize_value(onlyDefault)
         _body = None
         rel_path = '/rest/api/3/issuesecurityschemes/level'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -7891,7 +7904,7 @@ class JiraDataSource:
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            query_params=_query,  # Already serialized
             body=_body,
         )
         resp = await self._client.execute(req)
