@@ -3,6 +3,11 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
+# Static empty dicts to avoid repeated allocations in hot path
+_EMPTY_DICT: Dict[str, Any] = {}
 
 
 class JiraDataSource:
@@ -6463,6 +6468,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8012,18 +8018,33 @@ class JiraDataSource:
         oldToNewSecurityLevelMappings: Optional[list[Dict[str, Any]]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Associate security scheme to project\n\nHTTP PUT /rest/api/3/issuesecurityschemes/project\nBody (application/json) fields:\n  - oldToNewSecurityLevelMappings (list[Dict[str, Any]], optional)\n  - projectId (str, required)\n  - schemeId (str, required)"""
+        """Auto-generated from OpenAPI: Associate security scheme to project
+
+HTTP PUT /rest/api/3/issuesecurityschemes/project
+Body (application/json) fields:
+  - oldToNewSecurityLevelMappings (list[Dict[str, Any]], optional)
+  - projectId (str, required)
+  - schemeId (str, required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        if 'Content-Type' not in _headers:
+            _headers['Content-Type'] = 'application/json'
+        # Use static empty dicts (these are never mutated)
+        _path: Dict[str, Any] = _EMPTY_DICT
+        _query: Dict[str, Any] = _EMPTY_DICT
+        # Directly construct the body without redundant allocations/setitem hits
         if oldToNewSecurityLevelMappings is not None:
-            _body['oldToNewSecurityLevelMappings'] = oldToNewSecurityLevelMappings
-        _body['projectId'] = projectId
-        _body['schemeId'] = schemeId
+            _body: Dict[str, Any] = {
+                'oldToNewSecurityLevelMappings': oldToNewSecurityLevelMappings,
+                'projectId': projectId,
+                'schemeId': schemeId
+            }
+        else:
+            _body: Dict[str, Any] = {
+                'projectId': projectId,
+                'schemeId': schemeId
+            }
         rel_path = '/rest/api/3/issuesecurityschemes/project'
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
@@ -20081,9 +20102,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20120,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    _serialize = _serialize_value
+    return {str(k): _serialize(v) for k, v in (d or {}).items()}
