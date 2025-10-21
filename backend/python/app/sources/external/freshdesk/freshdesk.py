@@ -771,9 +771,6 @@ class FreshdeskDataSource:
             params['page'] = page
         if per_page is not None:
             params['per_page'] = per_page
-        if params:
-            from urllib.parse import urlencode
-            url += '?' + urlencode(params)
         request_body = None
 
         try:
@@ -781,7 +778,8 @@ class FreshdeskDataSource:
                 url=url,
                 method="GET",
                 headers={"Content-Type": "application/json"},
-                body=request_body
+                body=request_body,
+                query_params=params
             )
             response: HTTPResponse = await self.http_client.execute(request)
 
