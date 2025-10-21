@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -7770,8 +7773,6 @@ class JiraDataSource:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
         _body: Dict[str, Any] = {}
         if archivedBy is not None:
             _body['archivedBy'] = archivedBy
@@ -7786,13 +7787,13 @@ class JiraDataSource:
         if 'body_additional' in locals() and body_additional:
             _body.update(body_additional)
         rel_path = '/rest/api/3/issues/archive/export'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + rel_path
         req = HTTPRequest(
             method='PUT',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params={},
+            query_params={},
             body=_body,
         )
         resp = await self._client.execute(req)
