@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9296,25 +9299,30 @@ class JiraDataSource:
         issueTypeMappings: list[Dict[str, Any]],
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Append mappings to issue type screen scheme\n\nHTTP PUT /rest/api/3/issuetypescreenscheme/{issueTypeScreenSchemeId}/mapping\nPath params:\n  - issueTypeScreenSchemeId (str)\nBody (application/json) fields:\n  - issueTypeMappings (list[Dict[str, Any]], required)"""
+        """Auto-generated from OpenAPI: Append mappings to issue type screen scheme
+
+HTTP PUT /rest/api/3/issuetypescreenscheme/{issueTypeScreenSchemeId}/mapping
+Path params:
+  - issueTypeScreenSchemeId (str)
+Body (application/json) fields:
+  - issueTypeMappings (list[Dict[str, Any]], required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'issueTypeScreenSchemeId': issueTypeScreenSchemeId,
-        }
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['issueTypeMappings'] = issueTypeMappings
-        rel_path = '/rest/api/3/issuetypescreenscheme/{issueTypeScreenSchemeId}/mapping'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        _path = {'issueTypeScreenSchemeId': issueTypeScreenSchemeId}
+        # Create _body in a single step (slightly more memory/cpu efficient)
+        _body = {'issueTypeMappings': issueTypeMappings}
+        url = self.base_url + _safe_format_url(
+            '/rest/api/3/issuetypescreenscheme/{issueTypeScreenSchemeId}/mapping',
+            _path
+        )
         req = HTTPRequest(
             method='PUT',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            query_params={},  # Empty dict, no need to call _as_str_dict on {}
             body=_body,
         )
         resp = await self._client.execute(req)
