@@ -1640,26 +1640,30 @@ class FreshdeskDataSource:
         """
         url = self._freshdesk_client.get_base_url()
         url += f"/problems/{id}/time_entries"
-        request_body = None
 
         try:
+            # Using constants instead of reconstructing dicts every request
             request = HTTPRequest(
                 url=url,
                 method="GET",
-                headers={"Content-Type": "application/json"},
-                body=request_body
+                headers=self.CONTENT_TYPE_JSON_HEADER,
+                body=self.REQUEST_BODY
             )
             response: HTTPResponse = await self.http_client.execute(request)
-
-            # Debug logging
             response_text = response.text()
-            if response.status >= HTTP_ERROR_THRESHOLD:
-                logger.debug(f"list_problem_time_entries: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}")
+            status = getattr(response, 'status', None)
+            if status is None:
+                status = getattr(response.response, 'status_code', 0)
 
+            if status >= HTTP_ERROR_THRESHOLD:
+                logger.debug(f"list_problem_time_entries: Status={status}, Response={response_text[:200] if response_text else 'Empty'}")
+
+            # Avoid calling response.json() and text() twice
+            data = response.json() if response_text else None
             return FreshDeskResponse(
-                success=response.status < HTTP_ERROR_THRESHOLD,
-                data=response.json() if response_text else None,
-                message="Successfully executed list_problem_time_entries" if response.status < HTTP_ERROR_THRESHOLD else f"Failed with status {response.status}"
+                success=status < HTTP_ERROR_THRESHOLD,
+                data=data,
+                message="Successfully executed list_problem_time_entries" if status < HTTP_ERROR_THRESHOLD else f"Failed with status {status}"
             )
         except Exception as e:
             logger.debug(f"Error in list_problem_time_entries: {e}")
