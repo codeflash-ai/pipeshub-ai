@@ -3,6 +3,13 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
+# ---- Caching for constant content ----
+_EMPTY_STR_DICT: Dict[str, str] = {}
+_EMPTY_DICT: Dict[str, Any] = {}
+_REL_PATH: str = '/rest/api/3/issuetypescheme/mapping'
 
 
 class JiraDataSource:
@@ -6463,6 +6470,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8813,12 +8821,20 @@ class JiraDataSource:
         issueTypeSchemeId: Optional[list[int]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue type scheme items\n\nHTTP GET /rest/api/3/issuetypescheme/mapping\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)\n  - issueTypeSchemeId (list[int], optional)"""
+        """Auto-generated from OpenAPI: Get issue type scheme items
+
+HTTP GET /rest/api/3/issuetypescheme/mapping
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)
+  - issueTypeSchemeId (list[int], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
+        # Pre-allocate empty dicts; build only if passed
+        # Dict allocations are cheap but skipping them entirely is faster under high-throughput
+        _headers = headers if headers else _EMPTY_DICT
+        _path = _EMPTY_DICT
+        _query = {}
         if startAt is not None:
             _query['startAt'] = startAt
         if maxResults is not None:
@@ -8826,14 +8842,14 @@ class JiraDataSource:
         if issueTypeSchemeId is not None:
             _query['issueTypeSchemeId'] = issueTypeSchemeId
         _body = None
-        rel_path = '/rest/api/3/issuetypescheme/mapping'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Use cached rel_path and cached format for constant no-path replacement
+        url = self.base_url + _safe_format_url_cached(_REL_PATH, _path)
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict_cached(_headers),
+            path_params=_as_str_dict_cached(_path),
+            query_params=_as_str_dict_cached(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20103,3 +20119,22 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+
+def _safe_format_url_cached(template: str, params: Dict[str, object]) -> str:
+    # Fast path for static values
+    if not params and template is _REL_PATH:
+        return _REL_PATH
+    class _SafeDict(dict):
+        def __missing__(self, key: str) -> str:
+            return '{' + key + '}'
+    try:
+        return template.format_map(_SafeDict(params))
+    except Exception:
+        return template
+
+def _as_str_dict_cached(d: Dict[str, Any]) -> Dict[str, str]:
+    # Fast path for empty dicts
+    if not d:
+        return _EMPTY_STR_DICT
+    # This calls the original logic
+    return {str(k): _serialize_value(v) for k, v in d.items()}
