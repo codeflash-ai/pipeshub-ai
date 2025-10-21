@@ -621,7 +621,7 @@ class UserGroup(BaseModel):
         return True
 
     def key(self) -> str:
-        return self._key
+        return self.__dict__.get('_key')
 
 
 class AppUser(BaseModel):
