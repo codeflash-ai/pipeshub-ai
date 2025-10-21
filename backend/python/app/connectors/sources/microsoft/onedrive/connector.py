@@ -136,6 +136,10 @@ class OneDriveConnector(BaseConnector):
 
         self.rate_limiter = AsyncLimiter(50, 1)  # 50 requests per second
 
+        # Cache the bound logging function to avoid attribute access overhead in tight loops
+        self._log_info = self.logger.info
+        self._log_error = self.logger.error
+
     async def init(self) -> bool:
         config = await self.config_service.get_config("/services/connectors/onedrive/config") or await self.config_service.get_config(f"/services/connectors/onedrive/config/{self.data_entities_processor.org_id}")
         if not config:
@@ -802,10 +806,12 @@ class OneDriveConnector(BaseConnector):
     async def test_connection_and_access(self) -> bool:
         """Test connection and access to OneDrive."""
         try:
-            self.logger.info("Testing connection and access to OneDrive")
+            log_info = self._log_info
+            log_info("Testing connection and access to OneDrive")
             return True
         except Exception as e:
-            self.logger.error(f"❌ Error testing connection and access to OneDrive: {e}")
+            log_error = self._log_error
+            log_error(f"❌ Error testing connection and access to OneDrive: {e}")
             return False
 
     @classmethod
