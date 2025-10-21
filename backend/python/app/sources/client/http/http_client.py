@@ -1,7 +1,6 @@
 from typing import Optional
 
 import httpx  # type: ignore
-
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.iclient import IClient
@@ -13,7 +12,7 @@ class HTTPClient(IClient):
         token: str,
         token_type: str = "Bearer",
         timeout: float = 30.0,
-        follow_redirects: bool = True
+        follow_redirects: bool = True,
     ) -> None:
         self.headers = {
             "Authorization": f"{token_type} {token}",
@@ -30,8 +29,7 @@ class HTTPClient(IClient):
         """Ensure client is created and available"""
         if self.client is None:
             self.client = httpx.AsyncClient(
-                timeout=self.timeout,
-                follow_redirects=self.follow_redirects
+                timeout=self.timeout, follow_redirects=self.follow_redirects
             )
         return self.client
 
@@ -47,11 +45,15 @@ class HTTPClient(IClient):
         client = await self._ensure_client()
 
         # Merge client headers with request headers (request headers take precedence)
-        merged_headers = {**self.headers, **request.headers}
+        if request.headers:
+            merged_headers = {**self.headers, **request.headers}
+        else:
+            merged_headers = self.headers
+
         request_kwargs = {
             "params": request.query_params,
             "headers": merged_headers,
-            **kwargs
+            **kwargs,
         }
 
         if isinstance(request.body, dict):
