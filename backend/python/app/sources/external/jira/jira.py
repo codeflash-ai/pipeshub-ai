@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8238,27 +8241,44 @@ class JiraDataSource:
         replaceWith: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Remove issue security level\n\nHTTP DELETE /rest/api/3/issuesecurityschemes/{schemeId}/level/{levelId}\nPath params:\n  - schemeId (str)\n  - levelId (str)\nQuery params:\n  - replaceWith (str, optional)"""
+        """Auto-generated from OpenAPI: Remove issue security level
+
+HTTP DELETE /rest/api/3/issuesecurityschemes/{schemeId}/level/{levelId}
+Path params:
+  - schemeId (str)
+  - levelId (str)
+Query params:
+  - replaceWith (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
+
+        # Avoid redundant dict wrappers
+        _headers = headers if headers is not None else {}
+        _path = {
             'schemeId': schemeId,
             'levelId': levelId,
         }
-        _query: Dict[str, Any] = {}
+        # Use direct assignment to avoid overhead from initializing empty dict
         if replaceWith is not None:
-            _query['replaceWith'] = replaceWith
-        _body = None
+            _query = {'replaceWith': replaceWith}
+        else:
+            _query = {}
+
         rel_path = '/rest/api/3/issuesecurityschemes/{schemeId}/level/{levelId}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Inline _as_str_dict logic to avoid three separate function calls/attribute lookups
+        serialize_value = _serialize_value  # local reference for speed
+        str_headers = {str(k): serialize_value(v) for k, v in _headers.items()}
+        str_path = {str(k): serialize_value(v) for k, v in _path.items()}
+        str_query = {str(k): serialize_value(v) for k, v in _query.items()}
+
         req = HTTPRequest(
             method='DELETE',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=str_headers,
+            path_params=str_path,
+            query_params=str_query,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20101,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
