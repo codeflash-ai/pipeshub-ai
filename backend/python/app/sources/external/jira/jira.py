@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8143,13 +8146,22 @@ class JiraDataSource:
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue security level members by issue security scheme\n\nHTTP GET /rest/api/3/issuesecurityschemes/{issueSecuritySchemeId}/members\nPath params:\n  - issueSecuritySchemeId (int)\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)\n  - issueSecurityLevelId (list[str], optional)\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get issue security level members by issue security scheme
+
+HTTP GET /rest/api/3/issuesecurityschemes/{issueSecuritySchemeId}/members
+Path params:
+  - issueSecuritySchemeId (int)
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)
+  - issueSecurityLevelId (list[str], optional)
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'issueSecuritySchemeId': issueSecuritySchemeId,
-        }
+
+        # Direct dict construction for known fields
+        _headers: Dict[str, Any] = dict(headers) if headers is not None else {}
+        _path: Dict[str, Any] = {'issueSecuritySchemeId': issueSecuritySchemeId}
         _query: Dict[str, Any] = {}
         if startAt is not None:
             _query['startAt'] = startAt
@@ -8160,14 +8172,19 @@ class JiraDataSource:
         if expand is not None:
             _query['expand'] = expand
         _body = None
+
         rel_path = '/rest/api/3/issuesecurityschemes/{issueSecuritySchemeId}/members'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Fast path: only one substitution, directly format
+        url = f"{self.base_url}{rel_path.replace('{issueSecuritySchemeId}', str(issueSecuritySchemeId))}"
+
+        _as_str_dict_fast = _as_str_dict  # Local binding for quicker access
+
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict_fast(_headers),
+            path_params=_as_str_dict_fast(_path),
+            query_params=_as_str_dict_fast(_query),
             body=_body,
         )
         resp = await self._client.execute(req)
