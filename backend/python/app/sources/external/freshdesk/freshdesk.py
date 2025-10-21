@@ -301,9 +301,7 @@ class FreshdeskDataSource:
             params['per_page'] = per_page
         if include is not None:
             params['include'] = include
-        if params:
-            from urllib.parse import urlencode
-            url += '?' + urlencode(params)
+
         request_body = None
 
         try:
@@ -311,11 +309,11 @@ class FreshdeskDataSource:
                 url=url,
                 method="GET",
                 headers={"Content-Type": "application/json"},
+                query_params=params,  # Pass params directly
                 body=request_body
             )
             response: HTTPResponse = await self.http_client.execute(request)
 
-            # Debug logging
             response_text = response.text()
             if response.status >= HTTP_ERROR_THRESHOLD:
                 logger.debug(f"list_tickets: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}")
