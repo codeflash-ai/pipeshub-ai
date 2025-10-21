@@ -3,6 +3,13 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
+_ISSUE_LINK_TYPE_PATH = '/rest/api/3/issueLinkType'
+
+# Shared constants for empty dicts and request path
+_EMPTY_DICT: Dict[str, Any] = {}
 
 
 class JiraDataSource:
@@ -6463,6 +6470,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -7598,14 +7606,18 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue link types\n\nHTTP GET /rest/api/3/issueLinkType"""
+        """Auto-generated from OpenAPI: Get issue link types
+
+HTTP GET /rest/api/3/issueLinkType"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
+        # Only create headers dict if provided, else use shared empty
+        _headers: Dict[str, Any] = dict(headers) if headers else _EMPTY_DICT
+        # Using shared immutable empty dicts for _path, _query
+        _path: Dict[str, Any] = _EMPTY_DICT
+        _query: Dict[str, Any] = _EMPTY_DICT
         _body = None
-        rel_path = '/rest/api/3/issueLinkType'
+        rel_path = _ISSUE_LINK_TYPE_PATH
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='GET',
@@ -20081,9 +20093,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Fast path: if params is empty, avoid format_map overhead
+    if not params:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20114,13 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast path for None or empty dict
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
+
+def _to_bool_str(v: Any) -> str:
+    # Typical serialization helper
+    if isinstance(v, bool):
+        return str(v).lower()
+    return str(v)
