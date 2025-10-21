@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -7548,20 +7551,19 @@ class JiraDataSource:
         """Auto-generated from OpenAPI: Delete issue link\n\nHTTP DELETE /rest/api/3/issueLink/{linkId}\nPath params:\n  - linkId (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {
             'linkId': linkId,
         }
         _query: Dict[str, Any] = {}
         _body = None
-        rel_path = '/rest/api/3/issueLink/{linkId}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}/rest/api/3/issueLink/{linkId}"
         req = HTTPRequest(
             method='DELETE',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            query_params=_query,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -20102,4 +20104,9 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    if len(d) == 1:
+        k, v = next(iter(d.items()))
+        return {str(k): _serialize_value(v)}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
