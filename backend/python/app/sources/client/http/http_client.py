@@ -13,7 +13,7 @@ class HTTPClient(IClient):
         token: str,
         token_type: str = "Bearer",
         timeout: float = 30.0,
-        follow_redirects: bool = True
+        follow_redirects: bool = True,
     ) -> None:
         self.headers = {
             "Authorization": f"{token_type} {token}",
@@ -30,8 +30,7 @@ class HTTPClient(IClient):
         """Ensure client is created and available"""
         if self.client is None:
             self.client = httpx.AsyncClient(
-                timeout=self.timeout,
-                follow_redirects=self.follow_redirects
+                timeout=self.timeout, follow_redirects=self.follow_redirects
             )
         return self.client
 
@@ -43,25 +42,25 @@ class HTTPClient(IClient):
         Returns:
             A HTTPResponse object containing the response from the server
         """
-        url = f"{request.url.format(**request.path_params)}"
+        url = request.url.format(**request.path_params)
+
         client = await self._ensure_client()
 
-        # Merge client headers with request headers (request headers take precedence)
-        merged_headers = {**self.headers, **request.headers}
+        # Merge headers efficiently (request headers take precedence)
+        merged_headers = self.headers.copy()
+        merged_headers.update(request.headers)
         request_kwargs = {
             "params": request.query_params,
             "headers": merged_headers,
-            **kwargs
+            **kwargs,
         }
 
         if isinstance(request.body, dict):
-            # Check if Content-Type indicates form data
-            content_type = request.headers.get("Content-Type", "").lower()
+            content_type = request.headers.get("Content-Type", "").casefold()
+            # Send as form data or JSON as appropriate
             if "application/x-www-form-urlencoded" in content_type:
-                # Send as form data
                 request_kwargs["data"] = request.body
             else:
-                # Send as JSON (default behavior)
                 request_kwargs["json"] = request.body
         elif isinstance(request.body, bytes):
             request_kwargs["content"] = request.body

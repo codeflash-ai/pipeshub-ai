@@ -3144,8 +3144,8 @@ class FreshdeskDataSource:
         Example:
             software = await ds.move_software(id=123, workspace_id=2)
         """
-        url = self._freshdesk_client.get_base_url()
-        url += f"/applications/{id}/move_workspace"
+        # Build URL in one step for reduced allocations
+        url = f"{self._freshdesk_client.get_base_url()}/applications/{id}/move_workspace"
         request_body: Dict[str, Any] = {}
         if workspace_id is not None:
             request_body['workspace_id'] = workspace_id
@@ -3159,18 +3159,33 @@ class FreshdeskDataSource:
             )
             response: HTTPResponse = await self.http_client.execute(request)
 
-            # Debug logging
             response_text = response.text()
-            if response.status >= HTTP_ERROR_THRESHOLD:
-                logger.debug(f"move_software: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}")
+            status = getattr(response, "status", None)
+            if status is None:
+                status = getattr(response.response, "status_code", None)
+            # Only parse JSON with non-error response and non-empty text
+            is_success = status is not None and status < HTTP_ERROR_THRESHOLD
+            data = response.json() if response_text and is_success else None
+
+            # Only format debug logs if logger level is enabled
+            if not is_success:
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug(
+                        f"move_software: Status={status}, Response={response_text[:200] if response_text else 'Empty'}"
+                    )
 
             return FreshDeskResponse(
-                success=response.status < HTTP_ERROR_THRESHOLD,
-                data=response.json() if response_text else None,
-                message="Successfully executed move_software" if response.status < HTTP_ERROR_THRESHOLD else f"Failed with status {response.status}"
+                success=is_success,
+                data=data,
+                message=(
+                    "Successfully executed move_software"
+                    if is_success
+                    else f"Failed with status {status}"
+                )
             )
         except Exception as e:
-            logger.debug(f"Error in move_software: {e}")
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Error in move_software: {e}")
             return FreshDeskResponse(
                 success=False,
                 error=str(e),
