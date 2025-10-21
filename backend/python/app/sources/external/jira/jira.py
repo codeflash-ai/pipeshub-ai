@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -6722,7 +6725,18 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update remote issue link by ID\n\nHTTP PUT /rest/api/3/issue/{issueIdOrKey}/remotelink/{linkId}\nPath params:\n  - issueIdOrKey (str)\n  - linkId (str)\nBody (application/json) fields:\n  - application (Dict[str, Any], optional)\n  - globalId (str, optional)\n  - object (Dict[str, Any], required)\n  - relationship (str, optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Update remote issue link by ID
+
+HTTP PUT /rest/api/3/issue/{issueIdOrKey}/remotelink/{linkId}
+Path params:
+  - issueIdOrKey (str)
+  - linkId (str)
+Body (application/json) fields:
+  - application (Dict[str, Any], optional)
+  - globalId (str, optional)
+  - object (Dict[str, Any], required)
+  - relationship (str, optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -6740,10 +6754,13 @@ class JiraDataSource:
         _body['object'] = object
         if relationship is not None:
             _body['relationship'] = relationship
-        if 'body_additional' in locals() and body_additional:
+        if body_additional:
             _body.update(body_additional)
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/remotelink/{linkId}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Use local variable for url building
+        base_url = self.base_url
+        url = base_url + _safe_format_url(rel_path, _path)
+        # Avoid repeated _as_str_dict and pass empty dict early
         req = HTTPRequest(
             method='PUT',
             url=url,
@@ -20081,9 +20098,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20116,6 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
