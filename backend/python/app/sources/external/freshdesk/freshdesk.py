@@ -2426,19 +2426,28 @@ class FreshdeskDataSource:
                 body=request_body
             )
             response: HTTPResponse = await self.http_client.execute(request)
+            response_status = response.status  # Cache status
+            response_text = response.text()  # Cache text
 
-            # Debug logging
-            response_text = response.text()
-            if response.status >= HTTP_ERROR_THRESHOLD:
-                logger.debug(f"view_software: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}")
+            # Debug logging, only format string if logging is enabled and error occurred (status >= threshold)
+            if response_status >= HTTP_ERROR_THRESHOLD and logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"view_software: Status={response_status}, "
+                    f"Response={response_text[:200] if response_text else 'Empty'}"
+                )
 
+            success = response_status < HTTP_ERROR_THRESHOLD
+
+            # Directly use cached status and text for deciding FreshDeskResponse
             return FreshDeskResponse(
-                success=response.status < HTTP_ERROR_THRESHOLD,
+                success=success,
                 data=response.json() if response_text else None,
-                message="Successfully executed view_software" if response.status < HTTP_ERROR_THRESHOLD else f"Failed with status {response.status}"
+                message="Successfully executed view_software" if success else f"Failed with status {response_status}"
             )
         except Exception as e:
-            logger.debug(f"Error in view_software: {e}")
+            # Only format error string if logger is enabled for DEBUG
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(f"Error in view_software: {e}")
             return FreshDeskResponse(
                 success=False,
                 error=str(e),
