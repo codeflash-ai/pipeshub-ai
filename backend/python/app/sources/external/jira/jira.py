@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8490,17 +8493,20 @@ class JiraDataSource:
         id: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue type\n\nHTTP GET /rest/api/3/issuetype/{id}\nPath params:\n  - id (str)"""
+        """Auto-generated from OpenAPI: Get issue type
+
+HTTP GET /rest/api/3/issuetype/{id}
+Path params:
+  - id (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
+        _headers: Dict[str, Any] = headers if headers else {}
+        _path: Dict[str, Any] = {'id': id}
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/rest/api/3/issuetype/{id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Precompute the dicts only once and more efficiently
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -20081,9 +20087,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20105,10 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast-path for empty or None (common for query/body empty case)
+    if not d:
+        return {}
+    result = {}
+    for k, v in d.items():
+        result[str(k)] = _serialize_value(v)
+    return result
