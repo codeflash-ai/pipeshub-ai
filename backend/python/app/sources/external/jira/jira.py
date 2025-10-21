@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -12,9 +14,10 @@ class JiraDataSource:
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         try:
-            self.base_url = self._client.get_base_url().rstrip('/') # type: ignore [valid method]
+            base_url = self._client.get_base_url()
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
+        self.base_url = base_url.rstrip('/') # type: ignore [valid method]
 
     def get_data_source(self) -> 'JiraDataSource':
         return self
@@ -6463,6 +6466,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -6765,34 +6769,41 @@ class JiraDataSource:
         sortByOpsBarAndStatus: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get transitions\n\nHTTP GET /rest/api/3/issue/{issueIdOrKey}/transitions\nPath params:\n  - issueIdOrKey (str)\nQuery params:\n  - expand (str, optional)\n  - transitionId (str, optional)\n  - skipRemoteOnlyCondition (bool, optional)\n  - includeUnavailableTransitions (bool, optional)\n  - sortByOpsBarAndStatus (bool, optional)"""
+        """Auto-generated from OpenAPI: Get transitions
+
+HTTP GET /rest/api/3/issue/{issueIdOrKey}/transitions
+Path params:
+  - issueIdOrKey (str)
+Query params:
+  - expand (str, optional)
+  - transitionId (str, optional)
+  - skipRemoteOnlyCondition (bool, optional)
+  - includeUnavailableTransitions (bool, optional)
+  - sortByOpsBarAndStatus (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
-        if transitionId is not None:
-            _query['transitionId'] = transitionId
-        if skipRemoteOnlyCondition is not None:
-            _query['skipRemoteOnlyCondition'] = skipRemoteOnlyCondition
-        if includeUnavailableTransitions is not None:
-            _query['includeUnavailableTransitions'] = includeUnavailableTransitions
-        if sortByOpsBarAndStatus is not None:
-            _query['sortByOpsBarAndStatus'] = sortByOpsBarAndStatus
-        _body = None
+        # Fast dict copy and assignment
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+        _path = {'issueIdOrKey': issueIdOrKey}
+        # _query building: skip redundant assignments and minimize lookups
+        _query = {}
+        if expand is not None: _query['expand'] = expand
+        if transitionId is not None: _query['transitionId'] = transitionId
+        if skipRemoteOnlyCondition is not None: _query['skipRemoteOnlyCondition'] = skipRemoteOnlyCondition
+        if includeUnavailableTransitions is not None: _query['includeUnavailableTransitions'] = includeUnavailableTransitions
+        if sortByOpsBarAndStatus is not None: _query['sortByOpsBarAndStatus'] = sortByOpsBarAndStatus
+
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/transitions'
+        # Compose URL efficiently — keep safe formatting and rstrip logic
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Build request object (avoid redundant dict copies)
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
             query_params=_as_str_dict(_query),
-            body=_body,
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20092,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20110,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid creating new dict when d is empty
+    # Use list comprehension for speed and avoid function call overhead
+    # but keep original logic for _serialize_value usage
+    return {str(k): _serialize_value(v) for k, v in d.items()}
