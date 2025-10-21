@@ -3,6 +3,10 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
+_REL_PATH_DEFAULT_LEVELS = '/rest/api/3/issuesecurityschemes/level/default'
 
 
 class JiraDataSource:
@@ -6463,6 +6467,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -7903,19 +7908,28 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Set default issue security levels\n\nHTTP PUT /rest/api/3/issuesecurityschemes/level/default\nBody (application/json) fields:\n  - defaultValues (list[Dict[str, Any]], required)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Set default issue security levels
+
+HTTP PUT /rest/api/3/issuesecurityschemes/level/default
+Body (application/json) fields:
+  - defaultValues (list[Dict[str, Any]], required)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
+        # Build headers efficiently, only set if not present
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
+        if 'Content-Type' not in _headers:
+            _headers['Content-Type'] = 'application/json'
+        # Path/query/body params (empty dicts)
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['defaultValues'] = defaultValues
-        if 'body_additional' in locals() and body_additional:
+        # Body construction
+        _body: Dict[str, Any] = {'defaultValues': defaultValues}
+        if body_additional:
             _body.update(body_additional)
-        rel_path = '/rest/api/3/issuesecurityschemes/level/default'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Compose URL (base_url always stripped, rel_path is const)
+        url = f"{self.base_url}{_safe_format_url(_REL_PATH_DEFAULT_LEVELS, _path)}"
+        # HTTPRequest construction
         req = HTTPRequest(
             method='PUT',
             url=url,
@@ -20081,9 +20095,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Pre-check for empty params: saves format_map overhead in the common case
+    if not params:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20116,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    if not d:
+        return {}
+    items = d.items()
+    return {str(k): _serialize_value(v) for k, v in items}
