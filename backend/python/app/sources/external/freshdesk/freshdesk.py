@@ -14,6 +14,7 @@ from app.sources.client.freshdesk.freshdesk import (
 )
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
+from urllib.parse import urlencode
 
 logger = logging.getLogger(__name__)
 
@@ -1274,16 +1275,17 @@ class FreshdeskDataSource:
         Example:
             deleted = await ds.list_deleted_problems()
         """
-        url = self._freshdesk_client.get_base_url()
-        url += "/problems/deleted"
+        base_url = self._freshdesk_client.get_base_url()
         params = {}
         if page is not None:
             params['page'] = page
         if per_page is not None:
             params['per_page'] = per_page
         if params:
-            from urllib.parse import urlencode
-            url += '?' + urlencode(params)
+            query_string = urlencode(params)
+            url = f"{base_url}/problems/deleted?{query_string}"
+        else:
+            url = f"{base_url}/problems/deleted"
         request_body = None
 
         try:
@@ -1298,7 +1300,9 @@ class FreshdeskDataSource:
             # Debug logging
             response_text = response.text()
             if response.status >= HTTP_ERROR_THRESHOLD:
-                logger.debug(f"list_deleted_problems: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}")
+                logger.debug(
+                    f"list_deleted_problems: Status={response.status}, Response={response_text[:200] if response_text else 'Empty'}"
+                )
 
             return FreshDeskResponse(
                 success=response.status < HTTP_ERROR_THRESHOLD,
