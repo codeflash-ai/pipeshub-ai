@@ -3,6 +3,14 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
+_BODY = None
+
+# Pre-allocate constants to avoid redundant allocations
+_EMPTY_DICT: Dict[str, Any] = {}
+_REL_PATH: str = '/rest/api/3/mypreferences/locale'
 
 
 class JiraDataSource:
@@ -6463,6 +6471,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9931,22 +9940,21 @@ class JiraDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get locale\n\nHTTP GET /rest/api/3/mypreferences/locale"""
+        """Auto-generated from OpenAPI: Get locale
+
+HTTP GET /rest/api/3/mypreferences/locale"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body = None
-        rel_path = '/rest/api/3/mypreferences/locale'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Use constant empty dicts for path, query, and body
+        _headers: Dict[str, Any] = dict(headers) if headers else _EMPTY_DICT
+        url = self.base_url + _safe_format_url(_REL_PATH, _EMPTY_DICT)
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            path_params=_EMPTY_DICT,  # also passed as constants
+            query_params=_EMPTY_DICT,
+            body=_BODY,
         )
         resp = await self._client.execute(req)
         return resp
@@ -20081,9 +20089,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20107,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid unnecessary (d or {}) since d is always passed as dict
+    return {str(k): _serialize_value(v) for k, v in d.items()}
