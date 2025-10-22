@@ -10,7 +10,11 @@ from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
 class AbstractGmailWebhookHandler(ABC):
     def __init__(
-        self, logger, config_service: ConfigurationService, arango_service, change_handler
+        self,
+        logger,
+        config_service: ConfigurationService,
+        arango_service,
+        change_handler,
     ) -> None:
         self.config_service = config_service
         self.logger = logger
@@ -179,10 +183,11 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                 self.handler_type,
                 email_address,
             )
+
             self.logger.debug(
                 "%s webhook: Notification details - %s",
                 self.handler_type,
-                json.dumps(message_data, indent=2),
+                json.dumps(message_data),
             )
 
             async with self.processing_lock:
@@ -201,10 +206,7 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                     email_address
                 )
                 if not channel_history:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 current_history_id = channel_history["historyId"]
@@ -213,7 +215,9 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                 )
                 if changes:
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"], channel_history["expiration"], email_address
+                        changes["historyId"],
+                        channel_history["expiration"],
+                        email_address,
                     )
 
                 user_id = await self.arango_service.get_entity_id_by_email(
@@ -333,19 +337,13 @@ class EnterpriseGmailWebhookHandler(AbstractGmailWebhookHandler):
                     email_address
                 )
                 if not channel_history:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 self.logger.debug("channel_history: %s", channel_history)
                 current_history_id = channel_history["historyId"]
                 if not current_history_id:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 self.logger.debug("current_history_id: %s", current_history_id)
@@ -354,7 +352,9 @@ class EnterpriseGmailWebhookHandler(AbstractGmailWebhookHandler):
                 )
                 if changes:
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"], channel_history["expiration"], email_address
+                        changes["historyId"],
+                        channel_history["expiration"],
+                        email_address,
                     )
 
                 user_id = await self.arango_service.get_entity_id_by_email(
