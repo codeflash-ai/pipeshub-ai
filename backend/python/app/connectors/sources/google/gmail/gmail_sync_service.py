@@ -881,8 +881,6 @@ class GmailSyncEnterpriseService(BaseGmailSyncService):
     async def connect_services(self, org_id: str) -> bool:
         """Connect to services for enterprise setup"""
         try:
-            self.logger.info("🚀 Connecting to enterprise services")
-
             # Connect to Google Admin
             if not await self.gmail_admin_service.connect_admin(org_id, "gmail"):
                 raise Exception("Failed to connect to Gmail Admin API")
