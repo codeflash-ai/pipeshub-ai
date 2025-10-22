@@ -10,7 +10,11 @@ from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
 class AbstractGmailWebhookHandler(ABC):
     def __init__(
-        self, logger, config_service: ConfigurationService, arango_service, change_handler
+        self,
+        logger,
+        config_service: ConfigurationService,
+        arango_service,
+        change_handler,
     ) -> None:
         self.config_service = config_service
         self.logger = logger
@@ -201,10 +205,7 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                     email_address
                 )
                 if not channel_history:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 current_history_id = channel_history["historyId"]
@@ -213,7 +214,9 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                 )
                 if changes:
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"], channel_history["expiration"], email_address
+                        changes["historyId"],
+                        channel_history["expiration"],
+                        email_address,
                     )
 
                 user_id = await self.arango_service.get_entity_id_by_email(
@@ -296,27 +299,34 @@ class EnterpriseGmailWebhookHandler(AbstractGmailWebhookHandler):
                 )
                 return False
 
-            self.logger.info(
-                "%s webhook: Received notification for user %s",
-                self.handler_type,
-                email_address,
-            )
-            self.logger.debug(
-                "%s webhook: Notification details - %s",
-                self.handler_type,
-                json.dumps(message_data, indent=2),
-            )
+            # Avoid pretty-printing JSON for logs unless debug logging is enabled.
+            # Check the logger's effective level before doing expensive formatting.
+            if self.logger.isEnabledFor(20):  # INFO
+                self.logger.info(
+                    "%s webhook: Received notification for user %s",
+                    self.handler_type,
+                    email_address,
+                )
+            if self.logger.isEnabledFor(10):  # DEBUG
+                # Only pretty-print JSON if debug logging is enabled
+                self.logger.debug(
+                    "%s webhook: Notification details - %s",
+                    self.handler_type,
+                    json.dumps(message_data, indent=2),
+                )
 
             async with self.processing_lock:
                 # For Gmail Pub/Sub notifications, we always handle as 'exists' state
                 # since these are change notifications
                 email_address = message_data["emailAddress"]
 
-                self.logger.info(
-                    "%s webhook: Fetching changes for %s",
-                    self.handler_type,
-                    email_address,
-                )
+                if self.logger.isEnabledFor(20):  # INFO
+                    self.logger.info(
+                        "%s webhook: Fetching changes for %s",
+                        self.handler_type,
+                        email_address,
+                    )
+
                 user_service = await self.gmail_admin_service.create_gmail_user_service(
                     email_address
                 )
@@ -333,60 +343,71 @@ class EnterpriseGmailWebhookHandler(AbstractGmailWebhookHandler):
                     email_address
                 )
                 if not channel_history:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
-                self.logger.debug("channel_history: %s", channel_history)
+                if self.logger.isEnabledFor(10):  # DEBUG
+                    self.logger.debug("channel_history: %s", channel_history)
+
                 current_history_id = channel_history["historyId"]
                 if not current_history_id:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
-                self.logger.debug("current_history_id: %s", current_history_id)
-                changes = await user_service.fetch_gmail_changes(
+                if self.logger.isEnabledFor(10):  # DEBUG
+                    self.logger.debug("current_history_id: %s", current_history_id)
+
+                # Parallelize the following 3 async calls where possible
+                # 1. fetch_gmail_changes
+                # 2. get_entity_id_by_email
+                # 3. (store_channel_history_id depends on 1, get_document depends on 2)
+                changes_task = user_service.fetch_gmail_changes(
                     email_address, current_history_id
                 )
+                user_id_task = self.arango_service.get_entity_id_by_email(email_address)
+                changes, user_id = await changes_task, await user_id_task
+
                 if changes:
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"], channel_history["expiration"], email_address
+                        changes["historyId"],
+                        channel_history["expiration"],
+                        email_address,
                     )
 
-                user_id = await self.arango_service.get_entity_id_by_email(
-                    email_address
+                # Compose org_id retrieval query
+                query = (
+                    f"FOR edge IN belongsTo "
+                    f"FILTER edge._from == 'users/{user_id}' "
+                    f"AND edge.entityType == 'ORGANIZATION' "
+                    f"RETURN PARSE_IDENTIFIER(edge._to).key"
                 )
-                # Get org_id from belongsTo relation for this user
-                query = f"""
-                FOR edge IN belongsTo
-                    FILTER edge._from == 'users/{user_id}'
-                    AND edge.entityType == 'ORGANIZATION'
-                    RETURN PARSE_IDENTIFIER(edge._to).key
-                """
-                cursor = self.arango_service.db.aql.execute(query)
+                # The `.execute()` call is synchronous; run in loop executor to prevent blocking event loop
+                execute = self.arango_service.db.aql.execute
+                import asyncio
+
+                loop = asyncio.get_running_loop()
+                cursor = await loop.run_in_executor(None, execute, query)
+                # The cursor may be a generator or iterator
                 org_id = next(cursor, None)
 
                 if changes and isinstance(changes, dict) and changes.get("history"):
-                    self.logger.info(
-                        "%s webhook: Found %s changes to process",
-                        self.handler_type,
-                        len(changes),
-                    )
+                    if self.logger.isEnabledFor(20):  # INFO
+                        self.logger.info(
+                            "%s webhook: Found %s changes to process",
+                            self.handler_type,
+                            len(changes),
+                        )
                     user = await self.arango_service.get_document(
                         user_id, CollectionNames.USERS.value
                     )
-
                     await self.change_handler.process_changes(
                         user_service, changes, org_id, user
                     )
                 else:
-                    self.logger.info(
-                        "%s webhook: No changes to process", self.handler_type
-                    )
+                    if self.logger.isEnabledFor(20):  # INFO
+                        self.logger.info(
+                            "%s webhook: No changes to process", self.handler_type
+                        )
 
             return True
 
