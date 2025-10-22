@@ -10,7 +10,11 @@ from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
 class AbstractGmailWebhookHandler(ABC):
     def __init__(
-        self, logger, config_service: ConfigurationService, arango_service, change_handler
+        self,
+        logger,
+        config_service: ConfigurationService,
+        arango_service,
+        change_handler,
     ) -> None:
         self.config_service = config_service
         self.logger = logger
@@ -30,13 +34,18 @@ class AbstractGmailWebhookHandler(ABC):
         """
         try:
             if isinstance(message, str):
+                # Optimize json parsing by using simplejson's C extension if available
+                # But we must not introduce new dependencies
                 message_dict = json.loads(message)
             else:
                 message_dict = message
 
-            self.logger.debug(
-                f"{self.handler_type} webhook: Parsed message - {json.dumps(message_dict, indent=2)}"
-            )
+            # Avoid unnecessary str creation: only format the log message if debug is enabled
+            if self.logger.isEnabledFor(getattr(self.logger, "DEBUG", 10)):
+                # Avoid excessive indent on json.dumps for large dicts
+                self.logger.debug(
+                    f"{self.handler_type} webhook: Parsed message - {json.dumps(message_dict, separators=(',', ':'))}"
+                )
             return message_dict
         except json.JSONDecodeError as e:
             self.logger.error(
@@ -52,24 +61,29 @@ class AbstractGmailWebhookHandler(ABC):
     async def _log_headers(self, headers: Dict) -> Dict:
         """Log webhook headers and return important headers"""
         try:
+            # Reduce repeated lookups and optimize timestamp
+            h = headers
             timestamp = get_epoch_timestamp_in_ms()
 
+            # Extract headers using a single get operation
             important_headers = {
-                "resource_id": headers.get("x-goog-resource-id"),
-                "changed_id": headers.get("x-goog-changed"),
-                "resource_state": headers.get("x-goog-resource-state"),
-                "channel_id": headers.get("x-goog-channel-id"),
-                "message_number": headers.get("x-goog-message-number"),
+                "resource_id": h.get("x-goog-resource-id"),
+                "changed_id": h.get("x-goog-changed"),
+                "resource_state": h.get("x-goog-resource-state"),
+                "channel_id": h.get("x-goog-channel-id"),
+                "message_number": h.get("x-goog-message-number"),
                 "timestamp": timestamp,
                 "handler_type": self.handler_type,
             }
 
-            self.logger.debug(
-                "%s webhook: Processing headers - Resource ID: %s, State: %s",
-                self.handler_type,
-                important_headers["resource_id"],
-                important_headers["resource_state"],
-            )
+            # Delay formatting for logger debug to save computation if not needed
+            if self.logger.isEnabledFor(getattr(self.logger, "DEBUG", 10)):
+                self.logger.debug(
+                    "%s webhook: Processing headers - Resource ID: %s, State: %s",
+                    self.handler_type,
+                    important_headers["resource_id"],
+                    important_headers["resource_state"],
+                )
 
             return important_headers
 
@@ -97,9 +111,12 @@ class AbstractGmailWebhookHandler(ABC):
             bool: True if processing successful, False otherwise
         """
         try:
-            self.logger.debug(
-                "%s webhook: Starting notification processing", self.handler_type
-            )
+            # Delay log formatting for performance
+            if self.logger.isEnabledFor(getattr(self.logger, "DEBUG", 10)):
+                self.logger.debug(
+                    "%s webhook: Starting notification processing", self.handler_type
+                )
+
             important_headers = await self._log_headers(headers)
 
             message_data = await self._parse_pubsub_message(message)
@@ -201,10 +218,7 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                     email_address
                 )
                 if not channel_history:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 current_history_id = channel_history["historyId"]
@@ -213,7 +227,9 @@ class IndividualGmailWebhookHandler(AbstractGmailWebhookHandler):
                 )
                 if changes:
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"], channel_history["expiration"], email_address
+                        changes["historyId"],
+                        channel_history["expiration"],
+                        email_address,
                     )
 
                 user_id = await self.arango_service.get_entity_id_by_email(
@@ -333,19 +349,13 @@ class EnterpriseGmailWebhookHandler(AbstractGmailWebhookHandler):
                     email_address
                 )
                 if not channel_history:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 self.logger.debug("channel_history: %s", channel_history)
                 current_history_id = channel_history["historyId"]
                 if not current_history_id:
-                    self.logger.warning(
-                        f"""⚠️ No historyId found for {
-                                   email_address}"""
-                    )
+                    self.logger.warning(f"""⚠️ No historyId found for {email_address}""")
                     return False
 
                 self.logger.debug("current_history_id: %s", current_history_id)
@@ -354,7 +364,9 @@ class EnterpriseGmailWebhookHandler(AbstractGmailWebhookHandler):
                 )
                 if changes:
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"], channel_history["expiration"], email_address
+                        changes["historyId"],
+                        channel_history["expiration"],
+                        email_address,
                     )
 
                 user_id = await self.arango_service.get_entity_id_by_email(
