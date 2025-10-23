@@ -20,6 +20,7 @@ class RecordGroupType(str, Enum):
     SHAREPOINT_SUBSITE = "SHAREPOINT_SUBSITE"
     MAILBOX = "MAILBOX"
 
+
 class RecordType(str, Enum):
     FILE = "FILE"
     DRIVE = "DRIVE"
@@ -32,6 +33,7 @@ class RecordType(str, Enum):
     SHAREPOINT_DOCUMENT_LIBRARY = "SHAREPOINT_DOCUMENT_LIBRARY"
     OTHERS = "OTHERS"
 
+
 class RecordStatus(str, Enum):
     NOT_STARTED = "NOT_STARTED"
     IN_PROGRESS = "IN_PROGRESS"
@@ -42,38 +44,82 @@ class RecordStatus(str, Enum):
     MANUAL_SYNC = "MANUAL_SYNC"
     AUTO_INDEX_OFF = "AUTO_INDEX_OFF"
 
+
 class Record(BaseModel):
     # Core record properties
-    id: str = Field(description="Unique identifier for the record", default_factory=lambda: str(uuid4()))
-    org_id: str = Field(description="Unique identifier for the organization", default="")
+    id: str = Field(
+        description="Unique identifier for the record",
+        default_factory=lambda: str(uuid4()),
+    )
+    org_id: str = Field(
+        description="Unique identifier for the organization", default=""
+    )
     record_name: str = Field(description="Human-readable name for the record")
     record_type: RecordType = Field(description="Type/category of the record")
     record_status: RecordStatus = Field(default=RecordStatus.NOT_STARTED)
-    parent_record_type: Optional[RecordType] = Field(default=None, description="Type of the parent record")
-    record_group_type: Optional[RecordGroupType] = Field(default=None, description="Type of the record group")
-    external_record_id: str = Field(description="Unique identifier for the record in the external system")
-    external_revision_id: Optional[str] = Field(default=None, description="Unique identifier for the revision of the record in the external system")
-    external_record_group_id: Optional[str] = Field(default=None, description="Unique identifier for the record group in the external system")
-    parent_external_record_id: Optional[str] = Field(default=None, description="Unique identifier for the parent record in the external system")
+    parent_record_type: Optional[RecordType] = Field(
+        default=None, description="Type of the parent record"
+    )
+    record_group_type: Optional[RecordGroupType] = Field(
+        default=None, description="Type of the record group"
+    )
+    external_record_id: str = Field(
+        description="Unique identifier for the record in the external system"
+    )
+    external_revision_id: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for the revision of the record in the external system",
+    )
+    external_record_group_id: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for the record group in the external system",
+    )
+    parent_external_record_id: Optional[str] = Field(
+        default=None,
+        description="Unique identifier for the parent record in the external system",
+    )
     version: int = Field(description="Version of the record")
     origin: OriginTypes = Field(description="Origin of the record")
-    connector_name: Connectors = Field(description="Name of the connector used to create the record")
-    virtual_record_id: Optional[str] = Field(description="Virtual record identifier", default=None)
-    summary_document_id: Optional[str] = Field(description="Summary document identifier", default=None)
+    connector_name: Connectors = Field(
+        description="Name of the connector used to create the record"
+    )
+    virtual_record_id: Optional[str] = Field(
+        description="Virtual record identifier", default=None
+    )
+    summary_document_id: Optional[str] = Field(
+        description="Summary document identifier", default=None
+    )
     md5_hash: Optional[str] = Field(default=None, description="MD5 hash of the record")
-    mime_type: str = Field(default=MimeTypes.UNKNOWN.value, description="MIME type of the record")
+    mime_type: str = Field(
+        default=MimeTypes.UNKNOWN.value, description="MIME type of the record"
+    )
     # Epoch Timestamps
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the record creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the record update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the record creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the record update in the source system")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the record creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the record update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the record creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the record update in the source system",
+    )
 
     # Source information
     weburl: Optional[str] = None
     signed_url: Optional[str] = None
     fetch_signed_url: Optional[str] = None
     # Content blocks
-    block_containers: BlocksContainer = Field(default_factory=BlocksContainer, description="List of block containers in this record")
+    block_containers: BlocksContainer = Field(
+        default_factory=BlocksContainer,
+        description="List of block containers in this record",
+    )
     semantic_metadata: Optional[SemanticMetadata] = None
     # Relationships
     parent_record_id: Optional[str] = None
@@ -126,12 +172,15 @@ class Record(BaseModel):
             created_at=arango_base_record.get("createdAtTimestamp", None),
             updated_at=arango_base_record.get("updatedAtTimestamp", None),
             source_created_at=arango_base_record.get("sourceCreatedAtTimestamp", None),
-            source_updated_at=arango_base_record.get("sourceLastModifiedTimestamp", None),
+            source_updated_at=arango_base_record.get(
+                "sourceLastModifiedTimestamp", None
+            ),
             virtual_record_id=arango_base_record.get("virtualRecordId", None),
         )
 
     def to_kafka_record(self) -> Dict:
         raise NotImplementedError("Implement this method in the subclass")
+
 
 class FileRecord(Record):
     is_file: bool
@@ -167,7 +216,9 @@ class FileRecord(Record):
         }
 
     @staticmethod
-    def from_arango_base_file_record(arango_base_file_record: Dict, arango_base_record: Dict) -> "FileRecord":
+    def from_arango_base_file_record(
+        arango_base_file_record: Dict, arango_base_record: Dict
+    ) -> "FileRecord":
         return FileRecord(
             id=arango_base_record["_key"],
             org_id=arango_base_record["orgId"],
@@ -223,6 +274,7 @@ class FileRecord(Record):
             "isFile": self.is_file,
         }
 
+
 class MessageRecord(Record):
     content: Optional[str] = None
 
@@ -238,6 +290,7 @@ class MessageRecord(Record):
             "sourceLastModifiedTimestamp": self.source_updated_at,
         }
 
+
 class MailRecord(Record):
     subject: Optional[str] = None
     from_email: Optional[str] = None
@@ -248,7 +301,6 @@ class MailRecord(Record):
     is_parent: bool = False
     internet_message_id: Optional[str] = None
     conversation_index: Optional[str] = None
-
 
     def to_arango_record(self) -> Dict:
         return {
@@ -265,7 +317,6 @@ class MailRecord(Record):
             "conversationIndex": self.conversation_index,
         }
 
-
     def to_kafka_record(self) -> Dict:
         return {
             "recordId": self.id,
@@ -275,6 +326,7 @@ class MailRecord(Record):
             "mimeType": self.mime_type,
             "subject": self.subject,
         }
+
 
 class WebpageRecord(Record):
     def to_kafka_record(self) -> Dict:
@@ -297,6 +349,7 @@ class WebpageRecord(Record):
             "_key": self.id,
             "orgId": self.org_id,
         }
+
 
 class TicketRecord(Record):
     summary: Optional[str] = None
@@ -327,7 +380,6 @@ class TicketRecord(Record):
         }
 
     def to_kafka_record(self) -> Dict:
-
         return {
             "recordId": self.id,
             "orgId": self.org_id,
@@ -344,6 +396,7 @@ class TicketRecord(Record):
             "sourceCreatedAtTimestamp": self.source_created_at,
             "sourceLastModifiedTimestamp": self.source_updated_at,
         }
+
 
 class SharePointListRecord(Record):
     """Record class for SharePoint lists"""
@@ -369,6 +422,7 @@ class SharePointListRecord(Record):
             "parentExternalRecordId": self.parent_external_record_id,
         }
 
+
 class SharePointListItemRecord(Record):
     """Record class for SharePoint list items"""
 
@@ -392,6 +446,7 @@ class SharePointListItemRecord(Record):
             "externalGroupId": self.external_record_group_id,
             "parentExternalRecordId": self.parent_external_record_id,
         }
+
 
 class SharePointDocumentLibraryRecord(Record):
     """Record class for SharePoint document libraries"""
@@ -417,6 +472,7 @@ class SharePointDocumentLibraryRecord(Record):
             "parentExternalRecordId": self.parent_external_record_id,
         }
 
+
 class SharePointPageRecord(Record):
     """Record class for SharePoint pages"""
 
@@ -441,22 +497,56 @@ class SharePointPageRecord(Record):
             "parentExternalRecordId": self.parent_external_record_id,
         }
 
+
 class RecordGroup(BaseModel):
-    id: str = Field(description="Unique identifier for the record group", default_factory=lambda: str(uuid4()))
-    org_id: str = Field(description="Unique identifier for the organization", default="")
+    id: str = Field(
+        description="Unique identifier for the record group",
+        default_factory=lambda: str(uuid4()),
+    )
+    org_id: str = Field(
+        description="Unique identifier for the organization", default=""
+    )
     name: str = Field(description="Name of the record group")
-    short_name: Optional[str] = Field(default=None, description="Short name of the record group")
-    description: Optional[str] = Field(default=None, description="Description of the record group")
-    external_group_id: Optional[str] = Field(description="External identifier for the record group")
-    parent_external_group_id: Optional[str] = Field(default=None, description="External identifier for the parent record group")
-    parent_record_group_id: Optional[str] = Field(default=None, description="Internal identifier for the parent record group")
-    connector_name: Connectors = Field(description="Name of the connector used to create the record group")
-    web_url: Optional[str] = Field(default=None, description="Web URL of the record group")
-    group_type: Optional[RecordGroupType] = Field(description="Type of the record group")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the record group creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the record group update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the record group creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the record group update in the source system")
+    short_name: Optional[str] = Field(
+        default=None, description="Short name of the record group"
+    )
+    description: Optional[str] = Field(
+        default=None, description="Description of the record group"
+    )
+    external_group_id: Optional[str] = Field(
+        description="External identifier for the record group"
+    )
+    parent_external_group_id: Optional[str] = Field(
+        default=None, description="External identifier for the parent record group"
+    )
+    parent_record_group_id: Optional[str] = Field(
+        default=None, description="Internal identifier for the parent record group"
+    )
+    connector_name: Connectors = Field(
+        description="Name of the connector used to create the record group"
+    )
+    web_url: Optional[str] = Field(
+        default=None, description="Web URL of the record group"
+    )
+    group_type: Optional[RecordGroupType] = Field(
+        description="Type of the record group"
+    )
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the record group creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the record group update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the record group creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the record group update in the source system",
+    )
 
     def to_arango_base_record_group(self) -> Dict:
         doc = {
@@ -486,7 +576,9 @@ class RecordGroup(BaseModel):
             short_name=arango_base_record_group.get("shortName", None),
             description=arango_base_record_group.get("description", None),
             external_group_id=arango_base_record_group["externalGroupId"],
-            parent_external_group_id=arango_base_record_group.get("parentExternalGroupId", None),
+            parent_external_group_id=arango_base_record_group.get(
+                "parentExternalGroupId", None
+            ),
             connector_name=arango_base_record_group["connectorName"],
             group_type=arango_base_record_group["groupType"],
             web_url=arango_base_record_group.get("webUrl", None),
@@ -496,63 +588,174 @@ class RecordGroup(BaseModel):
             source_updated_at=arango_base_record_group["sourceLastModifiedTimestamp"],
         )
 
+
 class Anyone(BaseModel):
-    id: str = Field(description="Unique identifier for the anyone", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the anyone",
+        default_factory=lambda: str(uuid4()),
+    )
     name: str = Field(description="Name of the anyone")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
+
 
 class AnyoneWithLink(BaseModel):
-    id: str = Field(description="Unique identifier for the anyone with link", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the anyone with link",
+        default_factory=lambda: str(uuid4()),
+    )
     name: str = Field(description="Name of the anyone with link")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone with link creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone with link update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone with link creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone with link update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone with link creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone with link update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone with link creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone with link update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
+
 
 class AnyoneSameOrg(BaseModel):
-    id: str = Field(description="Unique identifier for the anyone same org", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the anyone same org",
+        default_factory=lambda: str(uuid4()),
+    )
     name: str = Field(description="Name of the anyone same org")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone same org creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone same org update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone same org creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone same org update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone same org creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone same org update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone same org creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone same org update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
+
 
 class Org(BaseModel):
-    id: str = Field(description="Unique identifier for the organization", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the organization",
+        default_factory=lambda: str(uuid4()),
+    )
     name: str = Field(description="Name of the organization")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the organization creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the organization update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the organization creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the organization update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the organization creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the organization update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the organization creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the organization update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
+
 
 class Domain(BaseModel):
-    id: str = Field(description="Unique identifier for the domain", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the domain",
+        default_factory=lambda: str(uuid4()),
+    )
     name: str = Field(description="Name of the domain")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the domain creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the domain update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the domain creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the domain update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the domain creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the domain update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the domain creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the domain update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
+
 
 class AnyOneWithLink(BaseModel):
-    id: str = Field(description="Unique identifier for the anyone with link", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the anyone with link",
+        default_factory=lambda: str(uuid4()),
+    )
     name: str = Field(description="Name of the anyone with link")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone with link creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the anyone with link update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone with link creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the anyone with link update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone with link creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the anyone with link update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone with link creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the anyone with link update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
 
 
 class User(BaseModel):
-    id: str = Field(description="Unique identifier for the user", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the user",
+        default_factory=lambda: str(uuid4()),
+    )
     email: str
     source_user_id: Optional[str] = None
     org_id: Optional[str] = None
@@ -563,7 +766,6 @@ class User(BaseModel):
     last_name: Optional[str] = None
     full_name: Optional[str] = None
     title: Optional[str] = None
-
 
     def to_arango_base_record(self) -> Dict[str, Any]:
         return {
@@ -579,7 +781,7 @@ class User(BaseModel):
         return self.email
 
     @staticmethod
-    def from_arango_user(data: Dict[str, Any]) -> 'User':
+    def from_arango_user(data: Dict[str, Any]) -> "User":
         return User(
             id=data.get("_key", None),
             email=data.get("email", ""),
@@ -614,7 +816,7 @@ class UserGroup(BaseModel):
             "updated_at_timestamp": self.updated_at_timestamp,
             "last_sync_timestamp": self.last_sync_timestamp,
             "source_created_at_timestamp": self.source_created_at_timestamp,
-            "source_last_modified_timestamp": self.source_last_modified_timestamp
+            "source_last_modified_timestamp": self.source_last_modified_timestamp,
         }
 
     def validate(self) -> bool:
@@ -626,15 +828,34 @@ class UserGroup(BaseModel):
 
 class AppUser(BaseModel):
     app_name: Connectors = Field(description="Name of the app")
-    id: str = Field(description="Unique identifier for the user", default_factory=lambda: str(uuid4()))
-    source_user_id: str = Field(description="Unique identifier for the user in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    id: str = Field(
+        description="Unique identifier for the user",
+        default_factory=lambda: str(uuid4()),
+    )
+    source_user_id: str = Field(
+        description="Unique identifier for the user in the source system"
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
     email: str = Field(description="Email of the user")
     full_name: str = Field(description="Name of the user")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the user creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the user update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the user creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the user update in the source system")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the user creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the user update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the user creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the user update in the source system",
+    )
     is_active: bool = Field(default=False, description="Whether the user is active")
     title: Optional[str] = Field(default=None, description="Title of the user")
 
@@ -652,15 +873,34 @@ class AppUser(BaseModel):
 
 
 class AppUserGroup(BaseModel):
-    id: str = Field(description="Unique identifier for the user group", default_factory=lambda: str(uuid4()))
+    id: str = Field(
+        description="Unique identifier for the user group",
+        default_factory=lambda: str(uuid4()),
+    )
     app_name: Connectors = Field(description="Name of the app")
-    source_user_group_id: str = Field(description="Unique identifier for the user group in the source system")
+    source_user_group_id: str = Field(
+        description="Unique identifier for the user group in the source system"
+    )
     name: str = Field(description="Name of the user group")
-    created_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the user group creation")
-    updated_at: int = Field(default=get_epoch_timestamp_in_ms(), description="Epoch timestamp in milliseconds of the user group update")
-    source_created_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the user group creation in the source system")
-    source_updated_at: Optional[int] = Field(default=None, description="Epoch timestamp in milliseconds of the user group update in the source system")
-    org_id: str = Field(default="", description="Unique identifier for the organization")
+    created_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the user group creation",
+    )
+    updated_at: int = Field(
+        default=get_epoch_timestamp_in_ms(),
+        description="Epoch timestamp in milliseconds of the user group update",
+    )
+    source_created_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the user group creation in the source system",
+    )
+    source_updated_at: Optional[int] = Field(
+        default=None,
+        description="Epoch timestamp in milliseconds of the user group update in the source system",
+    )
+    org_id: str = Field(
+        default="", description="Unique identifier for the organization"
+    )
 
     def to_arango_base_user_group(self) -> Dict[str, Any]:
         """
@@ -676,7 +916,6 @@ class AppUserGroup(BaseModel):
             "updatedAtTimestamp": self.updated_at,
             "sourceCreatedAtTimestamp": self.source_created_at,
             "sourceLastModifiedTimestamp": self.source_updated_at,
-
         }
 
     @staticmethod

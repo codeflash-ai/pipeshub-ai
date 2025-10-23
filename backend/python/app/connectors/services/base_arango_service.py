@@ -3528,37 +3528,20 @@ class BaseArangoService:
         """
         try:
 
-            # Query that joins records, mails, and permissions to find mail by owner
-            query = f"""
-            FOR record IN {CollectionNames.RECORDS.value}
-                FILTER record.connectorName == @connector_name
-                    AND record.orgId == @org_id
-                FOR mail IN {CollectionNames.MAILS.value}
-                    FILTER mail._key == record._key
-                        AND mail.conversationIndex == @conversation_index
-                        AND mail.threadId == @thread_id
-                    FOR edge IN {CollectionNames.PERMISSIONS.value}
-                        FILTER edge._from == record._id
-                            AND edge.role == 'OWNER'
-                            AND edge.type == 'USER'
-                        LET user_key = SPLIT(edge._to, '/')[1]
-                        LET user = DOCUMENT('{CollectionNames.USERS.value}', user_key)
-                        FILTER user.userId == @user_id
-                        LIMIT 1
-                    RETURN record
-            """
-
+            # Use pre-built static query string for performance
+            query = self._MAIL_RECORD_QUERY
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(
-                query,
-                bind_vars={
-                    "conversation_index": conversation_index,
-                    "thread_id": thread_id,
-                    "connector_name": connector_name.value,
-                    "org_id": org_id,
-                    "user_id": user_id,
-                },
-            )
+
+            # Cache bind_vars dict locally, directly from arguments
+            bind_vars = {
+                "conversation_index": conversation_index,
+                "thread_id": thread_id,
+                "connector_name": connector_name.value,
+                "org_id": org_id,
+                "user_id": user_id,
+            }
+
+            cursor = db.aql.execute(query, bind_vars=bind_vars)
             result = next(cursor, None)
 
             if result:
