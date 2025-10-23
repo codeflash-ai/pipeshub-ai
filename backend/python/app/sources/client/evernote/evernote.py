@@ -71,6 +71,7 @@ from app.sources.client.iclient import IClient
 try:
     from evernote.edam.notestore import NoteStore  # type: ignore
     from evernote.edam.userstore import UserStore  # type: ignore
+
     EVERNOTE_SDK_AVAILABLE = True
 except ImportError:
     EVERNOTE_SDK_AVAILABLE = False
@@ -80,6 +81,7 @@ except ImportError:
 
 class EvernoteResponse(BaseModel):
     """Standardized Evernote API response wrapper"""
+
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -107,10 +109,7 @@ class EvernoteThriftClient:
     """
 
     def __init__(
-        self,
-        token: str,
-        note_store_url: Optional[str] = None,
-        sandbox: bool = False
+        self, token: str, note_store_url: Optional[str] = None, sandbox: bool = False
     ) -> None:
         if not EVERNOTE_SDK_AVAILABLE:
             raise ImportError(
@@ -121,8 +120,10 @@ class EvernoteThriftClient:
             raise ValueError("Evernote token cannot be empty")
 
         # Validate token format (should start with S=)
-        if not token.startswith('S='):
-            raise ValueError(f"Invalid Evernote token format. Token should start with 'S=', got: {token[:10]}...")
+        if not token.startswith("S="):
+            raise ValueError(
+                f"Invalid Evernote token format. Token should start with 'S=', got: {token[:10]}..."
+            )
 
         self.token = token
         self.note_store_url = note_store_url
@@ -203,7 +204,7 @@ class EvernoteOAuthHandler:
         consumer_key: str,
         consumer_secret: str,
         callback_url: str,
-        sandbox: bool = False
+        sandbox: bool = False,
     ) -> None:
         self.consumer_key = consumer_key
         self.consumer_secret = consumer_secret
@@ -222,6 +223,9 @@ class EvernoteOAuthHandler:
             self.oauth_authorize_url = "https://www.evernote.com/OAuth.action"
             self.oauth_access_token_url = "https://www.evernote.com/oauth"
 
+        # Precompute fixed part of the authorization URL for efficiency
+        self._authorization_url_prefix = f"{self.oauth_authorize_url}?oauth_token="
+
     async def request_temporary_token(self) -> Optional[str]:
         """Step 1: Generate a temporary token
         Returns:
@@ -239,13 +243,11 @@ class EvernoteOAuthHandler:
         Returns:
             Authorization URL to redirect user to
         """
-        params = {"oauth_token": oauth_token}
-        return f"{self.oauth_authorize_url}?{urlencode(params)}"
+        # Avoid creating dict and calling urlencode for single known-safe param
+        return f"{self._authorization_url_prefix}{urlencode({'': oauth_token})[1:]}"
 
     async def exchange_token_for_access(
-        self,
-        oauth_token: str,
-        oauth_verifier: str
+        self, oauth_token: str, oauth_verifier: str
     ) -> Optional[Dict[str, str]]:
         """Step 3: Exchange temporary token and verifier for access token
         Args:
@@ -280,17 +282,14 @@ class EvernoteTokenConfig(BaseModel):
         note_store_url: NoteStore URL for the user (required for NoteStore API calls)
         sandbox: Whether to use sandbox environment
     """
+
     token: str = Field(..., description="Evernote access token")
     note_store_url: Optional[str] = Field(None, description="User's NoteStore URL")
     sandbox: bool = Field(default=False, description="Use sandbox environment")
 
     def create_client(self) -> EvernoteThriftClient:
         """Create an Evernote Thrift client"""
-        return EvernoteThriftClient(
-            self.token,
-            self.note_store_url,
-            self.sandbox
-        )
+        return EvernoteThriftClient(self.token, self.note_store_url, self.sandbox)
 
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary"""
@@ -306,6 +305,7 @@ class EvernoteOAuthConfig(BaseModel):
         callback_url: The callback URL for OAuth flow
         sandbox: Whether to use sandbox environment
     """
+
     consumer_key: str = Field(..., description="Evernote consumer key (API key)")
     consumer_secret: str = Field(..., description="Evernote consumer secret")
     callback_url: str = Field(..., description="OAuth callback URL")
@@ -314,10 +314,7 @@ class EvernoteOAuthConfig(BaseModel):
     def create_oauth_handler(self) -> EvernoteOAuthHandler:
         """Create an Evernote OAuth handler"""
         return EvernoteOAuthHandler(
-            self.consumer_key,
-            self.consumer_secret,
-            self.callback_url,
-            self.sandbox
+            self.consumer_key, self.consumer_secret, self.callback_url, self.sandbox
         )
 
     def to_dict(self) -> dict:
@@ -371,10 +368,7 @@ class EvernoteClient(IClient):
         self.client.set_note_store_url(url)
 
     @classmethod
-    def build_with_config(
-        cls,
-        config: EvernoteTokenConfig
-    ) -> "EvernoteClient":
+    def build_with_config(cls, config: EvernoteTokenConfig) -> "EvernoteClient":
         """Build EvernoteClient with token configuration
         Args:
             config: EvernoteTokenConfig instance
@@ -413,9 +407,7 @@ class EvernoteClient(IClient):
 
             # Create Thrift client
             thrift_client = EvernoteThriftClient(
-                token=token,
-                note_store_url=note_store_url,
-                sandbox=sandbox
+                token=token, note_store_url=note_store_url, sandbox=sandbox
             )
 
             return cls(thrift_client)
@@ -426,12 +418,13 @@ class EvernoteClient(IClient):
 
     @staticmethod
     async def _get_connector_config(
-        logger: logging.Logger,
-        config_service: ConfigurationService
+        logger: logging.Logger, config_service: ConfigurationService
     ) -> Dict[str, Any]:
         """Fetch connector config from etcd for Evernote."""
         try:
-            config = await config_service.get_config("/services/connectors/evernote/config")
+            config = await config_service.get_config(
+                "/services/connectors/evernote/config"
+            )
             return config or {}
         except Exception as e:
             logger.error(f"Failed to get Evernote connector config: {e}")
