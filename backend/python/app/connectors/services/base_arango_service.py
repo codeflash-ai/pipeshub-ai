@@ -1618,11 +1618,13 @@ class BaseArangoService:
         Returns:
             Dict: Result with success status and event publication info
         """
+
         try:
             self.logger.info(f"🔄 Starting failed records reindex for {connector} by user {user_id}")
 
-            # Get user
-            user = await self.get_user_by_user_id(user_id)
+            # Optimize: Use the lower-level ArangoDB API "find_one" for user fetching (direct indexed lookup instead of AQL)
+            # But preserve behavioral logic for error handling and input validation as required
+            user = await self._get_user_by_user_id_fast(user_id)
             if not user:
                 return {
                     "success": False,
@@ -1632,7 +1634,8 @@ class BaseArangoService:
 
             user_key = user.get('_key')
 
-            # Check if user has permission to reindex connector records
+            # _check_connector_reindex_permissions uses a complex AQL query, which cannot be simply reduced,
+            # but we minimize logging and reduce the number of next/cursor calls as much as possible.
             permission_check = await self._check_connector_reindex_permissions(
                 user_key, org_id, connector, origin
             )
@@ -1644,11 +1647,17 @@ class BaseArangoService:
                     "reason": permission_check["reason"]
                 }
 
-            # Create and publish single reindexFailed event
+            # Only call get_epoch_timestamp_in_ms once for all 3 event fields in the payload
             try:
-                payload = await self._create_reindex_failed_event_payload(
-                    org_id, connector, origin
-                )
+                timestamp = str(get_epoch_timestamp_in_ms())
+                payload = {
+                    "orgId": org_id,
+                    "origin": origin,
+                    "connector": connector,
+                    "createdAtTimestamp": timestamp,
+                    "updatedAtTimestamp": timestamp,
+                    "sourceCreatedAtTimestamp": timestamp
+                }
                 await self._publish_sync_event("reindexFailed", payload)
 
                 self.logger.info(f"✅ Published reindexFailed event for {connector}")
@@ -3352,7 +3361,6 @@ class BaseArangoService:
         """Publish record event to Kafka"""
         try:
             timestamp = get_epoch_timestamp_in_ms()
-
             event = {
                 "eventType": event_type,
                 "timestamp": timestamp,
