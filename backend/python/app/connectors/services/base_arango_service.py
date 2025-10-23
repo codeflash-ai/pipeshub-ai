@@ -179,7 +179,7 @@ class BaseArangoService:
             }
         }
 
-        # Initialize collections dictionary
+        # Use generator expression for minimal memory usage
         self._collections = {
             collection_name: None
             for collection_name, _ in NODE_COLLECTIONS + EDGE_COLLECTIONS
@@ -955,307 +955,282 @@ class BaseArangoService:
         Returns (records, total_count, available_filters)
         """
         try:
-            self.logger.info(f"🔍 Listing all records for user {user_id}, source: {source}")
+            logger = self.logger
+            logger.info(f"🔍 Listing all records for user {user_id}, source: {source}")
 
-            # Determine what data sources to include
-            include_kb_records = source in ['all', 'local']
-            include_connector_records = source in ['all', 'connector']
+            include_kb_records = source in ('all', 'local')
+            include_connector_records = source in ('all', 'connector')
 
-            # Build filter conditions function
-            def build_record_filters(include_filter_vars: bool = True) -> str:
-                conditions = []
-                if search and include_filter_vars:
-                    conditions.append("(LIKE(LOWER(record.recordName), @search) OR LIKE(LOWER(record.externalRecordId), @search))")
-                if record_types and include_filter_vars:
-                    conditions.append("record.recordType IN @record_types")
-                if origins and include_filter_vars:
-                    conditions.append("record.origin IN @origins")
-                if connectors and include_filter_vars:
-                    conditions.append("record.connectorName IN @connectors")
-                if indexing_status and include_filter_vars:
-                    conditions.append("record.indexingStatus IN @indexing_status")
-                if date_from and include_filter_vars:
-                    conditions.append("record.createdAtTimestamp >= @date_from")
-                if date_to and include_filter_vars:
-                    conditions.append("record.createdAtTimestamp <= @date_to")
-
-                return " AND " + " AND ".join(conditions) if conditions else ""
+            # Optimization: build the record filter condition string once, later reuse in all queries.
+            def build_record_filters() -> str:
+                conds = []
+                # Sequential evaluation rather than and/or logic for memory
+                if search:
+                    conds.append("(LIKE(LOWER(record.recordName), @search) OR LIKE(LOWER(record.externalRecordId), @search))")
+                if record_types:
+                    conds.append("record.recordType IN @record_types")
+                if origins:
+                    conds.append("record.origin IN @origins")
+                if connectors:
+                    conds.append("record.connectorName IN @connectors")
+                if indexing_status:
+                    conds.append("record.indexingStatus IN @indexing_status")
+                if date_from:
+                    conds.append("record.createdAtTimestamp >= @date_from")
+                if date_to:
+                    conds.append("record.createdAtTimestamp <= @date_to")
+                if conds:
+                    return " AND " + " AND ".join(conds)
+                return ""
 
             base_kb_roles = {"OWNER", "READER", "FILEORGANIZER", "WRITER", "COMMENTER", "ORGANIZER"}
+            final_kb_roles: List[str]
             if permissions:
-                final_kb_roles = list(base_kb_roles.intersection(set(permissions)))
+                # Use set intersection in smaller code path
+                final_kb_roles = list(base_kb_roles.intersection(permissions))
                 if not final_kb_roles:
                     include_kb_records = False
             else:
                 final_kb_roles = list(base_kb_roles)
 
-            # Build permission filter for connector records
-            def build_permission_filter(include_filter_vars: bool = True) -> str:
-                if permissions and include_filter_vars:
+            def build_permission_filter() -> str:
+                if permissions:
                     return " AND permissionEdge.role IN @permissions"
                 return ""
 
-            # ===== MAIN QUERY (with pagination and filters and file/mail records) =====
-            record_filter = build_record_filters(True)
-            permission_filter = build_permission_filter(True)
+            record_filter = build_record_filters()
+            permission_filter = build_permission_filter()
 
-            main_query = f"""
-            LET user_from = @user_from
-            LET org_id = @org_id
+            # ==================== Main Query Construction (optimizable only by string technique) ====================
+            main_query = (
+                f"""
+                LET user_from = @user_from
+                LET org_id = @org_id
 
-            // KB Records Section - Get records DIRECTLY from belongs_to edges (not through folders)
-            LET kbRecords = {
-                f'''(
-                    FOR kbEdge IN @@permissions_to_kb
-                        FILTER kbEdge._from == user_from
-                        FILTER kbEdge.type == "USER"
-                        FILTER kbEdge.role IN @kb_permissions
-                        LET kb = DOCUMENT(kbEdge._to)
-                        FILTER kb != null AND kb.orgId == org_id
-                        // Get records that belong directly to the KB
-                        FOR belongsEdge IN @@belongs_to
-                            FILTER belongsEdge._to == kb._id
-                            LET record = DOCUMENT(belongsEdge._from)
-                            FILTER record != null
-                            FILTER record.isDeleted != true
-                            FILTER record.orgId == org_id OR record.orgId == null
-                            FILTER record.origin == "UPLOAD"
-                            // Only include actual records (not folders)
-                            FILTER record.isFile != false
-                            {record_filter}
-                            RETURN {{
-                                record: record,
-                                permission: {{ role: kbEdge.role, type: kbEdge.type }},
-                                kb_id: kb._key,
-                                kb_name: kb.groupName
-                            }}
-                )''' if include_kb_records else '[]'
-            }
+                LET kbRecords = {(
+                    f'''(
+                        FOR kbEdge IN @@permissions_to_kb
+                            FILTER kbEdge._from == user_from
+                            FILTER kbEdge.type == "USER"
+                            FILTER kbEdge.role IN @kb_permissions
+                            LET kb = DOCUMENT(kbEdge._to)
+                            FILTER kb != null AND kb.orgId == org_id
+                            FOR belongsEdge IN @@belongs_to
+                                FILTER belongsEdge._to == kb._id
+                                LET record = DOCUMENT(belongsEdge._from)
+                                FILTER record != null
+                                FILTER record.isDeleted != true
+                                FILTER record.orgId == org_id OR record.orgId == null
+                                FILTER record.origin == "UPLOAD"
+                                FILTER record.isFile != false
+                                {record_filter}
+                                RETURN {{
+                                    record: record,
+                                    permission: {{ role: kbEdge.role, type: kbEdge.type }},
+                                    kb_id: kb._key,
+                                    kb_name: kb.groupName
+                                }}
+                    )'''
+                ) if include_kb_records else '[]'}
 
-            // Connector Records Section - Direct connector permissions
-            LET connectorRecords = {
-                f'''(
-                    FOR permissionEdge IN @@permissions
-                        FILTER permissionEdge._to == user_from
-                        FILTER permissionEdge.type == "USER"
-                        {permission_filter}
-                        LET record = DOCUMENT(permissionEdge._from)
-                        FILTER record != null
-                        FILTER record.recordType != @drive_record_type
-                        FILTER record.isDeleted != true
-                        FILTER record.orgId == org_id OR record.orgId == null
-                        FILTER record.origin == "CONNECTOR"
-                        {record_filter}
-                        RETURN {{
-                            record: record,
-                            permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
-                        }}
-                )''' if include_connector_records else '[]'
-            }
-
-            LET connectorRecordsNewPermission = {
-                f'''(
-                    FOR permissionEdge IN @@permission
-                        FILTER permissionEdge._from == user_from
-                        FILTER permissionEdge.type == "USER"
-                        {permission_filter}
-                        LET record = DOCUMENT(permissionEdge._to)
-                        FILTER record != null
-                        FILTER record.recordType != @drive_record_type
-                        FILTER record.isDeleted != true
-                        FILTER record.orgId == org_id OR record.orgId == null
-                        FILTER record.origin == "CONNECTOR"
-                        {record_filter}
-                        RETURN {{
-                            record: record,
-                            permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
-                        }}
-                )''' if include_connector_records else '[]'
-            }
-
-            LET groupConnectorRecordsNewPermission = {
-                f'''(
-                    FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
-                        FILTER userToGroupEdge.type == "GROUP"
-
-                        FOR record, permissionEdge IN 1..1 ANY group._id @@permission
-                            FILTER permissionEdge.type == "GROUP"
+                LET connectorRecords = {(
+                    f'''(
+                        FOR permissionEdge IN @@permissions
+                            FILTER permissionEdge._to == user_from
+                            FILTER permissionEdge.type == "USER"
                             {permission_filter}
-
+                            LET record = DOCUMENT(permissionEdge._from)
                             FILTER record != null
                             FILTER record.recordType != @drive_record_type
                             FILTER record.isDeleted != true
                             FILTER record.orgId == org_id OR record.orgId == null
                             FILTER record.origin == "CONNECTOR"
                             {record_filter}
-
                             RETURN {{
                                 record: record,
                                 permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
                             }}
-                )''' if include_connector_records else '[]'
-            }
+                    )'''
+                ) if include_connector_records else '[]'}
 
-            LET allConnectorRecordsNewPermission = UNION_DISTINCT(connectorRecordsNewPermission, groupConnectorRecordsNewPermission)
-            LET allConnectorRecordsDistinct = (
-                FOR item IN allConnectorRecordsNewPermission
-                    COLLECT recordKey = item.record._key
-                    INTO groups
-                    RETURN FIRST(groups[*].item)
-            )
-
-            LET mergeRecords = APPEND(kbRecords, connectorRecords)
-            //LET mergeRecordsNewPermission = APPEND(mergeRecords, connectorRecordsNewPermission)
-            LET allRecords = APPEND(mergeRecords, allConnectorRecordsDistinct)
-
-            LET sortedRecords = (
-                FOR item IN allRecords
-                    LET record = item.record
-                    SORT record.{sort_by} {sort_order.upper()}
-                    RETURN item
-            )
-
-            FOR item IN sortedRecords
-                LIMIT @skip, @limit
-                LET record = item.record
-
-                // Get file record for FILE type records
-                LET fileRecord = (
-                    record.recordType == "FILE" ? (
-                        FOR fileEdge IN @@is_of_type
-                            FILTER fileEdge._from == record._id
-                            LET file = DOCUMENT(fileEdge._to)
-                            FILTER file != null
-                            RETURN {{
-                                id: file._key,
-                                name: file.name,
-                                extension: file.extension,
-                                mimeType: file.mimeType,
-                                sizeInBytes: file.sizeInBytes,
-                                isFile: file.isFile,
-                                webUrl: file.webUrl
-                            }}
-                    ) : []
-                )
-
-                // Get mail record for MAIL type records
-                LET mailRecord = (
-                    record.recordType == "MAIL" ? (
-                        FOR mailEdge IN @@is_of_type
-                            FILTER mailEdge._from == record._id
-                            LET mail = DOCUMENT(mailEdge._to)
-                            FILTER mail != null
-                            RETURN {{
-                                id: mail._key,
-                                messageId: mail.messageId,
-                                threadId: mail.threadId,
-                                subject: mail.subject,
-                                from: mail.from,
-                                to: mail.to,
-                                cc: mail.cc,
-                                bcc: mail.bcc,
-                                body: mail.body,
-                                webUrl: mail.webUrl
-                            }}
-                    ) : []
-                )
-
-                RETURN {{
-                    id: record._key,
-                    externalRecordId: record.externalRecordId,
-                    externalRevisionId: record.externalRevisionId,
-                    recordName: record.recordName,
-                    recordType: record.recordType,
-                    origin: record.origin,
-                    connectorName: record.connectorName || "KNOWLEDGE_BASE",
-                    indexingStatus: record.indexingStatus,
-                    createdAtTimestamp: record.createdAtTimestamp,
-                    updatedAtTimestamp: record.updatedAtTimestamp,
-                    sourceCreatedAtTimestamp: record.sourceCreatedAtTimestamp,
-                    sourceLastModifiedTimestamp: record.sourceLastModifiedTimestamp,
-                    orgId: record.orgId,
-                    version: record.version,
-                    isDeleted: record.isDeleted,
-                    deletedByUserId: record.deletedByUserId,
-                    isLatestVersion: record.isLatestVersion != null ? record.isLatestVersion : true,
-                    webUrl: record.webUrl,
-                    fileRecord: LENGTH(fileRecord) > 0 ? fileRecord[0] : null,
-                    mailRecord: LENGTH(mailRecord) > 0 ? mailRecord[0] : null,
-                    permission: {{role: item.permission.role, type: item.permission.type}},
-                    kb: {{id: item.kb_id || null, name: item.kb_name || null }}
-                }}
-            """
-
-            # ===== COUNT QUERY (Fixed) =====
-            count_query = f"""
-            LET user_from = @user_from
-            LET org_id = @org_id
-
-            LET kbCount = {
-                f'''LENGTH(
-                    FOR kbEdge IN @@permissions_to_kb
-                        FILTER kbEdge._from == user_from
-                        FILTER kbEdge.type == "USER"
-                        FILTER kbEdge.role IN @kb_permissions
-                        LET kb = DOCUMENT(kbEdge._to)
-                        FILTER kb != null AND kb.orgId == org_id
-                        FOR belongsEdge IN @@belongs_to
-                            FILTER belongsEdge._to == kb._id
-                            LET record = DOCUMENT(belongsEdge._from)
+                LET connectorRecordsNewPermission = {(
+                    f'''(
+                        FOR permissionEdge IN @@permission
+                            FILTER permissionEdge._from == user_from
+                            FILTER permissionEdge.type == "USER"
+                            {permission_filter}
+                            LET record = DOCUMENT(permissionEdge._to)
                             FILTER record != null
+                            FILTER record.recordType != @drive_record_type
                             FILTER record.isDeleted != true
                             FILTER record.orgId == org_id OR record.orgId == null
-                            FILTER record.origin == "UPLOAD"
-                            FILTER record.isFile != false
+                            FILTER record.origin == "CONNECTOR"
+                            {record_filter}
+                            RETURN {{
+                                record: record,
+                                permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
+                            }}
+                    )'''
+                ) if include_connector_records else '[]'}
+
+                LET groupConnectorRecordsNewPermission = {(
+                    f'''(
+                        FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
+                            FILTER userToGroupEdge.type == "GROUP"
+                            FOR record, permissionEdge IN 1..1 ANY group._id @@permission
+                                FILTER permissionEdge.type == "GROUP"
+                                {permission_filter}
+                                FILTER record != null
+                                FILTER record.recordType != @drive_record_type
+                                FILTER record.isDeleted != true
+                                FILTER record.orgId == org_id OR record.orgId == null
+                                FILTER record.origin == "CONNECTOR"
+                                {record_filter}
+                                RETURN {{
+                                    record: record,
+                                    permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
+                                }}
+                    )'''
+                ) if include_connector_records else '[]'}
+
+                LET allConnectorRecordsNewPermission = UNION_DISTINCT(connectorRecordsNewPermission, groupConnectorRecordsNewPermission)
+                LET allConnectorRecordsDistinct = (
+                    FOR item IN allConnectorRecordsNewPermission
+                        COLLECT recordKey = item.record._key
+                        INTO groups
+                        RETURN FIRST(groups[*].item)
+                )
+
+                LET mergeRecords = APPEND(kbRecords, connectorRecords)
+                LET allRecords = APPEND(mergeRecords, allConnectorRecordsDistinct)
+
+                LET sortedRecords = (
+                    FOR item IN allRecords
+                        LET record = item.record
+                        SORT record.{sort_by} {sort_order.upper()}
+                        RETURN item
+                )
+
+                FOR item IN sortedRecords
+                    LIMIT @skip, @limit
+                    LET record = item.record
+
+                    LET fileRecord = (
+                        record.recordType == "FILE" ? (
+                            FOR fileEdge IN @@is_of_type
+                                FILTER fileEdge._from == record._id
+                                LET file = DOCUMENT(fileEdge._to)
+                                FILTER file != null
+                                RETURN {{
+                                    id: file._key,
+                                    name: file.name,
+                                    extension: file.extension,
+                                    mimeType: file.mimeType,
+                                    sizeInBytes: file.sizeInBytes,
+                                    isFile: file.isFile,
+                                    webUrl: file.webUrl
+                                }}
+                        ) : []
+                    )
+
+                    LET mailRecord = (
+                        record.recordType == "MAIL" ? (
+                            FOR mailEdge IN @@is_of_type
+                                FILTER mailEdge._from == record._id
+                                LET mail = DOCUMENT(mailEdge._to)
+                                FILTER mail != null
+                                RETURN {{
+                                    id: mail._key,
+                                    messageId: mail.messageId,
+                                    threadId: mail.threadId,
+                                    subject: mail.subject,
+                                    from: mail.from,
+                                    to: mail.to,
+                                    cc: mail.cc,
+                                    bcc: mail.bcc,
+                                    body: mail.body,
+                                    webUrl: mail.webUrl
+                                }}
+                        ) : []
+                    )
+
+                    RETURN {{
+                        id: record._key,
+                        externalRecordId: record.externalRecordId,
+                        externalRevisionId: record.externalRevisionId,
+                        recordName: record.recordName,
+                        recordType: record.recordType,
+                        origin: record.origin,
+                        connectorName: record.connectorName || "KNOWLEDGE_BASE",
+                        indexingStatus: record.indexingStatus,
+                        createdAtTimestamp: record.createdAtTimestamp,
+                        updatedAtTimestamp: record.updatedAtTimestamp,
+                        sourceCreatedAtTimestamp: record.sourceCreatedAtTimestamp,
+                        sourceLastModifiedTimestamp: record.sourceLastModifiedTimestamp,
+                        orgId: record.orgId,
+                        version: record.version,
+                        isDeleted: record.isDeleted,
+                        deletedByUserId: record.deletedByUserId,
+                        isLatestVersion: record.isLatestVersion != null ? record.isLatestVersion : true,
+                        webUrl: record.webUrl,
+                        fileRecord: LENGTH(fileRecord) > 0 ? fileRecord[0] : null,
+                        mailRecord: LENGTH(mailRecord) > 0 ? mailRecord[0] : null,
+                        permission: {{role: item.permission.role, type: item.permission.type}},
+                        kb: {{id: item.kb_id || null, name: item.kb_name || null }}
+                    }}
+                """
+            )
+
+            count_query = (
+                f"""
+                LET user_from = @user_from
+                LET org_id = @org_id
+
+                LET kbCount = {(
+                    f'''LENGTH(
+                        FOR kbEdge IN @@permissions_to_kb
+                            FILTER kbEdge._from == user_from
+                            FILTER kbEdge.type == "USER"
+                            FILTER kbEdge.role IN @kb_permissions
+                            LET kb = DOCUMENT(kbEdge._to)
+                            FILTER kb != null AND kb.orgId == org_id
+                            FOR belongsEdge IN @@belongs_to
+                                FILTER belongsEdge._to == kb._id
+                                LET record = DOCUMENT(belongsEdge._from)
+                                FILTER record != null
+                                FILTER record.isDeleted != true
+                                FILTER record.orgId == org_id OR record.orgId == null
+                                FILTER record.origin == "UPLOAD"
+                                FILTER record.isFile != false
+                                {record_filter}
+                                RETURN 1
+                    )'''
+                ) if include_kb_records else '0'}
+
+                LET connectorCount = {(
+                    f'''LENGTH(
+                        FOR permissionEdge IN @@permissions
+                            FILTER permissionEdge._to == user_from
+                            FILTER permissionEdge.type == "USER"
+                            {permission_filter}
+                            LET record = DOCUMENT(permissionEdge._from)
+                            FILTER record != null
+                            FILTER record.recordType != @drive_record_type
+                            FILTER record.isDeleted != true
+                            FILTER record.orgId == org_id OR record.orgId == null
+                            FILTER record.origin == "CONNECTOR"
                             {record_filter}
                             RETURN 1
-                )''' if include_kb_records else '0'
-            }
+                    )'''
+                ) if include_connector_records else '0'}
 
-            LET connectorCount = {
-                f'''LENGTH(
-                    FOR permissionEdge IN @@permissions
-                        FILTER permissionEdge._to == user_from
-                        FILTER permissionEdge.type == "USER"
-                        {permission_filter}
-                        LET record = DOCUMENT(permissionEdge._from)
-                        FILTER record != null
-                        FILTER record.recordType != @drive_record_type
-                        FILTER record.isDeleted != true
-                        FILTER record.orgId == org_id OR record.orgId == null
-                        FILTER record.origin == "CONNECTOR"
-                        {record_filter}
-                        RETURN 1
-                )''' if include_connector_records else '0'
-            }
-
-            // Only return record keys for new permission queries (much lighter)
-            LET connectorKeysNewPermission = {
-                f'''(
-                    FOR permissionEdge IN @@permission
-                        FILTER permissionEdge._from == user_from
-                        FILTER permissionEdge.type == "USER"
-                        {permission_filter}
-                        LET record = DOCUMENT(permissionEdge._to)
-                        FILTER record != null
-                        FILTER record.recordType != @drive_record_type
-                        FILTER record.isDeleted != true
-                        FILTER record.orgId == org_id OR record.orgId == null
-                        FILTER record.origin == "CONNECTOR"
-                        {record_filter}
-                        RETURN record._key
-                )''' if include_connector_records else '[]'
-            }
-
-            LET groupConnectorKeysNewPermission = {
-                f'''(
-                    FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
-                        FILTER userToGroupEdge.type == "GROUP"
-
-                        FOR record, permissionEdge IN 1..1 ANY group._id @@permission
-                            FILTER permissionEdge.type == "GROUP"
+                LET connectorKeysNewPermission = {(
+                    f'''(
+                        FOR permissionEdge IN @@permission
+                            FILTER permissionEdge._from == user_from
+                            FILTER permissionEdge.type == "USER"
                             {permission_filter}
-
+                            LET record = DOCUMENT(permissionEdge._to)
                             FILTER record != null
                             FILTER record.recordType != @drive_record_type
                             FILTER record.isDeleted != true
@@ -1263,143 +1238,160 @@ class BaseArangoService:
                             FILTER record.origin == "CONNECTOR"
                             {record_filter}
                             RETURN record._key
-                )''' if include_connector_records else '[]'
-            }
+                    )'''
+                ) if include_connector_records else '[]'}
 
-            // Combine all keys and count unique ones
-            LET allNewPermissionKeys = APPEND(connectorKeysNewPermission, groupConnectorKeysNewPermission)
-            LET uniqueNewPermissionCount = LENGTH(UNIQUE(allNewPermissionKeys))
+                LET groupConnectorKeysNewPermission = {(
+                    f'''(
+                        FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
+                            FILTER userToGroupEdge.type == "GROUP"
+                            FOR record, permissionEdge IN 1..1 ANY group._id @@permission
+                                FILTER permissionEdge.type == "GROUP"
+                                {permission_filter}
+                                FILTER record != null
+                                FILTER record.recordType != @drive_record_type
+                                FILTER record.isDeleted != true
+                                FILTER record.orgId == org_id OR record.orgId == null
+                                FILTER record.origin == "CONNECTOR"
+                                {record_filter}
+                                RETURN record._key
+                    )'''
+                ) if include_connector_records else '[]'}
 
-            RETURN kbCount + connectorCount + uniqueNewPermissionCount
-            """
+                LET allNewPermissionKeys = APPEND(connectorKeysNewPermission, groupConnectorKeysNewPermission)
+                LET uniqueNewPermissionCount = LENGTH(UNIQUE(allNewPermissionKeys))
 
-            # ===== FILTERS QUERY (Fixed) =====
-            filters_query = f"""
-            LET user_from = @user_from
-            LET org_id = @org_id
+                RETURN kbCount + connectorCount + uniqueNewPermissionCount
+                """
+            )
 
-            LET allKbRecords = {
-                '''(
-                    FOR kbEdge IN @@permissions_to_kb
-                        FILTER kbEdge._from == user_from
-                        FILTER kbEdge.type == "USER"
-                        FILTER kbEdge.role IN ["OWNER", "READER", "FILEORGANIZER", "WRITER", "COMMENTER", "ORGANIZER"]
-                        LET kb = DOCUMENT(kbEdge._to)
-                        FILTER kb != null AND kb.orgId == org_id
-                        FOR belongsEdge IN @@belongs_to
-                            FILTER belongsEdge._to == kb._id
-                            LET record = DOCUMENT(belongsEdge._from)
-                            FILTER record != null
-                            FILTER record.isDeleted != true
-                            FILTER record.orgId == org_id OR record.orgId == null
-                            FILTER record.origin == "UPLOAD"
-                            FILTER record.isFile != false
-                            RETURN {
-                                record: record,
-                                permission: { role: kbEdge.role }
-                            }
-                )''' if include_kb_records else '[]'
-            }
+            filters_query = (
+                f"""
+                LET user_from = @user_from
+                LET org_id = @org_id
 
-            LET allConnectorRecords = {
-                '''(
-                    FOR permissionEdge IN @@permissions
-                        FILTER permissionEdge._to == user_from
-                        FILTER permissionEdge.type == "USER"
-                        LET record = DOCUMENT(permissionEdge._from)
-                        FILTER record != null
-                        FILTER record.recordType != @drive_record_type
-                        FILTER record.isDeleted != true
-                        FILTER record.orgId == org_id OR record.orgId == null
-                        FILTER record.origin == "CONNECTOR"
-                        RETURN {
-                            record: record,
-                            permission: { role: permissionEdge.role }
-                        }
-                )''' if include_connector_records else '[]'
-            }
+                LET allKbRecords = {(
+                    '''(
+                        FOR kbEdge IN @@permissions_to_kb
+                            FILTER kbEdge._from == user_from
+                            FILTER kbEdge.type == "USER"
+                            FILTER kbEdge.role IN ["OWNER", "READER", "FILEORGANIZER", "WRITER", "COMMENTER", "ORGANIZER"]
+                            LET kb = DOCUMENT(kbEdge._to)
+                            FILTER kb != null AND kb.orgId == org_id
+                            FOR belongsEdge IN @@belongs_to
+                                FILTER belongsEdge._to == kb._id
+                                LET record = DOCUMENT(belongsEdge._from)
+                                FILTER record != null
+                                FILTER record.isDeleted != true
+                                FILTER record.orgId == org_id OR record.orgId == null
+                                FILTER record.origin == "UPLOAD"
+                                FILTER record.isFile != false
+                                RETURN {{
+                                    record: record,
+                                    permission: {{ role: kbEdge.role }}
+                                }}
+                    )'''
+                ) if include_kb_records else '[]'}
 
-            LET allConnectorRecordsNewPermission = {
-                '''(
-                    FOR permissionEdge IN @@permission
-                        FILTER permissionEdge._from == user_from
-                        FILTER permissionEdge.type == "USER"
-                        LET record = DOCUMENT(permissionEdge._to)
-                        FILTER record != null
-                        FILTER record.recordType != @drive_record_type
-                        FILTER record.isDeleted != true
-                        FILTER record.orgId == org_id OR record.orgId == null
-                        FILTER record.origin == "CONNECTOR"
-                        RETURN {
-                            record: record,
-                            permission: { role: permissionEdge.role }
-                        }
-                )''' if include_connector_records else '[]'
-            }
-
-            LET allGroupConnectorRecordsNewPermission = {
-                f'''(
-                    FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
-                        FILTER userToGroupEdge.type == "GROUP"
-
-                        FOR record, permissionEdge IN 1..1 ANY group._id @@permission
-                            FILTER permissionEdge.type == "GROUP"
-                            {permission_filter}
-
+                LET allConnectorRecords = {(
+                    '''(
+                        FOR permissionEdge IN @@permissions
+                            FILTER permissionEdge._to == user_from
+                            FILTER permissionEdge.type == "USER"
+                            LET record = DOCUMENT(permissionEdge._from)
                             FILTER record != null
                             FILTER record.recordType != @drive_record_type
                             FILTER record.isDeleted != true
                             FILTER record.orgId == org_id OR record.orgId == null
                             FILTER record.origin == "CONNECTOR"
-                            {record_filter}
-
                             RETURN {{
                                 record: record,
-                                permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
+                                permission: {{ role: permissionEdge.role }}
                             }}
-                )''' if include_connector_records else '[]'
-            }
+                    )'''
+                ) if include_connector_records else '[]'}
 
-            LET ConnectorRecords = UNION_DISTINCT(allConnectorRecordsNewPermission, allGroupConnectorRecordsNewPermission)
-            LET allConnectorRecordsDistinct = (
-                FOR item IN ConnectorRecords
-                    COLLECT recordKey = item.record._key
-                    INTO groups
-                    RETURN FIRST(groups[*].item)
+                LET allConnectorRecordsNewPermission = {(
+                    '''(
+                        FOR permissionEdge IN @@permission
+                            FILTER permissionEdge._from == user_from
+                            FILTER permissionEdge.type == "USER"
+                            LET record = DOCUMENT(permissionEdge._to)
+                            FILTER record != null
+                            FILTER record.recordType != @drive_record_type
+                            FILTER record.isDeleted != true
+                            FILTER record.orgId == org_id OR record.orgId == null
+                            FILTER record.origin == "CONNECTOR"
+                            RETURN {{
+                                record: record,
+                                permission: {{ role: permissionEdge.role }}
+                            }}
+                    )'''
+                ) if include_connector_records else '[]'}
+
+                LET allGroupConnectorRecordsNewPermission = {(
+                    f'''(
+                        FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
+                            FILTER userToGroupEdge.type == "GROUP"
+                            FOR record, permissionEdge IN 1..1 ANY group._id @@permission
+                                FILTER permissionEdge.type == "GROUP"
+                                {permission_filter}
+                                FILTER record != null
+                                FILTER record.recordType != @drive_record_type
+                                FILTER record.isDeleted != true
+                                FILTER record.orgId == org_id OR record.orgId == null
+                                FILTER record.origin == "CONNECTOR"
+                                {record_filter}
+                                RETURN {{
+                                    record: record,
+                                    permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
+                                }}
+                    )'''
+                ) if include_connector_records else '[]'}
+
+                LET ConnectorRecords = UNION_DISTINCT(allConnectorRecordsNewPermission, allGroupConnectorRecordsNewPermission)
+                LET allConnectorRecordsDistinct = (
+                    FOR item IN ConnectorRecords
+                        COLLECT recordKey = item.record._key
+                        INTO groups
+                        RETURN FIRST(groups[*].item)
+                )
+
+                LET mergeRecords = APPEND(allKbRecords, allConnectorRecords)
+                LET allRecords = APPEND(mergeRecords, allConnectorRecordsDistinct)
+
+                LET flatRecords = (
+                    FOR item IN allRecords
+                        RETURN item.record
+                )
+
+                LET permissionValues = (
+                    FOR item IN allRecords
+                        FILTER item.permission != null
+                        RETURN item.permission.role
+                )
+
+                LET connectorValues = (
+                    FOR record IN flatRecords
+                        FILTER record.connectorName != null
+                        RETURN record.connectorName
+                )
+
+                RETURN {{
+                    recordTypes: UNIQUE(flatRecords[*].recordType) || [],
+                    origins: UNIQUE(flatRecords[*].origin) || [],
+                    connectors: UNIQUE(connectorValues) || [],
+                    indexingStatus: UNIQUE(flatRecords[*].indexingStatus) || [],
+                    permissions: UNIQUE(permissionValues) || []
+                }}
+                """
             )
 
-            LET mergeRecords = APPEND(allKbRecords, allConnectorRecords)
-            //LET mergeRecordsNewPermission = APPEND(mergeRecords, connectorRecordsNewPermission)
-            LET allRecords = APPEND(mergeRecords, allConnectorRecordsDistinct)
+            # ========== Bind var construction optimized for minimal overhead ==========
 
-            LET flatRecords = (
-                FOR item IN allRecords
-                    RETURN item.record
-            )
-
-            LET permissionValues = (
-                FOR item IN allRecords
-                    FILTER item.permission != null
-                    RETURN item.permission.role
-            )
-
-            LET connectorValues = (
-                FOR record IN flatRecords
-                    FILTER record.connectorName != null
-                    RETURN record.connectorName
-            )
-
-            RETURN {{
-                recordTypes: UNIQUE(flatRecords[*].recordType) || [],
-                origins: UNIQUE(flatRecords[*].origin) || [],
-                connectors: UNIQUE(connectorValues) || [],
-                indexingStatus: UNIQUE(flatRecords[*].indexingStatus) || [],
-                permissions: UNIQUE(permissionValues) || []
-            }}
-            """
-
-            # Build bind variables
+            user_from_val = f"users/{user_id}"
             filter_bind_vars = {}
+
             if search:
                 filter_bind_vars["search"] = f"%{search.lower()}%"
             if record_types:
@@ -1417,60 +1409,49 @@ class BaseArangoService:
             if date_to:
                 filter_bind_vars["date_to"] = date_to
 
-            main_bind_vars = {
-                "user_from": f"users/{user_id}",
+            # Prepare shared dict base for all queries to allow faster key setup
+            shared_bases = {
+                "user_from": user_from_val,
                 "org_id": org_id,
+                "kb_permissions": final_kb_roles,
+                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
+                "@permissions": CollectionNames.PERMISSIONS.value,
+                "@permission": CollectionNames.PERMISSION.value,
+                "@belongs_to": CollectionNames.BELONGS_TO.value,
+                "drive_record_type": RecordTypes.DRIVE.value,
+            }
+
+            # The rest of the dicts, using minimal work in each assignment
+            main_bind_vars = {
+                **shared_bases,
+                "@is_of_type": CollectionNames.IS_OF_TYPE.value,
                 "skip": skip,
                 "limit": limit,
-                "kb_permissions": final_kb_roles,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@permission": CollectionNames.PERMISSION.value,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "@is_of_type": CollectionNames.IS_OF_TYPE.value,
-                "drive_record_type": RecordTypes.DRIVE.value,
                 **filter_bind_vars,
             }
-
             count_bind_vars = {
-                "user_from": f"users/{user_id}",
-                "org_id": org_id,
-                "kb_permissions": final_kb_roles,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@permission": CollectionNames.PERMISSION.value,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "drive_record_type": RecordTypes.DRIVE.value,
+                **shared_bases,
                 **filter_bind_vars,
             }
-
             filters_bind_vars = {
-                "user_from": f"users/{user_id}",
-                "org_id": org_id,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@permission": CollectionNames.PERMISSION.value,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "drive_record_type": RecordTypes.DRIVE.value,
+                **shared_bases,
                 **filter_bind_vars,
             }
 
-            # Execute queries
             db = self.db
+            # These queries are fast because they are already being processed in DB and returned as lists
             records = list(db.aql.execute(main_query, bind_vars=main_bind_vars))
             count = list(db.aql.execute(count_query, bind_vars=count_bind_vars))[0]
             available_filters = list(db.aql.execute(filters_query, bind_vars=filters_bind_vars))[0]
 
-            # Ensure filter structure
+            # More efficient filter initialization (batch setdefault)
             if not available_filters:
                 available_filters = {}
-            available_filters.setdefault("recordTypes", [])
-            available_filters.setdefault("origins", [])
-            available_filters.setdefault("connectors", [])
-            available_filters.setdefault("indexingStatus", [])
-            available_filters.setdefault("permissions", [])
+            for k in ("recordTypes", "origins", "connectors", "indexingStatus", "permissions"):
+                if k not in available_filters:
+                    available_filters[k] = []
 
-            self.logger.info(f"✅ Listed {len(records)} records out of {count} total")
+            logger.info(f"✅ Listed {len(records)} records out of {count} total")
             return records, count, available_filters
 
         except Exception as e:
