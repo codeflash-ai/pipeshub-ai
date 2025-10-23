@@ -1761,31 +1761,41 @@ class BaseArangoService:
         This removes the user's permissions and belongsTo edges without deleting the record itself
         """
         try:
-            self.logger.info(f"🔄 Removing user access: {external_id} from {connector_name} for user {user_id}")
+            self.logger.info(
+                "🔄 Removing user access: %s from %s for user %s", external_id, connector_name, user_id
+            )
+            # If logging format strings support lazy formatting, utilize them. Formatting strings before calling logger is slow.
 
             # Get record
             record = await self.get_record_by_external_id(connector_name, external_id, transaction=transaction)
             if not record:
-                self.logger.warning(f"⚠️ Record {external_id} not found in {connector_name}")
+                self.logger.warning(
+                    "⚠️ Record %s not found in %s", external_id, connector_name
+                )
                 return
 
             # Remove user's access instead of deleting the entire record
             result = await self._remove_user_access_from_record(record.id, user_id)
 
             if result.get("success"):
-                self.logger.info(f"✅ User access removed: {external_id} from {connector_name}")
+                self.logger.info(
+                    "✅ User access removed: %s from %s", external_id, connector_name
+                )
             else:
-                self.logger.error(f"❌ Failed to remove user access: {result.get('reason', 'Unknown error')}")
+                self.logger.error(
+                    "❌ Failed to remove user access: %s", result.get('reason', 'Unknown error')
+                )
                 raise Exception(f"Failed to remove user access: {result.get('reason', 'Unknown error')}")
-
         except Exception as e:
-            self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
+            self.logger.error("❌ Failed to remove user access %s from %s: %s", external_id, connector_name, str(e))
             raise
 
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
-            self.logger.info(f"🚀 Removing user {user_id} access to record {record_id}")
+            self.logger.info(
+                "🚀 Removing user %s access to record %s", user_id, record_id
+            )
 
             # Remove user's permission edges
             user_removal_query = """
@@ -1796,22 +1806,31 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            cursor = self.db.aql.execute(
+                user_removal_query,
+                bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                }
+            )
 
-            removed_permissions = list(cursor)
-
-            if removed_permissions:
-                self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
-                return {"success": True, "removed_permissions": len(removed_permissions)}
+            # Convert cursor to list once, check length only if possible
+            removed_permissions = []
+            count = 0
+            for _ in cursor:
+                count += 1
+            if count:
+                self.logger.info(
+                    "✅ Removed %d permission(s) for user %s on record %s", count, user_id, record_id
+                )
+                return {"success": True, "removed_permissions": count}
             else:
-                self.logger.warning(f"⚠️ No permissions found for user {user_id} on record {record_id}")
+                self.logger.warning(
+                    "⚠️ No permissions found for user %s on record %s", user_id, record_id
+                )
                 return {"success": True, "removed_permissions": 0}
-
         except Exception as e:
-            self.logger.error(f"❌ Failed to remove user access: {str(e)}")
+            self.logger.error("❌ Failed to remove user access: %s", str(e))
             return {
                 "success": False,
                 "reason": f"Access removal failed: {str(e)}"
@@ -3686,8 +3705,10 @@ class BaseArangoService:
             query = f"""
             FOR record IN {CollectionNames.RECORDS.value}
                 FILTER record.externalRecordId == @external_id AND record.connectorName == @connector_name
+                LIMIT 1
                 RETURN record
             """
+            # Add LIMIT 1 so ArangoAQL cursor stops at the first matching record
 
             db = transaction if transaction else self.db
             cursor = db.aql.execute(
