@@ -38,11 +38,20 @@ class GoogleSheetsParser:
         self.min_wait = 1  # seconds
         self.max_wait = 10  # seconds
 
+        # Cache for column letter conversions
+        self._column_letter_cache: Dict[int, str] = {}
+
     async def connect_service(
-        self, user_email: str = None, org_id: str = None, user_id: str = None, app_name: str = "drive"
+        self,
+        user_email: str = None,
+        org_id: str = None,
+        user_id: str = None,
+        app_name: str = "drive",
     ) -> None:
         if self.user_service:
-            if not await self.user_service.connect_individual_user(org_id, user_id,app_name=app_name):
+            if not await self.user_service.connect_individual_user(
+                org_id, user_id, app_name=app_name
+            ):
                 self.logger.error("❌ Failed to connect to Google Sheets service")
                 return None
 
@@ -171,23 +180,33 @@ class GoogleSheetsParser:
         except Exception as e:
             error_msg = str(e)
             if "SERVICE_DISABLED" in error_msg or "API has not been used" in error_msg:
-                self.logger.error(f"❌ Google Sheets API is not enabled. Please enable it in Google Cloud Console: {error_msg}")
+                self.logger.error(
+                    f"❌ Google Sheets API is not enabled. Please enable it in Google Cloud Console: {error_msg}"
+                )
             elif "PERMISSION_DENIED" in error_msg:
-                self.logger.error(f"❌ Permission denied for Google Sheets API: {error_msg}")
+                self.logger.error(
+                    f"❌ Permission denied for Google Sheets API: {error_msg}"
+                )
             else:
                 self.logger.error(f"❌ Failed to parse spreadsheet: {error_msg}")
             raise
 
     def _get_column_letter(self, col_idx: int) -> str:
         """Convert column index to letter (1 = A, 27 = AA, etc.)"""
+        cache = self._column_letter_cache
+        if col_idx in cache:
+            return cache[col_idx]
         result = ""
+        original_idx = col_idx
         while col_idx > 0:
             col_idx, remainder = divmod(col_idx - 1, 26)
             result = chr(65 + remainder) + result
+        cache[original_idx] = result
         return result
 
     def _get_data_type(self, value) -> str:
         """Determine the data type of a value"""
+        # isinstance(bool, int) is True, so check bool before int/float
         if value is None:
             return "n"  # null
         elif isinstance(value, bool):
@@ -369,17 +388,17 @@ class GoogleSheetsParser:
 
         return values
 
-    def _process_cell(
-        self, value, header: str, row: int, col: int
-    ) -> Dict[str, Any]:
+    def _process_cell(self, value, header: str, row: int, col: int) -> Dict[str, Any]:
         """Process a single cell and return its data"""
+        # Optimize so _get_column_letter is called only once per cell
+        column_letter = self._get_column_letter(col)
         return {
             "value": value,
             "header": header,
             "row": row,
             "column": col,
-            "column_letter": self._get_column_letter(col),
-            "coordinate": f"{self._get_column_letter(col)}{row}",
+            "column_letter": column_letter,
+            "coordinate": f"{column_letter}{row}",
             "data_type": self._get_data_type(value),
             "style": {"font": {}, "fill": {}, "alignment": {}},
         }
@@ -432,8 +451,8 @@ class GoogleSheetsParser:
                     {"role": "user", "content": formatted_prompt},
                 ]
                 response = await self._call_llm(messages)
-                if '</think>' in response.content:
-                    response.content = response.content.split('</think>')[-1]
+                if "</think>" in response.content:
+                    response.content = response.content.split("</think>")[-1]
                 try:
                     new_headers = [
                         h.strip() for h in response.content.strip().split(",")
@@ -525,8 +544,8 @@ class GoogleSheetsParser:
                 headers=table["headers"], sample_data=json.dumps(sample_data, indent=2)
             )
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             return response.content
 
         except Exception as e:
@@ -550,8 +569,8 @@ class GoogleSheetsParser:
             )
 
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             # Parse JSON array from response
             try:
                 return json.loads(response.content)
