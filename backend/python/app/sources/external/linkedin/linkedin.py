@@ -54,6 +54,8 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -1297,21 +1299,20 @@ class LinkedInDataSource:
             >>> upload_url = response.value['uploadMechanism']['...']['uploadUrl']
             >>> asset_urn = response.value['asset']
         """
-        action_params = {
-            "registerUploadRequest": {
-                "owner": owner,
-                "recipes": recipes
-            }
-        }
+        # Use tuple for constant values to avoid accidental mutation (recipes is list per signature, cannot optimize)
+        # Minimize dict creation steps and eliminate unnecessary lookups
+        req: Dict[str, object] = {"owner": owner, "recipes": recipes}
         if service_relationships:
-            action_params["registerUploadRequest"]["serviceRelationships"] = service_relationships
+            req["serviceRelationships"] = service_relationships
 
         return self._restli_client.action(
             resource_path="/assets",
             action_name="registerUpload",
-            action_params=action_params,
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            action_params={
+                "registerUploadRequest": req
+            },
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     def register_video_upload(
