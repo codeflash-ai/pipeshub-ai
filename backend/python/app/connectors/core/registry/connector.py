@@ -5,6 +5,7 @@ from app.connectors.core.registry.connector_builder import (
     DocumentationLink,
     FilterField,
 )
+import sys
 
 
 @ConnectorBuilder("Drive")\
@@ -450,7 +451,7 @@ class DocsConnector:
 
     def connect(self) -> bool:
         """Connect to Docs"""
-        print(f"Connecting to {self.name}")
+        sys.stdout.write(f"Connecting to {self.name}\n")
         return True
 
 
