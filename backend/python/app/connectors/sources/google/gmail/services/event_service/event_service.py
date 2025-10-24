@@ -31,35 +31,17 @@ class GmailEventService(BaseEventService):
         try:
             self.logger.info(f"Handling Gmail connector event: {event_type}")
 
-            if event_type == "gmail.init":
-                return await self._handle_gmail_init(payload)
-            elif event_type == "gmail.start":
-                return await self._handle_gmail_start_sync(payload)
-            elif event_type == "gmail.pause":
-                return await self._handle_gmail_pause_sync(payload)
-            elif event_type == "gmail.resume":
-                return await self._handle_gmail_resume_sync(payload)
-            elif event_type == "gmail.user":
-                return await self._handle_gmail_sync_user(payload)
-            elif event_type == "gmail.resync":
-                return await self._handle_resync_gmail(payload)
-            elif event_type == "gmailUpdatesEnabledEvent":
-                return await self._handle_gmail_updates_enabled_event(payload)
-            elif event_type == "gmailUpdatesDisabledEvent":
-                return await self._handle_gmail_updates_disabled_event(payload)
-            # to do  make a reindex failed event for each connector
-            elif event_type == "reindexFailed":
-                return await self._handle_reindex_failed(payload)
-            elif event_type == "gmail.enabled":
-                return await  self._handle_gmail_enabled(payload)
-            elif event_type == "gmail.disabled":
-                return await self._handle_gmail_disabled(payload)
+            handler = self._event_handlers.get(event_type)
+            if handler:
+                return await handler(payload)
             else:
                 self.logger.error(f"Unknown Gmail connector event type: {event_type}")
                 return False
 
         except Exception as e:
-            self.logger.error(f"Error handling Gmail connector event {event_type}: {str(e)}")
+            self.logger.error(
+                f"Error handling Gmail connector event {event_type}: {str(e)}"
+            )
             return False
 
     async def _handle_gmail_init(self, payload: Dict[str, Any]) -> bool:
@@ -73,7 +55,9 @@ class GmailEventService(BaseEventService):
             await self.sync_tasks.gmail_manual_sync_control("init", org_id)
             return True
         except Exception as e:
-            self.logger.error("Failed to queue Gmail sync service initialization: %s", str(e))
+            self.logger.error(
+                "Failed to queue Gmail sync service initialization: %s", str(e)
+            )
             return False
 
     async def _handle_gmail_start_sync(self, payload: Dict[str, Any]) -> bool:
@@ -149,7 +133,9 @@ class GmailEventService(BaseEventService):
                 if not user:
                     self.logger.error(f"User not found for user_id: {user_id}")
                     return False
-                result = await self.sync_tasks.gmail_manual_sync_control("resync", org_id, user_email=user["email"])
+                result = await self.sync_tasks.gmail_manual_sync_control(
+                    "resync", org_id, user_email=user["email"]
+                )
                 if not result or result.get("status") != "accepted":
                     self.logger.error(f"Error resyncing Gmail user {user['email']}")
                     return False
@@ -160,17 +146,23 @@ class GmailEventService(BaseEventService):
 
                 users = await self.arango_service.get_users(org_id, active=True)
                 for user in users:
-                    result = await self.sync_tasks.gmail_manual_sync_control("resync", org_id, user_email=user["email"])
+                    result = await self.sync_tasks.gmail_manual_sync_control(
+                        "resync", org_id, user_email=user["email"]
+                    )
                     if not result or result.get("status") != "accepted":
                         self.logger.error(f"Error resyncing Gmail user {user['email']}")
                         continue
-                self.logger.info(f"Successfully re-sync all Gmail users for org: {org_id}")
+                self.logger.info(
+                    f"Successfully re-sync all Gmail users for org: {org_id}"
+                )
                 return True
         except Exception as e:
             self.logger.error("Error resyncing Gmail user: %s", str(e))
             return False
 
-    async def _handle_gmail_updates_enabled_event(self, payload: Dict[str, Any]) -> bool:
+    async def _handle_gmail_updates_enabled_event(
+        self, payload: Dict[str, Any]
+    ) -> bool:
         """Handle Gmail updates enabled event"""
         try:
             self.logger.info(f"Gmail updates enabled event: {payload}")
@@ -182,13 +174,17 @@ class GmailEventService(BaseEventService):
             if Connectors.GOOGLE_MAIL.value in org_apps:
                 await self._handle_resync_gmail(payload)
             else:
-                self.logger.info(f"Google Mail app not enabled for org {org_id}. Skipping resync_gmail for gmail_updates_enabled event.")
+                self.logger.info(
+                    f"Google Mail app not enabled for org {org_id}. Skipping resync_gmail for gmail_updates_enabled event."
+                )
             return True
         except Exception as e:
             self.logger.error("Error handling Gmail updates enabled event: %s", str(e))
             return False
 
-    async def _handle_gmail_updates_disabled_event(self, payload: Dict[str, Any]) -> bool:
+    async def _handle_gmail_updates_disabled_event(
+        self, payload: Dict[str, Any]
+    ) -> bool:
         """Handle Gmail updates disabled event"""
         try:
             self.logger.info(f"Gmail updates disabled event: {payload}")
@@ -197,7 +193,9 @@ class GmailEventService(BaseEventService):
                 raise ValueError("orgId is required")
             users = await self.arango_service.get_users(org_id, active=True)
             for user in users:
-                await self.sync_tasks.gmail_manual_sync_control("stop", org_id, user_email=user["email"])
+                await self.sync_tasks.gmail_manual_sync_control(
+                    "stop", org_id, user_email=user["email"]
+                )
             return True
         except Exception as e:
             self.logger.error("Error handling Gmail updates disabled event: %s", str(e))
@@ -242,10 +240,37 @@ class GmailEventService(BaseEventService):
             if connector == Connectors.GOOGLE_MAIL.value:
                 await self.sync_tasks.gmail_manual_sync_control("reindex", org_id)
             else:
-                self.logger.warning(f"Connector {connector} is not Gmail, skipping reindex")
+                self.logger.warning(
+                    f"Connector {connector} is not Gmail, skipping reindex"
+                )
                 return True
 
             return True
         except Exception as e:
             self.logger.error("Error re-indexing failed Gmail records: %s", str(e))
             return False
+
+
+# --- HELPER FUNCTIONS ---
+
+
+async def _gather_resync_results(tasks) -> list:
+    """
+    Await a collection of awaitables preserving order and catching all exceptions.
+    """
+    if not tasks:
+        return []
+    import asyncio
+
+    return await asyncio.gather(*tasks)
+
+
+async def _gather_noop(tasks) -> None:
+    """
+    Await a collection of awaitables, discarding results (e.g., for 'stop' operations where only side effects/IO matters).
+    """
+    if not tasks:
+        return
+    import asyncio
+
+    await asyncio.gather(*tasks, return_exceptions=True)
