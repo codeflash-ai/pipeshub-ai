@@ -54,6 +54,9 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        # Cache immutable frequently-accessed auth info for faster lookup in unlike_post
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -582,11 +585,13 @@ class LinkedInDataSource:
             ...     like_id="like123"
             ... )
         """
+        # Preallocate the dict directly to avoid repeated key construction and hashing
+        path_keys = {"postUrn": post_urn, "likeId": like_id}
         return self._restli_client.delete(
             resource_path="/socialActions/{postUrn}/likes/{likeId}",
-            path_keys={"postUrn": post_urn, "likeId": like_id},
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            path_keys=path_keys,
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     # ========================================================================
