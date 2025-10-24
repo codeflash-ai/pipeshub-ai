@@ -740,7 +740,21 @@ class LinkedInDataSource:
             >>> stats = response.entity
             >>> print(stats.get('followerCountsByCountry'))
         """
-        return self.get_follower_statistics(org_urn=org_urn, query_params=query_params)
+        # Direct inline call avoids unnecessary stack frames and attribute lookups
+        final_params = {
+            "q": "organizationalEntity",
+            "organizationalEntity": org_urn
+        }
+        if query_params:
+            # Slight optimization: Avoiding unnecessary .update() when query_params is empty/None
+            final_params.update(query_params)
+        return self._restli_client.finder(
+            resource_path="/organizationalEntityFollowerStatistics",
+            finder_name="organizationalEntity",
+            access_token=self.client.access_token,
+            query_params=final_params,
+            version_string=self.client.version_string
+        )
 
     def get_organization_page_statistics(
         self,
