@@ -54,6 +54,9 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        # Cache frequently accessed attributes for efficiency
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -953,11 +956,13 @@ class LinkedInDataSource:
         Example:
             >>> response = ds.delete_ad_account("123456")
         """
+        # Locally cache static values and build dict in one shot to reduce attribute lookups
+        path_keys = {"id": account_id}
         return self._restli_client.delete(
             resource_path="/adAccounts/{id}",
-            path_keys={"id": account_id},
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            path_keys=path_keys,
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     def search_campaigns(
