@@ -639,16 +639,20 @@ class OutlookConnector(BaseConnector):
                 return {'messages': [], 'delta_link': None, 'next_link': None}
 
             data = response.data or {}
-            messages = self._safe_get_attr(data, 'value', [])
-            delta_link = (self._safe_get_attr(data, 'odata_delta_link') or
-                         self._safe_get_attr(data, '@odata.deltaLink'))
-            next_link = (self._safe_get_attr(data, 'odata_next_link') or
-                        self._safe_get_attr(data, '@odata.nextLink'))
+            # Optimize lookups for dicts: get both variants at once, fallback to attribute method for other objects.
+            if isinstance(data, dict):
+                messages = data.get('value', [])
+                delta_link_val = data.get('odata_delta_link') or data.get('@odata.deltaLink')
+                next_link_val = data.get('odata_next_link') or data.get('@odata.nextLink')
+            else:
+                messages = self._safe_get_attr(data, 'value', [])
+                delta_link_val = self._safe_get_attr(data, 'odata_delta_link') or self._safe_get_attr(data, '@odata.deltaLink')
+                next_link_val = self._safe_get_attr(data, 'odata_next_link') or self._safe_get_attr(data, '@odata.nextLink')
 
             return {
                 'messages': messages,
-                'delta_link': delta_link,
-                'next_link': next_link
+                'delta_link': delta_link_val,
+                'next_link': next_link_val
             }
 
         except Exception as e:
@@ -1073,12 +1077,12 @@ class OutlookConnector(BaseConnector):
 
     def _safe_get_attr(self, obj, attr_name: str, default=None) -> Optional[object]:
         """Safely get attribute from object that could be a class instance or dictionary."""
+        # Optimize: dict lookup is much cheaper/faster than hasattr/getattr for 'get' attribute.
+        if isinstance(obj, dict):
+            return obj.get(attr_name, default)
         if hasattr(obj, attr_name):
             return getattr(obj, attr_name, default)
-        elif hasattr(obj, 'get'):
-            return obj.get(attr_name, default)
-        else:
-            return default
+        return default
 
     def _get_mime_type_enum(self, content_type: str) -> MimeTypes:
         """Map content type string to MimeTypes enum."""

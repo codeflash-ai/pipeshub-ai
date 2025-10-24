@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -35,12 +33,19 @@ from app.sources.client.microsoft.microsoft import MSGraphClient
 # Outlook-specific response wrapper
 class OutlookCalendarContactsResponse:
     """Standardized Outlook API response wrapper."""
+
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     message: Optional[str] = None
 
-    def __init__(self, success: bool, data: Optional[Dict[str, Any]] = None, error: Optional[str] = None, message: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        success: bool,
+        data: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> None:
         self.success = success
         self.data = data
         self.error = error
@@ -51,16 +56,24 @@ class OutlookCalendarContactsResponse:
 
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
+
 
 # Outlook-specific response wrapper for mail folders
 class OutlookMailFoldersResponse:
     """Standardized Outlook Mail Folders API response wrapper."""
+
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
     message: Optional[str] = None
 
-    def __init__(self, success: bool, data: Optional[Dict[str, Any]] = None, error: Optional[str] = None, message: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        success: bool,
+        data: Optional[Dict[str, Any]] = None,
+        error: Optional[str] = None,
+        message: Optional[str] = None,
+    ) -> None:
         self.success = success
         self.data = data
         self.error = error
@@ -72,8 +85,10 @@ class OutlookMailFoldersResponse:
     def to_json(self) -> str:
         return json.dumps(self.to_dict())
 
+
 # Set up logger
 logger = logging.getLogger(__name__)
+
 
 class OutlookCalendarContactsDataSource:
     """
@@ -130,29 +145,33 @@ class OutlookCalendarContactsDataSource:
             raise ValueError("Client must be a Microsoft Graph SDK client")
         logger.info("Outlook client initialized with 681 methods")
 
-    def _handle_outlook_response(self, response: object) -> OutlookCalendarContactsResponse:
+    def _handle_outlook_response(
+        self, response: object
+    ) -> OutlookCalendarContactsResponse:
         """Handle Outlook API response with comprehensive error handling."""
         try:
             if response is None:
-                return OutlookCalendarContactsResponse(success=False, error="Empty response from Outlook API")
+                return OutlookCalendarContactsResponse(
+                    success=False, error="Empty response from Outlook API"
+                )
 
             success = True
             error_msg = None
 
             # Enhanced error response handling for Outlook operations
-            if hasattr(response, 'error'):
+            if hasattr(response, "error"):
                 success = False
                 error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+            elif isinstance(response, dict) and "error" in response:
                 success = False
-                error_info = response['error']
+                error_info = response["error"]
                 if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
+                    error_code = error_info.get("code", "Unknown")
+                    error_message = error_info.get("message", "No message")
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
+            elif hasattr(response, "code") and hasattr(response, "message"):
                 success = False
                 error_msg = f"{response.code}: {response.message}"
 
@@ -165,55 +184,60 @@ class OutlookCalendarContactsDataSource:
             logger.error(f"Error handling Outlook response: {e}")
             return OutlookCalendarContactsResponse(success=False, error=str(e))
 
-    def _handle_mail_folders_response(self, response: object) -> OutlookMailFoldersResponse:
+    def _handle_mail_folders_response(
+        self, response: object
+    ) -> OutlookMailFoldersResponse:
         """Handle mail folders API response specifically."""
         try:
             if response is None:
-                return OutlookMailFoldersResponse(success=False, error="Empty response from Outlook API")
+                return OutlookMailFoldersResponse(
+                    success=False, error="Empty response from Outlook API"
+                )
 
             success = True
             error_msg = None
 
             # Handle error responses
-            if hasattr(response, 'error'):
+            if hasattr(response, "error"):
                 success = False
                 error_msg = str(response.error)
 
             # Extract folders data from MailFolderCollectionResponse
             folders_data = None
-            if success and hasattr(response, 'value') and response.value:
-                folders_data = {
-                    "value": [],
-                    "count": len(response.value)
-                }
+            if success and hasattr(response, "value") and response.value:
+                folders_data = {"value": [], "count": len(response.value)}
 
                 # Add OData metadata if present
-                if hasattr(response, 'additional_data') and response.additional_data:
-                    if '@odata.context' in response.additional_data:
-                        folders_data["@odata.context"] = response.additional_data['@odata.context']
+                if hasattr(response, "additional_data") and response.additional_data:
+                    if "@odata.context" in response.additional_data:
+                        folders_data["@odata.context"] = response.additional_data[
+                            "@odata.context"
+                        ]
 
-                if hasattr(response, 'odata_next_link') and response.odata_next_link:
+                if hasattr(response, "odata_next_link") and response.odata_next_link:
                     folders_data["@odata.nextLink"] = response.odata_next_link
 
-                if hasattr(response, 'odata_count') and response.odata_count:
+                if hasattr(response, "odata_count") and response.odata_count:
                     folders_data["@odata.count"] = response.odata_count
 
                 # Process each MailFolder object
                 for folder in response.value:
                     folder_dict = {
-                        "id": getattr(folder, 'id', None),
-                        "display_name": getattr(folder, 'display_name', None),
-                        "parent_folder_id": getattr(folder, 'parent_folder_id', None),
-                        "child_folder_count": getattr(folder, 'child_folder_count', 0),
-                        "unread_item_count": getattr(folder, 'unread_item_count', 0),
-                        "total_item_count": getattr(folder, 'total_item_count', 0),
-                        "is_hidden": getattr(folder, 'is_hidden', False)
+                        "id": getattr(folder, "id", None),
+                        "display_name": getattr(folder, "display_name", None),
+                        "parent_folder_id": getattr(folder, "parent_folder_id", None),
+                        "child_folder_count": getattr(folder, "child_folder_count", 0),
+                        "unread_item_count": getattr(folder, "unread_item_count", 0),
+                        "total_item_count": getattr(folder, "total_item_count", 0),
+                        "is_hidden": getattr(folder, "is_hidden", False),
                     }
 
                     # Add additional properties if they exist
-                    if hasattr(folder, 'additional_data') and folder.additional_data:
-                        if 'sizeInBytes' in folder.additional_data:
-                            folder_dict["sizeInBytes"] = folder.additional_data['sizeInBytes']
+                    if hasattr(folder, "additional_data") and folder.additional_data:
+                        if "sizeInBytes" in folder.additional_data:
+                            folder_dict["sizeInBytes"] = folder.additional_data[
+                                "sizeInBytes"
+                            ]
 
                     folders_data["value"].append(folder_dict)
 
@@ -221,14 +245,16 @@ class OutlookCalendarContactsDataSource:
                 success=success,
                 data=folders_data,
                 error=error_msg,
-                message=f"Successfully retrieved {len(response.value) if response.value else 0} mail folders" if success else None
+                message=f"Successfully retrieved {len(response.value) if response.value else 0} mail folders"
+                if success
+                else None,
             )
 
         except Exception as e:
             logger.error(f"Error handling mail folders response: {e}")
             return OutlookMailFoldersResponse(success=False, error=str(e))
 
-    def get_data_source(self) -> 'OutlookCalendarContactsDataSource':
+    def get_data_source(self) -> "OutlookCalendarContactsDataSource":
         """Get the underlying Outlook client."""
         return self
 
@@ -248,7 +274,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailboxSettings property value.
         Outlook operation: GET /employeeExperience/communities/{community-id}/owners/{user-id}/mailboxSettings
@@ -302,9 +328,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.employee_experience.communities.by_communitie_id(community_id).owners.by_owner_id(user_id).mailbox_settings.get(request_configuration=config)
+            response = (
+                await self.client.employee_experience.communities.by_communitie_id(
+                    community_id
+                )
+                .owners.by_owner_id(user_id)
+                .mailbox_settings.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -325,7 +357,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update property mailboxSettings value..
         Outlook operation: PATCH /employeeExperience/communities/{community-id}/owners/{user-id}/mailboxSettings
@@ -378,9 +410,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.employee_experience.communities.by_communitie_id(community_id).owners.by_owner_id(user_id).mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.employee_experience.communities.by_communitie_id(
+                    community_id
+                )
+                .owners.by_owner_id(user_id)
+                .mailbox_settings.patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -401,7 +439,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messages for groups.
         Outlook operation: POST /groups/{group-id}/team/channels/{channel-id}/messages
@@ -454,9 +492,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).team.channels.by_channel_id(channel_id).messages.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .team.channels.by_channel_id(channel_id)
+                .messages.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -479,7 +521,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from groups.
         Outlook operation: GET /groups/{group-id}/team/channels/{channel-id}/messages
@@ -534,9 +576,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).team.channels.by_channel_id(channel_id).messages.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .team.channels.by_channel_id(channel_id)
+                .messages.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -556,7 +602,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messages for groups.
         Outlook operation: POST /groups/{group-id}/team/primaryChannel/messages
@@ -608,9 +654,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).team.primary_channel.messages.post(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).team.primary_channel.messages.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -632,7 +682,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from groups.
         Outlook operation: GET /groups/{group-id}/team/primaryChannel/messages
@@ -686,9 +736,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).team.primary_channel.messages.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).team.primary_channel.messages.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -708,7 +760,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailboxSettings property value.
         Outlook operation: GET /invitations/invitedUser/mailboxSettings
@@ -760,9 +812,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.invitations.invited_user.mailbox_settings.get(request_configuration=config)
+            response = await self.client.invitations.invited_user.mailbox_settings.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -781,7 +835,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update property mailboxSettings value..
         Outlook operation: PATCH /invitations/invitedUser/mailboxSettings
@@ -832,9 +886,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.invitations.invited_user.mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.invitations.invited_user.mailbox_settings.patch(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -853,7 +911,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create MailFolder.
         Outlook operation: POST /me/mailFolders
@@ -904,9 +962,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.post(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -928,7 +988,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List mailFolders.
         Outlook operation: GET /me/mailFolders
@@ -953,7 +1013,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -982,9 +1044,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.get(request_configuration=config)
+            response = await self.client.me.mail_folders.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1005,7 +1069,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/mailFolders/delta()
@@ -1029,7 +1093,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -1058,9 +1124,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.delta().get(request_configuration=config)
+            response = await self.client.me.mail_folders.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1080,7 +1148,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete mailFolder.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}
@@ -1132,9 +1200,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).delete(request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1155,7 +1225,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailFolder.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}
@@ -1179,7 +1249,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -1208,9 +1280,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).get(request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1230,7 +1304,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update mailSearchFolder.
         Outlook operation: PATCH /me/mailFolders/{mailFolder-id}
@@ -1282,9 +1356,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).patch(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1304,7 +1380,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create mailSearchFolder.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders
@@ -1356,9 +1432,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.post(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).child_folders.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1381,7 +1459,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List childFolders.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders
@@ -1407,7 +1485,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -1436,9 +1516,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.get(request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).child_folders.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1460,7 +1542,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/delta()
@@ -1485,7 +1567,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -1514,9 +1598,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1537,7 +1625,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property childFolders for me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}
@@ -1590,9 +1678,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1615,7 +1707,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get childFolders from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}
@@ -1641,7 +1733,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -1670,9 +1764,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1693,7 +1791,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property childFolders in me.
         Outlook operation: PATCH /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}
@@ -1746,9 +1844,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1769,7 +1871,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/copy
@@ -1822,9 +1924,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1845,7 +1951,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messageRules for me.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules
@@ -1898,9 +2004,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -1923,7 +2033,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messageRules from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules
@@ -1949,7 +2059,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -1978,9 +2090,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2002,7 +2118,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messageRules for me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules/{messageRule-id}
@@ -2056,9 +2172,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.by_message_rule_id(messageRule_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2081,7 +2202,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messageRules from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules/{messageRule-id}
@@ -2107,7 +2228,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -2136,9 +2259,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.by_message_rule_id(messageRule_id).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2160,7 +2288,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messageRules in me.
         Outlook operation: PATCH /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules/{messageRule-id}
@@ -2214,9 +2342,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.by_message_rule_id(messageRule_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2237,7 +2370,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messages for me.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages
@@ -2290,9 +2423,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2315,7 +2452,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages
@@ -2341,7 +2478,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -2370,9 +2509,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2396,7 +2539,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/delta()
@@ -2423,7 +2566,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -2452,9 +2597,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2476,7 +2626,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messages for me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}
@@ -2530,9 +2680,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2555,7 +2710,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}
@@ -2581,7 +2736,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -2610,9 +2767,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2634,7 +2796,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messages in me.
         Outlook operation: PATCH /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}
@@ -2688,9 +2850,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2712,7 +2879,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete media content for the navigation property messages in me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/$value
@@ -2766,9 +2933,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).value.delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .value.delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2789,7 +2961,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get media content for the navigation property messages from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/$value
@@ -2813,7 +2985,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -2842,9 +3016,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).value.get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .value.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2866,7 +3045,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update media content for the navigation property messages in me.
         Outlook operation: PUT /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/$value
@@ -2920,9 +3099,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).value.put(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .value.put(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -2944,7 +3128,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for me.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments
@@ -2998,9 +3182,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3024,7 +3213,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments
@@ -3051,7 +3240,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -3080,9 +3271,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3104,7 +3300,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments/createUploadSession
@@ -3158,9 +3354,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3183,7 +3386,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments/{attachment-id}
@@ -3238,9 +3441,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3264,7 +3473,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments/{attachment-id}
@@ -3291,7 +3500,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -3320,9 +3531,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3344,7 +3561,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/copy
@@ -3398,9 +3615,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3422,7 +3644,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createForward.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/createForward
@@ -3476,9 +3698,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).create_forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .create_forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3500,7 +3727,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReply.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/createReply
@@ -3554,9 +3781,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).create_reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .create_reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3578,7 +3810,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReplyAll.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/createReplyAll
@@ -3632,9 +3864,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).create_reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .create_reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3656,7 +3893,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/forward
@@ -3710,9 +3947,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3734,7 +3976,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/move
@@ -3788,9 +4030,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3811,7 +4058,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/permanentDelete
@@ -3864,9 +4111,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3888,7 +4140,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action reply.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/reply
@@ -3942,9 +4194,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -3966,7 +4223,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action replyAll.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/replyAll
@@ -4020,9 +4277,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4043,7 +4305,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action send.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/send
@@ -4096,9 +4358,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).send.post(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .send.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4119,7 +4386,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/move
@@ -4172,9 +4439,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4194,7 +4465,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/permanentDelete
@@ -4246,9 +4517,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4268,7 +4543,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/copy
@@ -4320,9 +4595,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).copy.post(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).copy.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4342,7 +4619,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create rule.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messageRules
@@ -4394,9 +4671,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).message_rules.post(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).message_rules.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4418,7 +4697,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List rules.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messageRules
@@ -4443,7 +4722,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -4472,9 +4753,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).message_rules.get(request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).message_rules.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4495,7 +4778,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete messageRule.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/messageRules/{messageRule-id}
@@ -4548,9 +4831,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).message_rules.by_message_rule_id(messageRule_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4572,7 +4859,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get rule.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messageRules/{messageRule-id}
@@ -4597,7 +4884,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -4626,9 +4915,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).message_rules.by_message_rule_id(messageRule_id).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4649,7 +4942,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update rule.
         Outlook operation: PATCH /me/mailFolders/{mailFolder-id}/messageRules/{messageRule-id}
@@ -4702,9 +4995,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).message_rules.by_message_rule_id(messageRule_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4724,7 +5021,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create message in a mailfolder.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages
@@ -4776,9 +5073,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.post(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).messages.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4800,7 +5099,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List messages.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messages
@@ -4825,7 +5124,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -4854,9 +5155,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.get(request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).messages.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4879,7 +5182,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messages/delta()
@@ -4905,7 +5208,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -4934,9 +5239,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -4957,7 +5266,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messages for me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/messages/{message-id}
@@ -5010,9 +5319,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5034,7 +5347,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messages/{message-id}
@@ -5059,7 +5372,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -5088,9 +5403,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5111,7 +5430,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messages in me.
         Outlook operation: PATCH /me/mailFolders/{mailFolder-id}/messages/{message-id}
@@ -5164,9 +5483,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5187,7 +5510,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete media content for the navigation property messages in me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/messages/{message-id}/$value
@@ -5240,9 +5563,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).value.delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .value.delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5262,7 +5589,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List messages.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messages/{message-id}/$value
@@ -5285,7 +5612,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -5314,9 +5643,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).value.get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .value.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5337,7 +5670,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update media content for the navigation property messages in me.
         Outlook operation: PUT /me/mailFolders/{mailFolder-id}/messages/{message-id}/$value
@@ -5390,9 +5723,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).value.put(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .value.put(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5413,7 +5750,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for me.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/attachments
@@ -5466,9 +5803,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5491,7 +5832,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messages/{message-id}/attachments
@@ -5517,7 +5858,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -5546,9 +5889,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5569,7 +5916,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/attachments/createUploadSession
@@ -5622,9 +5969,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5646,7 +5999,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for me.
         Outlook operation: DELETE /me/mailFolders/{mailFolder-id}/messages/{message-id}/attachments/{attachment-id}
@@ -5700,9 +6053,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5725,7 +6083,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/mailFolders/{mailFolder-id}/messages/{message-id}/attachments/{attachment-id}
@@ -5751,7 +6109,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            query_params = (
+                MailFoldersRequestBuilder.MailFoldersRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -5780,9 +6140,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5803,7 +6168,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/copy
@@ -5856,9 +6221,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5879,7 +6248,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createForward.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/createForward
@@ -5932,9 +6301,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).create_forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .create_forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -5955,7 +6328,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReply.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/createReply
@@ -6008,9 +6381,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).create_reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .create_reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6031,7 +6408,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReplyAll.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/createReplyAll
@@ -6084,9 +6461,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).create_reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .create_reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6107,7 +6488,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/forward
@@ -6160,9 +6541,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6183,7 +6568,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/move
@@ -6236,9 +6621,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6258,7 +6647,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/permanentDelete
@@ -6310,9 +6699,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6333,7 +6726,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action reply.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/reply
@@ -6386,9 +6779,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6409,7 +6806,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action replyAll.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/replyAll
@@ -6462,9 +6859,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6484,7 +6885,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action send.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/messages/{message-id}/send
@@ -6536,9 +6937,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).send.post(request_configuration=config)
+            response = (
+                await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .send.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6558,7 +6963,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/move
@@ -6610,9 +7015,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).move.post(body=request_body, request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).move.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6631,7 +7038,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/mailFolders/{mailFolder-id}/permanentDelete
@@ -6682,9 +7089,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mail_folders.by_mail_folder_id(mailFolder_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.mail_folders.by_mail_folder_id(
+                mailFolder_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6703,7 +7112,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update user mailbox settings.
         Outlook operation: PATCH /me/mailboxSettings
@@ -6754,9 +7163,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = await self.client.me.mailbox_settings.patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6775,7 +7186,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create message.
         Outlook operation: POST /me/messages
@@ -6826,9 +7237,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6850,7 +7263,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/messages/delta()
@@ -6875,7 +7288,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -6894,7 +7309,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -6904,9 +7321,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.delta().get(request_configuration=config)
+            response = await self.client.me.messages.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -6926,7 +7345,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete eventMessage.
         Outlook operation: DELETE /me/messages/{message-id}
@@ -6978,9 +7397,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).delete(request_configuration=config)
+            response = await self.client.me.messages.by_message_id(message_id).delete(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7000,7 +7421,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update message.
         Outlook operation: PATCH /me/messages/{message-id}
@@ -7052,9 +7473,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(message_id).patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7074,7 +7497,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete eventMessage.
         Outlook operation: DELETE /me/messages/{message-id}/$value
@@ -7126,9 +7549,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).value.delete(request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).value.delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7148,7 +7573,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update message.
         Outlook operation: PUT /me/messages/{message-id}/$value
@@ -7200,9 +7625,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).value.put(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).value.put(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7222,7 +7649,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Add attachment.
         Outlook operation: POST /me/messages/{message-id}/attachments
@@ -7274,9 +7701,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).attachments.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).attachments.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7298,7 +7727,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List attachments.
         Outlook operation: GET /me/messages/{message-id}/attachments
@@ -7323,7 +7752,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -7342,7 +7773,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -7352,9 +7785,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).attachments.get(request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).attachments.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7374,7 +7809,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/messages/{message-id}/attachments/createUploadSession
@@ -7426,9 +7861,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).attachments.create_upload_session.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7449,7 +7888,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for me.
         Outlook operation: DELETE /me/messages/{message-id}/attachments/{attachment-id}
@@ -7502,9 +7941,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7526,7 +7969,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachment.
         Outlook operation: GET /me/messages/{message-id}/attachments/{attachment-id}
@@ -7551,7 +7994,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -7570,7 +8015,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -7580,9 +8027,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7602,7 +8053,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /me/messages/{message-id}/copy
@@ -7654,9 +8105,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).copy.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).copy.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7676,7 +8129,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createForward.
         Outlook operation: POST /me/messages/{message-id}/createForward
@@ -7728,9 +8181,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).create_forward.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).create_forward.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7750,7 +8205,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReply.
         Outlook operation: POST /me/messages/{message-id}/createReply
@@ -7802,9 +8257,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).create_reply.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).create_reply.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7824,7 +8281,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReplyAll.
         Outlook operation: POST /me/messages/{message-id}/createReplyAll
@@ -7876,9 +8333,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).create_reply_all.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).create_reply_all.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7898,7 +8357,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/messages/{message-id}/forward
@@ -7950,9 +8409,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).forward.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).forward.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -7972,7 +8433,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /me/messages/{message-id}/move
@@ -8024,9 +8485,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).move.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).move.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8045,7 +8508,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/messages/{message-id}/permanentDelete
@@ -8096,9 +8559,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8118,7 +8583,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action reply.
         Outlook operation: POST /me/messages/{message-id}/reply
@@ -8170,9 +8635,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).reply.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).reply.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8192,7 +8659,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action replyAll.
         Outlook operation: POST /me/messages/{message-id}/replyAll
@@ -8244,9 +8711,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).reply_all.post(body=request_body, request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).reply_all.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8265,7 +8734,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action send.
         Outlook operation: POST /me/messages/{message-id}/send
@@ -8316,9 +8785,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.messages.by_message_id(message_id).send.post(request_configuration=config)
+            response = await self.client.me.messages.by_message_id(
+                message_id
+            ).send.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8337,7 +8808,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action setStatusMessage.
         Outlook operation: POST /me/presence/setStatusMessage
@@ -8388,9 +8859,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.presence.set_status_message.post(body=request_body, request_configuration=config)
+            response = await self.client.me.presence.set_status_message.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8412,7 +8885,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailboxSettings property value.
         Outlook operation: GET /print/shares/{printerShare-id}/allowedUsers/{user-id}/mailboxSettings
@@ -8466,9 +8939,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.print.shares.by_share_id(printerShare_id).allowed_users.by_allowedUser_id(user_id).mailbox_settings.get(request_configuration=config)
+            response = (
+                await self.client.print.shares.by_share_id(printerShare_id)
+                .allowed_users.by_allowedUser_id(user_id)
+                .mailbox_settings.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8489,7 +8966,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update property mailboxSettings value..
         Outlook operation: PATCH /print/shares/{printerShare-id}/allowedUsers/{user-id}/mailboxSettings
@@ -8542,9 +9019,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.print.shares.by_share_id(printerShare_id).allowed_users.by_allowedUser_id(user_id).mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.print.shares.by_share_id(printerShare_id)
+                .allowed_users.by_allowedUser_id(user_id)
+                .mailbox_settings.patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8566,7 +9047,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailboxSettings property value.
         Outlook operation: GET /privacy/subjectRightsRequests/{subjectRightsRequest-id}/approvers/{user-id}/mailboxSettings
@@ -8620,9 +9101,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(subjectRightsRequest_id).approvers.by_approver_id(user_id).mailbox_settings.get(request_configuration=config)
+            response = (
+                await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(
+                    subjectRightsRequest_id
+                )
+                .approvers.by_approver_id(user_id)
+                .mailbox_settings.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8643,7 +9130,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update property mailboxSettings value..
         Outlook operation: PATCH /privacy/subjectRightsRequests/{subjectRightsRequest-id}/approvers/{user-id}/mailboxSettings
@@ -8696,9 +9183,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(subjectRightsRequest_id).approvers.by_approver_id(user_id).mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(
+                    subjectRightsRequest_id
+                )
+                .approvers.by_approver_id(user_id)
+                .mailbox_settings.patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8720,7 +9213,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailboxSettings property value.
         Outlook operation: GET /privacy/subjectRightsRequests/{subjectRightsRequest-id}/collaborators/{user-id}/mailboxSettings
@@ -8774,9 +9267,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(subjectRightsRequest_id).collaborators.by_collaborator_id(user_id).mailbox_settings.get(request_configuration=config)
+            response = (
+                await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(
+                    subjectRightsRequest_id
+                )
+                .collaborators.by_collaborator_id(user_id)
+                .mailbox_settings.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8797,7 +9296,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update property mailboxSettings value..
         Outlook operation: PATCH /privacy/subjectRightsRequests/{subjectRightsRequest-id}/collaborators/{user-id}/mailboxSettings
@@ -8850,9 +9349,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(subjectRightsRequest_id).collaborators.by_collaborator_id(user_id).mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.privacy.subject_rights_requests.by_subjectRightsRequest_id(
+                    subjectRightsRequest_id
+                )
+                .collaborators.by_collaborator_id(user_id)
+                .mailbox_settings.patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8871,7 +9376,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function getMailboxUsageDetail.
         Outlook operation: GET /reports/getMailboxUsageDetail(period='{period}')
@@ -8922,9 +9427,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.reports.get_mailbox_usage_detail(period='{period}').get(request_configuration=config)
+            response = await self.client.reports.get_mailbox_usage_detail(
+                period="{period}"
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -8944,7 +9451,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to mailFolders for users.
         Outlook operation: POST /users/{user-id}/mailFolders
@@ -8996,9 +9503,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).mail_folders.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9021,7 +9530,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookMailFoldersResponse:
         """Get mailFolders from users.
         Outlook operation: GET /users/{user-id}/mailFolders
@@ -9076,9 +9585,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).mail_folders.get(
+                request_configuration=config
+            )
             return self._handle_mail_folders_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9100,7 +9611,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/mailFolders/delta()
@@ -9154,9 +9665,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9177,7 +9692,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property mailFolders for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}
@@ -9230,9 +9745,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9255,7 +9774,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailFolders from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}
@@ -9310,9 +9829,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9333,7 +9856,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property mailFolders in users.
         Outlook operation: PATCH /users/{user-id}/mailFolders/{mailFolder-id}
@@ -9386,9 +9909,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9409,7 +9936,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to childFolders for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders
@@ -9462,9 +9989,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9488,7 +10019,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get childFolders from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders
@@ -9544,9 +10075,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9569,7 +10104,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/delta()
@@ -9624,9 +10159,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9648,7 +10188,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property childFolders for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}
@@ -9702,9 +10242,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9728,7 +10273,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get childFolders from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}
@@ -9784,9 +10329,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9808,7 +10358,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property childFolders in users.
         Outlook operation: PATCH /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}
@@ -9862,9 +10412,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9886,7 +10441,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/copy
@@ -9940,9 +10495,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -9964,7 +10524,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messageRules for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules
@@ -10018,9 +10578,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10044,7 +10609,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messageRules from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules
@@ -10100,9 +10665,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10125,7 +10695,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messageRules for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules/{messageRule-id}
@@ -10180,9 +10750,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.by_message_rule_id(messageRule_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10206,7 +10782,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messageRules from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules/{messageRule-id}
@@ -10262,9 +10838,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.by_message_rule_id(messageRule_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10287,7 +10869,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messageRules in users.
         Outlook operation: PATCH /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messageRules/{messageRule-id}
@@ -10342,9 +10924,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).message_rules.by_message_rule_id(messageRule_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10366,7 +10954,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messages for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages
@@ -10420,9 +11008,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10446,7 +11039,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages
@@ -10502,9 +11095,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10529,7 +11127,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/delta()
@@ -10586,9 +11184,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10611,7 +11215,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messages for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}
@@ -10666,9 +11270,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10692,7 +11302,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}
@@ -10748,9 +11358,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10773,7 +11389,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messages in users.
         Outlook operation: PATCH /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}
@@ -10828,9 +11444,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10853,7 +11475,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete media content for the navigation property messages in users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/$value
@@ -10908,9 +11530,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).value.delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .value.delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -10932,7 +11560,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get media content for the navigation property messages from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/$value
@@ -10986,9 +11614,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).value.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .value.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11011,7 +11645,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update media content for the navigation property messages in users.
         Outlook operation: PUT /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/$value
@@ -11066,9 +11700,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).value.put(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .value.put(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11091,7 +11731,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments
@@ -11146,9 +11786,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11173,7 +11819,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments
@@ -11230,9 +11876,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11255,7 +11907,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments/createUploadSession
@@ -11310,9 +11962,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11336,7 +11996,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments/{attachment-id}
@@ -11392,9 +12052,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11419,7 +12086,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/attachments/{attachment-id}
@@ -11476,9 +12143,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11501,7 +12175,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/copy
@@ -11556,9 +12230,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11581,7 +12261,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createForward.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/createForward
@@ -11636,9 +12316,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).create_forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .create_forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11661,7 +12347,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReply.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/createReply
@@ -11716,9 +12402,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).create_reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .create_reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11741,7 +12433,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReplyAll.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/createReplyAll
@@ -11796,9 +12488,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).create_reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .create_reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11821,7 +12519,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/forward
@@ -11876,9 +12574,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11901,7 +12605,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/move
@@ -11956,9 +12660,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -11980,7 +12690,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/permanentDelete
@@ -12034,9 +12744,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12059,7 +12775,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action reply.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/reply
@@ -12114,9 +12830,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12139,7 +12861,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action replyAll.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/replyAll
@@ -12194,9 +12916,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12218,7 +12946,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action send.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/messages/{message-id}/send
@@ -12272,9 +13000,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).messages.by_message_id(message_id).send.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .messages.by_message_id(message_id)
+                .send.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12296,7 +13030,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/move
@@ -12350,9 +13084,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12373,7 +13112,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/childFolders/{mailFolder-id1}/permanentDelete
@@ -12426,9 +13165,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).child_folders.by_childFolder_id(mailFolder_id1).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .child_folders.by_childFolder_id(mailFolder_id1)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12449,7 +13193,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/copy
@@ -12502,9 +13246,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12525,7 +13273,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messageRules for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messageRules
@@ -12578,9 +13326,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).message_rules.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12603,7 +13355,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messageRules from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messageRules
@@ -12658,9 +13410,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).message_rules.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12682,7 +13438,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messageRules for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/messageRules/{messageRule-id}
@@ -12736,9 +13492,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).message_rules.by_message_rule_id(messageRule_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12761,7 +13522,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messageRules from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messageRules/{messageRule-id}
@@ -12816,9 +13577,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).message_rules.by_message_rule_id(messageRule_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12840,7 +13606,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messageRules in users.
         Outlook operation: PATCH /users/{user-id}/mailFolders/{mailFolder-id}/messageRules/{messageRule-id}
@@ -12894,9 +13660,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).message_rules.by_message_rule_id(messageRule_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .message_rules.by_message_rule_id(messageRule_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12917,7 +13688,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messages for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages
@@ -12970,9 +13741,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -12995,7 +13770,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messages
@@ -13050,9 +13825,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13077,7 +13856,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messages/delta()
@@ -13106,16 +13885,25 @@ class OutlookCalendarContactsDataSource:
         try:
             if delta_link:
                 # Use the complete deltaLink URL for subsequent requests
-                response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.delta.with_url(delta_link).get()
+                response = (
+                    await self.client.users.by_user_id(user_id)
+                    .mail_folders.by_mail_folder_id(mailFolder_id)
+                    .messages.delta.with_url(delta_link)
+                    .get()
+                )
             else:
                 # Use typed query parameters
                 query_params = RequestConfiguration()
 
                 # Set query parameters using typed object properties
                 if select:
-                    query_params.select = select if isinstance(select, list) else [select]
+                    query_params.select = (
+                        select if isinstance(select, list) else [select]
+                    )
                 if expand:
-                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                    query_params.expand = (
+                        expand if isinstance(expand, list) else [expand]
+                    )
                 if filter:
                     query_params.filter = filter
                 if orderby:
@@ -13138,9 +13926,13 @@ class OutlookCalendarContactsDataSource:
                 if search:
                     if not config.headers:
                         config.headers = {}
-                    config.headers['ConsistencyLevel'] = 'eventual'
+                    config.headers["ConsistencyLevel"] = "eventual"
 
-                response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.delta.get(request_configuration=config)
+                response = (
+                    await self.client.users.by_user_id(user_id)
+                    .mail_folders.by_mail_folder_id(mailFolder_id)
+                    .messages.delta.get(request_configuration=config)
+                )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13162,7 +13954,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messages for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}
@@ -13216,9 +14008,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13241,7 +14038,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}
@@ -13296,9 +14093,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13320,7 +14122,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messages in users.
         Outlook operation: PATCH /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}
@@ -13374,9 +14176,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13398,7 +14205,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete media content for the navigation property messages in users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/$value
@@ -13452,9 +14259,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).value.delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .value.delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13475,7 +14287,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get media content for the navigation property messages from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/$value
@@ -13528,9 +14340,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).value.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .value.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13552,7 +14369,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update media content for the navigation property messages in users.
         Outlook operation: PUT /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/$value
@@ -13606,9 +14423,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).value.put(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .value.put(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13630,7 +14452,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/attachments
@@ -13684,9 +14506,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13710,7 +14537,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/attachments
@@ -13766,9 +14593,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13790,7 +14622,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/attachments/createUploadSession
@@ -13844,9 +14676,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13869,7 +14708,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/attachments/{attachment-id}
@@ -13924,9 +14763,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -13950,7 +14795,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/attachments/{attachment-id}
@@ -14006,9 +14851,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14030,7 +14881,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/copy
@@ -14084,9 +14935,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14108,7 +14964,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createForward.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/createForward
@@ -14162,9 +15018,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).create_forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .create_forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14186,7 +15047,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReply.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/createReply
@@ -14240,9 +15101,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).create_reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .create_reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14264,7 +15130,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReplyAll.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/createReplyAll
@@ -14318,9 +15184,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).create_reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .create_reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14342,7 +15213,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/forward
@@ -14396,9 +15267,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14420,7 +15296,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/move
@@ -14474,9 +15350,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14497,7 +15378,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/permanentDelete
@@ -14550,9 +15431,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14574,7 +15460,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action reply.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/reply
@@ -14628,9 +15514,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14652,7 +15543,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action replyAll.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/replyAll
@@ -14706,9 +15597,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14729,7 +15625,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action send.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/messages/{message-id}/send
@@ -14782,9 +15678,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).messages.by_message_id(message_id).send.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .messages.by_message_id(message_id)
+                .send.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14805,7 +15706,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/move
@@ -14858,9 +15759,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14880,7 +15785,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/mailFolders/{mailFolder-id}/permanentDelete
@@ -14932,9 +15837,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mail_folders.by_mail_folder_id(mailFolder_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .mail_folders.by_mail_folder_id(mailFolder_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -14955,7 +15864,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get mailboxSettings property value.
         Outlook operation: GET /users/{user-id}/mailboxSettings
@@ -15008,9 +15917,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mailbox_settings.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).mailbox_settings.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15030,7 +15941,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update property mailboxSettings value..
         Outlook operation: PATCH /users/{user-id}/mailboxSettings
@@ -15082,9 +15993,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).mailbox_settings.patch(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).mailbox_settings.patch(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15104,7 +16017,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to messages for users.
         Outlook operation: POST /users/{user-id}/messages
@@ -15156,9 +16069,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).messages.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15181,7 +16096,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from users.
         Outlook operation: GET /users/{user-id}/messages
@@ -15207,7 +16122,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -15226,7 +16143,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -15236,9 +16155,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).messages.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15261,7 +16182,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/messages/delta()
@@ -15287,7 +16208,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -15306,7 +16229,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -15316,9 +16241,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15339,7 +16268,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property messages for users.
         Outlook operation: DELETE /users/{user-id}/messages/{message-id}
@@ -15392,9 +16321,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15417,7 +16350,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get messages from users.
         Outlook operation: GET /users/{user-id}/messages/{message-id}
@@ -15443,7 +16376,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -15462,7 +16397,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -15472,9 +16409,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15495,7 +16436,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property messages in users.
         Outlook operation: PATCH /users/{user-id}/messages/{message-id}
@@ -15548,9 +16489,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15571,7 +16516,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete media content for the navigation property messages in users.
         Outlook operation: DELETE /users/{user-id}/messages/{message-id}/$value
@@ -15624,9 +16569,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).value.delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .value.delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15646,7 +16595,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get media content for the navigation property messages from users.
         Outlook operation: GET /users/{user-id}/messages/{message-id}/$value
@@ -15669,7 +16618,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -15688,7 +16639,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -15698,9 +16651,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).value.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .value.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15721,7 +16678,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update media content for the navigation property messages in users.
         Outlook operation: PUT /users/{user-id}/messages/{message-id}/$value
@@ -15774,9 +16731,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).value.put(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .value.put(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15797,7 +16758,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/attachments
@@ -15850,9 +16811,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15875,7 +16840,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/messages/{message-id}/attachments
@@ -15901,7 +16866,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -15920,7 +16887,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -15930,9 +16899,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -15953,7 +16926,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/attachments/createUploadSession
@@ -16006,9 +16979,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16030,7 +17009,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/messages/{message-id}/attachments/{attachment-id}
@@ -16084,9 +17063,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16109,7 +17093,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/messages/{message-id}/attachments/{attachment-id}
@@ -16135,7 +17119,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            query_params = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -16154,7 +17140,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            config = (
+                MessagesRequestBuilder.MessagesRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -16164,9 +17152,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16187,7 +17180,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action copy.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/copy
@@ -16240,9 +17233,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).copy.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .copy.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16263,7 +17260,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createForward.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/createForward
@@ -16316,9 +17313,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).create_forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .create_forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16339,7 +17340,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReply.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/createReply
@@ -16392,9 +17393,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).create_reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .create_reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16415,7 +17420,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createReplyAll.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/createReplyAll
@@ -16468,9 +17473,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).create_reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .create_reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16491,7 +17500,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/forward
@@ -16544,9 +17553,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16567,7 +17580,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action move.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/move
@@ -16620,9 +17633,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).move.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .move.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16642,7 +17659,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/permanentDelete
@@ -16694,9 +17711,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16717,7 +17738,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action reply.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/reply
@@ -16770,9 +17791,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).reply.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .reply.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16793,7 +17818,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action replyAll.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/replyAll
@@ -16846,9 +17871,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).reply_all.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .reply_all.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16868,7 +17897,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action send.
         Outlook operation: POST /users/{user-id}/messages/{message-id}/send
@@ -16920,9 +17949,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).messages.by_message_id(message_id).send.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .messages.by_message_id(message_id)
+                .send.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -16942,7 +17975,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action setStatusMessage.
         Outlook operation: POST /users/{user-id}/presence/setStatusMessage
@@ -16994,9 +18027,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).presence.set_status_message.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).presence.set_status_message.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17019,7 +18056,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from groups.
         Outlook operation: GET /groups/{group-id}/calendar
@@ -17072,9 +18109,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(group_id).calendar.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17094,7 +18133,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /groups/{group-id}/calendar/allowedCalendarSharingRoles(User='{User}')
@@ -17146,9 +18185,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.allowed_calendar_sharing_roles(_user="{_user}")
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17168,7 +18211,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarPermissions for groups.
         Outlook operation: POST /groups/{group-id}/calendar/calendarPermissions
@@ -17220,9 +18263,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_permissions.post(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.calendar_permissions.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17244,7 +18291,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from groups.
         Outlook operation: GET /groups/{group-id}/calendar/calendarPermissions
@@ -17298,9 +18345,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_permissions.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.calendar_permissions.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17321,7 +18370,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarPermissions for groups.
         Outlook operation: DELETE /groups/{group-id}/calendar/calendarPermissions/{calendarPermission-id}
@@ -17374,9 +18423,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.calendar_permissions.by_calendarPermission_id(
+                    calendarPermission_id
+                )
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17398,7 +18453,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from groups.
         Outlook operation: GET /groups/{group-id}/calendar/calendarPermissions/{calendarPermission-id}
@@ -17452,9 +18507,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.calendar_permissions.by_calendarPermission_id(
+                    calendarPermission_id
+                )
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17475,7 +18536,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarPermissions in groups.
         Outlook operation: PATCH /groups/{group-id}/calendar/calendarPermissions/{calendarPermission-id}
@@ -17528,9 +18589,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.calendar_permissions.by_calendarPermission_id(
+                    calendarPermission_id
+                )
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17554,7 +18621,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from groups.
         Outlook operation: GET /groups/{group-id}/calendar/calendarView
@@ -17610,9 +18677,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_view.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.calendar_view.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17636,7 +18705,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /groups/{group-id}/calendar/calendarView/delta()
@@ -17692,9 +18761,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17714,7 +18787,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for groups.
         Outlook operation: POST /groups/{group-id}/calendar/events
@@ -17766,9 +18839,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.post(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.events.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17790,7 +18865,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from groups.
         Outlook operation: GET /groups/{group-id}/calendar/events
@@ -17844,9 +18919,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.events.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17870,7 +18947,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /groups/{group-id}/calendar/events/delta()
@@ -17926,9 +19003,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.delta().get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -17949,7 +19030,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for groups.
         Outlook operation: DELETE /groups/{group-id}/calendar/events/{event-id}
@@ -18002,9 +19083,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18026,7 +19111,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from groups.
         Outlook operation: GET /groups/{group-id}/calendar/events/{event-id}
@@ -18080,9 +19165,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18103,7 +19192,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update event.
         Outlook operation: PATCH /groups/{group-id}/calendar/events/{event-id}
@@ -18156,9 +19245,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18179,7 +19272,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/accept
@@ -18232,9 +19325,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18255,7 +19352,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for groups.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/attachments
@@ -18308,9 +19405,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18333,7 +19434,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/calendar/events/{event-id}/attachments
@@ -18388,9 +19489,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18411,7 +19516,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/attachments/createUploadSession
@@ -18464,9 +19569,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18488,7 +19599,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for groups.
         Outlook operation: DELETE /groups/{group-id}/calendar/events/{event-id}/attachments/{attachment-id}
@@ -18542,9 +19653,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18567,7 +19683,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/calendar/events/{event-id}/attachments/{attachment-id}
@@ -18622,9 +19738,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18646,7 +19767,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from groups.
         Outlook operation: GET /groups/{group-id}/calendar/events/{event-id}/calendar
@@ -18700,9 +19821,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18723,7 +19848,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/cancel
@@ -18776,9 +19901,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18799,7 +19928,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/decline
@@ -18852,9 +19981,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18874,7 +20007,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/dismissReminder
@@ -18926,9 +20059,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -18949,7 +20086,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/forward
@@ -19002,9 +20139,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19029,7 +20170,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from groups.
         Outlook operation: GET /groups/{group-id}/calendar/events/{event-id}/instances
@@ -19086,9 +20227,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19113,7 +20258,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /groups/{group-id}/calendar/events/{event-id}/instances/delta()
@@ -19170,9 +20315,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19192,7 +20342,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/permanentDelete
@@ -19244,9 +20394,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19267,7 +20421,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/snoozeReminder
@@ -19320,9 +20474,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19343,7 +20501,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /groups/{group-id}/calendar/events/{event-id}/tentativelyAccept
@@ -19396,9 +20554,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar.events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19418,7 +20582,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /groups/{group-id}/calendar/getSchedule
@@ -19470,9 +20634,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.get_schedule.post(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.get_schedule.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19491,7 +20659,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /groups/{group-id}/calendar/permanentDelete
@@ -19542,9 +20710,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar.permanent_delete.post(request_configuration=config)
+            response = await self.client.groups.by_group_id(
+                group_id
+            ).calendar.permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19568,7 +20738,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List group calendarView.
         Outlook operation: GET /groups/{group-id}/calendarView
@@ -19624,9 +20794,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar_view.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(group_id).calendar_view.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19650,7 +20822,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /groups/{group-id}/calendarView/delta()
@@ -19706,9 +20878,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19728,7 +20904,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create event.
         Outlook operation: POST /groups/{group-id}/events
@@ -19780,9 +20956,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.post(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(group_id).events.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19804,7 +20982,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List events.
         Outlook operation: GET /groups/{group-id}/events
@@ -19858,9 +21036,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.get(request_configuration=config)
+            response = await self.client.groups.by_group_id(group_id).events.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19884,7 +21064,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /groups/{group-id}/events/delta()
@@ -19940,9 +21120,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.delta().get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -19963,7 +21147,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete event.
         Outlook operation: DELETE /groups/{group-id}/events/{event-id}
@@ -20016,9 +21200,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20040,7 +21228,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get event.
         Outlook operation: GET /groups/{group-id}/events/{event-id}
@@ -20094,9 +21282,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20117,7 +21309,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in groups.
         Outlook operation: PATCH /groups/{group-id}/events/{event-id}
@@ -20170,9 +21362,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20193,7 +21389,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/accept
@@ -20246,9 +21442,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20269,7 +21469,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for groups.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/attachments
@@ -20322,9 +21522,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20347,7 +21551,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/events/{event-id}/attachments
@@ -20402,9 +21606,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20425,7 +21633,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/attachments/createUploadSession
@@ -20478,9 +21686,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20502,7 +21716,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for groups.
         Outlook operation: DELETE /groups/{group-id}/events/{event-id}/attachments/{attachment-id}
@@ -20556,9 +21770,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20581,7 +21800,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/events/{event-id}/attachments/{attachment-id}
@@ -20636,9 +21855,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20660,7 +21884,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from groups.
         Outlook operation: GET /groups/{group-id}/events/{event-id}/calendar
@@ -20714,9 +21938,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20737,7 +21965,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/cancel
@@ -20790,9 +22018,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20813,7 +22045,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/decline
@@ -20866,9 +22098,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20888,7 +22124,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/dismissReminder
@@ -20940,9 +22176,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -20963,7 +22203,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/forward
@@ -21016,9 +22256,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21043,7 +22287,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from groups.
         Outlook operation: GET /groups/{group-id}/events/{event-id}/instances
@@ -21100,9 +22344,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21127,7 +22375,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /groups/{group-id}/events/{event-id}/instances/delta()
@@ -21184,9 +22432,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21206,7 +22459,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/permanentDelete
@@ -21258,9 +22511,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21281,7 +22538,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/snoozeReminder
@@ -21334,9 +22591,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21357,7 +22618,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /groups/{group-id}/events/{event-id}/tentativelyAccept
@@ -21410,9 +22671,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21432,7 +22699,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar.
         Outlook operation: GET /me/calendar
@@ -21484,7 +22751,7 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
             response = await self.client.me.calendar.get(request_configuration=config)
             return self._handle_outlook_response(response)
@@ -21505,7 +22772,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update calendar.
         Outlook operation: PATCH /me/calendar
@@ -21556,9 +22823,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.patch(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21577,7 +22846,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /me/calendar/allowedCalendarSharingRoles(User='{User}')
@@ -21628,9 +22897,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = await self.client.me.calendar.allowed_calendar_sharing_roles(
+                _user="{_user}"
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21651,7 +22922,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from me.
         Outlook operation: GET /me/calendar/calendarPermissions
@@ -21704,9 +22975,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.calendar_permissions.get(request_configuration=config)
+            response = await self.client.me.calendar.calendar_permissions.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21726,7 +22999,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarPermissions for me.
         Outlook operation: DELETE /me/calendar/calendarPermissions/{calendarPermission-id}
@@ -21778,9 +23051,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = await self.client.me.calendar.calendar_permissions.by_calendarPermission_id(
+                calendarPermission_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21801,7 +23076,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from me.
         Outlook operation: GET /me/calendar/calendarPermissions/{calendarPermission-id}
@@ -21854,9 +23129,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = await self.client.me.calendar.calendar_permissions.by_calendarPermission_id(
+                calendarPermission_id
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21876,7 +23153,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarPermissions in me.
         Outlook operation: PATCH /me/calendar/calendarPermissions/{calendarPermission-id}
@@ -21928,9 +23205,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.calendar_permissions.by_calendarPermission_id(
+                calendarPermission_id
+            ).patch(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -21953,7 +23232,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List calendarView.
         Outlook operation: GET /me/calendar/calendarView
@@ -22008,9 +23287,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.calendar_view.get(request_configuration=config)
+            response = await self.client.me.calendar.calendar_view.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22033,7 +23314,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendar/calendarView/delta()
@@ -22088,9 +23369,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.calendar_view.delta().get(request_configuration=config)
+            response = await self.client.me.calendar.calendar_view.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22109,7 +23392,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for me.
         Outlook operation: POST /me/calendar/events
@@ -22160,9 +23443,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22183,7 +23468,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List events.
         Outlook operation: GET /me/calendar/events
@@ -22236,9 +23521,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.get(request_configuration=config)
+            response = await self.client.me.calendar.events.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22261,7 +23548,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendar/events/delta()
@@ -22316,9 +23603,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.delta().get(request_configuration=config)
+            response = await self.client.me.calendar.events.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22338,7 +23627,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for me.
         Outlook operation: DELETE /me/calendar/events/{event-id}
@@ -22390,9 +23679,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).delete(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22413,7 +23704,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from me.
         Outlook operation: GET /me/calendar/events/{event-id}
@@ -22466,9 +23757,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).get(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(event_id).get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22488,7 +23781,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in me.
         Outlook operation: PATCH /me/calendar/events/{event-id}
@@ -22540,9 +23833,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(event_id).patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22562,7 +23857,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /me/calendar/events/{event-id}/accept
@@ -22614,9 +23909,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).accept.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22636,7 +23933,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for me.
         Outlook operation: POST /me/calendar/events/{event-id}/attachments
@@ -22688,9 +23985,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).attachments.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22712,7 +24011,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/calendar/events/{event-id}/attachments
@@ -22766,9 +24065,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).attachments.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22788,7 +24089,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/calendar/events/{event-id}/attachments/createUploadSession
@@ -22840,9 +24141,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).attachments.create_upload_session.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22863,7 +24168,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for me.
         Outlook operation: DELETE /me/calendar/events/{event-id}/attachments/{attachment-id}
@@ -22916,9 +24221,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendar.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -22940,7 +24249,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/calendar/events/{event-id}/attachments/{attachment-id}
@@ -22994,9 +24303,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendar.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23017,7 +24330,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from me.
         Outlook operation: GET /me/calendar/events/{event-id}/calendar
@@ -23070,9 +24383,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).calendar.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23092,7 +24407,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /me/calendar/events/{event-id}/cancel
@@ -23144,9 +24459,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).cancel.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23166,7 +24483,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /me/calendar/events/{event-id}/decline
@@ -23218,9 +24535,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).decline.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23239,7 +24558,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /me/calendar/events/{event-id}/dismissReminder
@@ -23290,9 +24609,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).dismiss_reminder.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23312,7 +24633,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/calendar/events/{event-id}/forward
@@ -23364,9 +24685,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).forward.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23390,7 +24713,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from me.
         Outlook operation: GET /me/calendar/events/{event-id}/instances
@@ -23446,9 +24769,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).instances.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23472,7 +24797,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendar/events/{event-id}/instances/delta()
@@ -23528,9 +24853,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendar.events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23549,7 +24878,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/calendar/events/{event-id}/permanentDelete
@@ -23600,9 +24929,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23622,7 +24953,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /me/calendar/events/{event-id}/snoozeReminder
@@ -23674,9 +25005,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).snooze_reminder.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23696,7 +25029,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /me/calendar/events/{event-id}/tentativelyAccept
@@ -23748,9 +25081,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.events.by_event_id(
+                event_id
+            ).tentatively_accept.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23769,7 +25104,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /me/calendar/getSchedule
@@ -23820,9 +25155,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.get_schedule.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar.get_schedule.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23840,7 +25177,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/calendar/permanentDelete
@@ -23890,9 +25227,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar.permanent_delete.post(request_configuration=config)
+            response = await self.client.me.calendar.permanent_delete.post(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23911,7 +25250,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create CalendarGroup.
         Outlook operation: POST /me/calendarGroups
@@ -23962,9 +25301,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar_groups.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -23985,7 +25326,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List calendarGroups.
         Outlook operation: GET /me/calendarGroups
@@ -24038,9 +25379,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.get(request_configuration=config)
+            response = await self.client.me.calendar_groups.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24060,7 +25403,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete calendarGroup.
         Outlook operation: DELETE /me/calendarGroups/{calendarGroup-id}
@@ -24112,9 +25455,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).delete(request_configuration=config)
+            response = await self.client.me.calendar_groups.by_calendarGroup_id(
+                calendarGroup_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24135,7 +25480,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarGroup.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}
@@ -24188,9 +25533,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).get(request_configuration=config)
+            response = await self.client.me.calendar_groups.by_calendarGroup_id(
+                calendarGroup_id
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24210,7 +25557,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update calendargroup.
         Outlook operation: PATCH /me/calendarGroups/{calendarGroup-id}
@@ -24262,9 +25609,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar_groups.by_calendarGroup_id(
+                calendarGroup_id
+            ).patch(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24284,7 +25633,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create Calendar.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars
@@ -24336,9 +25685,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendar_groups.by_calendarGroup_id(
+                calendarGroup_id
+            ).calendars.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24360,7 +25711,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List calendars.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars
@@ -24414,9 +25765,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.get(request_configuration=config)
+            response = await self.client.me.calendar_groups.by_calendarGroup_id(
+                calendarGroup_id
+            ).calendars.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24437,7 +25790,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendars for me.
         Outlook operation: DELETE /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}
@@ -24490,9 +25843,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24514,7 +25873,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendars from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}
@@ -24568,9 +25927,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24591,7 +25956,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendars in me.
         Outlook operation: PATCH /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}
@@ -24644,9 +26009,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24667,7 +26038,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/allowedCalendarSharingRoles(User='{User}')
@@ -24720,9 +26091,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .allowed_calendar_sharing_roles(_user="{_user}")
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24743,7 +26121,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarPermissions for me.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions
@@ -24796,9 +26174,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24821,7 +26207,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions
@@ -24876,9 +26262,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24900,7 +26292,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarPermissions for me.
         Outlook operation: DELETE /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -24954,9 +26346,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -24979,7 +26378,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -25034,9 +26433,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25058,7 +26464,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarPermissions in me.
         Outlook operation: PATCH /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -25112,9 +26518,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25139,7 +26552,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarView
@@ -25196,9 +26609,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_view.get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_view.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25223,7 +26642,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarView/delta()
@@ -25280,9 +26699,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25303,7 +26729,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for me.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events
@@ -25356,9 +26782,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25381,7 +26813,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events
@@ -25436,9 +26868,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25463,7 +26901,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/delta()
@@ -25520,9 +26958,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25544,7 +26989,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for me.
         Outlook operation: DELETE /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}
@@ -25598,9 +27043,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25623,7 +27075,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}
@@ -25678,9 +27130,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25702,7 +27161,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in me.
         Outlook operation: PATCH /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}
@@ -25756,9 +27215,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25780,7 +27246,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/accept
@@ -25834,9 +27300,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25858,7 +27331,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for me.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments
@@ -25912,9 +27385,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -25938,7 +27418,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments
@@ -25994,9 +27474,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26018,7 +27505,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments/createUploadSession
@@ -26072,9 +27559,18 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26097,7 +27593,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for me.
         Outlook operation: DELETE /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -26152,9 +27648,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26178,7 +27682,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -26234,9 +27738,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26259,7 +27771,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/calendar
@@ -26314,9 +27826,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26338,7 +27857,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/cancel
@@ -26392,9 +27911,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26416,7 +27942,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/decline
@@ -26470,9 +27996,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26493,7 +28026,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/dismissReminder
@@ -26546,9 +28079,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26570,7 +28110,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/forward
@@ -26624,9 +28164,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26652,7 +28199,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from me.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/instances
@@ -26710,9 +28257,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26738,7 +28292,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/instances/delta()
@@ -26796,9 +28350,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26819,7 +28381,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/permanentDelete
@@ -26872,9 +28434,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26896,7 +28465,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/snoozeReminder
@@ -26950,9 +28519,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -26974,7 +28550,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/tentativelyAccept
@@ -27028,9 +28604,18 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27051,7 +28636,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/getSchedule
@@ -27104,9 +28689,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).get_schedule.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .get_schedule.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27126,7 +28717,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/permanentDelete
@@ -27178,9 +28769,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.calendar_groups.by_calendarGroup_id(
+                    calendarGroup_id
+                )
+                .calendars.by_calendar_id(calendar_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27203,7 +28800,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List calendarView.
         Outlook operation: GET /me/calendarView
@@ -27258,9 +28855,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_view.get(request_configuration=config)
+            response = await self.client.me.calendar_view.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27283,7 +28882,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendarView/delta()
@@ -27338,9 +28937,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendar_view.delta().get(request_configuration=config)
+            response = await self.client.me.calendar_view.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27359,7 +28960,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create calendar.
         Outlook operation: POST /me/calendars
@@ -27410,9 +29011,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendars.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27433,7 +29036,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List calendars.
         Outlook operation: GET /me/calendars
@@ -27457,7 +29060,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -27476,7 +29081,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -27486,7 +29093,7 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
             response = await self.client.me.calendars.get(request_configuration=config)
             return self._handle_outlook_response(response)
@@ -27508,7 +29115,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendars for me.
         Outlook operation: DELETE /me/calendars/{calendar-id}
@@ -27560,9 +29167,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).delete(request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27583,7 +29192,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendars from me.
         Outlook operation: GET /me/calendars/{calendar-id}
@@ -27607,7 +29216,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -27626,7 +29237,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -27636,9 +29249,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).get(request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(calendar_id).get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27658,7 +29273,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendars in me.
         Outlook operation: PATCH /me/calendars/{calendar-id}
@@ -27710,9 +29325,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(calendar_id).patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27732,7 +29349,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /me/calendars/{calendar-id}/allowedCalendarSharingRoles(User='{User}')
@@ -27755,7 +29372,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -27774,7 +29393,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -27784,9 +29405,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .allowed_calendar_sharing_roles(_user="{_user}")
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27806,7 +29431,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarPermissions for me.
         Outlook operation: POST /me/calendars/{calendar-id}/calendarPermissions
@@ -27858,9 +29483,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_permissions.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).calendar_permissions.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27882,7 +29509,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from me.
         Outlook operation: GET /me/calendars/{calendar-id}/calendarPermissions
@@ -27907,7 +29534,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -27926,7 +29555,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -27936,9 +29567,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_permissions.get(request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).calendar_permissions.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -27959,7 +29592,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarPermissions for me.
         Outlook operation: DELETE /me/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -28012,9 +29645,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28036,7 +29673,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from me.
         Outlook operation: GET /me/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -28061,7 +29698,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -28080,7 +29719,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -28090,9 +29731,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28113,7 +29758,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarPermissions in me.
         Outlook operation: PATCH /me/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -28166,9 +29811,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28192,7 +29841,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from me.
         Outlook operation: GET /me/calendars/{calendar-id}/calendarView
@@ -28219,7 +29868,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -28238,7 +29889,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -28248,9 +29901,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_view.get(request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).calendar_view.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28274,7 +29929,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendars/{calendar-id}/calendarView/delta()
@@ -28301,7 +29956,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -28320,7 +29977,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -28330,9 +29989,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28352,7 +30015,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create event.
         Outlook operation: POST /me/calendars/{calendar-id}/events
@@ -28404,9 +30067,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).events.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28428,7 +30093,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from me.
         Outlook operation: GET /me/calendars/{calendar-id}/events
@@ -28453,7 +30118,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -28472,7 +30139,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -28482,9 +30151,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.get(request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).events.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28508,7 +30179,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendars/{calendar-id}/events/delta()
@@ -28535,7 +30206,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -28554,7 +30227,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -28564,9 +30239,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28587,7 +30266,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for me.
         Outlook operation: DELETE /me/calendars/{calendar-id}/events/{event-id}
@@ -28640,9 +30319,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28664,7 +30347,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from me.
         Outlook operation: GET /me/calendars/{calendar-id}/events/{event-id}
@@ -28689,7 +30372,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -28708,7 +30393,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -28718,9 +30405,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28741,7 +30432,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in me.
         Outlook operation: PATCH /me/calendars/{calendar-id}/events/{event-id}
@@ -28794,9 +30485,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28817,7 +30512,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/accept
@@ -28870,9 +30565,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28893,7 +30592,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for me.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/attachments
@@ -28946,9 +30645,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -28971,7 +30674,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/calendars/{calendar-id}/events/{event-id}/attachments
@@ -28997,7 +30700,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -29016,7 +30721,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -29026,9 +30733,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29049,7 +30760,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/attachments/createUploadSession
@@ -29102,9 +30813,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29126,7 +30843,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for me.
         Outlook operation: DELETE /me/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -29180,9 +30897,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29205,7 +30927,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -29231,7 +30953,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -29250,7 +30974,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -29260,9 +30986,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29284,7 +31015,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from me.
         Outlook operation: GET /me/calendars/{calendar-id}/events/{event-id}/calendar
@@ -29309,7 +31040,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -29328,7 +31061,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -29338,9 +31073,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29361,7 +31100,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/cancel
@@ -29414,9 +31153,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29437,7 +31180,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/decline
@@ -29490,9 +31233,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29512,7 +31259,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/dismissReminder
@@ -29564,9 +31311,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29587,7 +31338,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/forward
@@ -29640,9 +31391,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29667,7 +31422,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from me.
         Outlook operation: GET /me/calendars/{calendar-id}/events/{event-id}/instances
@@ -29695,7 +31450,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -29714,7 +31471,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -29724,9 +31483,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29751,7 +31514,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/calendars/{calendar-id}/events/{event-id}/instances/delta()
@@ -29779,7 +31542,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            query_params = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -29798,7 +31563,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            config = (
+                CalendarsRequestBuilder.CalendarsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -29808,9 +31575,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29830,7 +31602,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/permanentDelete
@@ -29882,9 +31654,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29905,7 +31681,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/snoozeReminder
@@ -29958,9 +31734,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -29981,7 +31761,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /me/calendars/{calendar-id}/events/{event-id}/tentativelyAccept
@@ -30034,9 +31814,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30056,7 +31842,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /me/calendars/{calendar-id}/getSchedule
@@ -30108,9 +31894,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).get_schedule.post(body=request_body, request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).get_schedule.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30129,7 +31917,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/calendars/{calendar-id}/permanentDelete
@@ -30180,9 +31968,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.calendars.by_calendar_id(calendar_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.calendars.by_calendar_id(
+                calendar_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30203,7 +31993,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List events.
         Outlook operation: GET /me/events
@@ -30256,7 +32046,7 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
             response = await self.client.me.events.get(request_configuration=config)
             return self._handle_outlook_response(response)
@@ -30281,7 +32071,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/events/delta()
@@ -30336,9 +32126,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.delta().get(request_configuration=config)
+            response = await self.client.me.events.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30358,7 +32150,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete event.
         Outlook operation: DELETE /me/events/{event-id}
@@ -30410,9 +32202,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).delete(request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).delete(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30432,7 +32226,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update event.
         Outlook operation: PATCH /me/events/{event-id}
@@ -30484,9 +32278,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30506,7 +32302,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /me/events/{event-id}/accept
@@ -30558,9 +32354,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).accept.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30580,7 +32378,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Add attachment.
         Outlook operation: POST /me/events/{event-id}/attachments
@@ -30632,9 +32430,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).attachments.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30656,7 +32456,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List attachments.
         Outlook operation: GET /me/events/{event-id}/attachments
@@ -30710,9 +32510,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).attachments.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30732,7 +32534,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /me/events/{event-id}/attachments/createUploadSession
@@ -30784,9 +32586,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).attachments.create_upload_session.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30807,7 +32613,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete attachment.
         Outlook operation: DELETE /me/events/{event-id}/attachments/{attachment-id}
@@ -30860,9 +32666,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30884,7 +32694,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from me.
         Outlook operation: GET /me/events/{event-id}/attachments/{attachment-id}
@@ -30938,9 +32748,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.me.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -30961,7 +32775,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from me.
         Outlook operation: GET /me/events/{event-id}/calendar
@@ -31014,9 +32828,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).calendar.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31036,7 +32852,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /me/events/{event-id}/cancel
@@ -31088,9 +32904,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).cancel.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31110,7 +32928,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /me/events/{event-id}/decline
@@ -31162,9 +32980,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).decline.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31183,7 +33003,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /me/events/{event-id}/dismissReminder
@@ -31234,9 +33054,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).dismiss_reminder.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31256,7 +33078,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /me/events/{event-id}/forward
@@ -31308,9 +33130,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).forward.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31334,7 +33158,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List instances.
         Outlook operation: GET /me/events/{event-id}/instances
@@ -31390,9 +33214,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = await self.client.me.events.by_event_id(event_id).instances.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31416,7 +33242,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/events/{event-id}/instances/delta()
@@ -31472,9 +33298,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31493,7 +33323,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/events/{event-id}/permanentDelete
@@ -31544,9 +33374,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31566,7 +33398,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /me/events/{event-id}/snoozeReminder
@@ -31618,9 +33450,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).snooze_reminder.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31640,7 +33474,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /me/events/{event-id}/tentativelyAccept
@@ -31692,9 +33526,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = await self.client.me.events.by_event_id(
+                event_id
+            ).tentatively_accept.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31715,7 +33551,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from users.
         Outlook operation: GET /users/{user-id}/calendar
@@ -31768,9 +33604,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31790,7 +33628,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendar in users.
         Outlook operation: PATCH /users/{user-id}/calendar
@@ -31842,9 +33680,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.patch(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar.patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31864,7 +33704,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /users/{user-id}/calendar/allowedCalendarSharingRoles(User='{User}')
@@ -31916,9 +33756,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.allowed_calendar_sharing_roles(_user="{_user}")
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -31938,7 +33782,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarPermissions for users.
         Outlook operation: POST /users/{user-id}/calendar/calendarPermissions
@@ -31990,9 +33834,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.calendar_permissions.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).calendar.calendar_permissions.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32013,7 +33861,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete calendarPermission.
         Outlook operation: DELETE /users/{user-id}/calendar/calendarPermissions/{calendarPermission-id}
@@ -32066,9 +33914,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.calendar_permissions.by_calendarPermission_id(
+                    calendarPermission_id
+                )
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32090,7 +33944,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermission.
         Outlook operation: GET /users/{user-id}/calendar/calendarPermissions/{calendarPermission-id}
@@ -32144,9 +33998,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.calendar_permissions.by_calendarPermission_id(
+                    calendarPermission_id
+                )
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32167,7 +34027,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update calendarPermission.
         Outlook operation: PATCH /users/{user-id}/calendar/calendarPermissions/{calendarPermission-id}
@@ -32220,9 +34080,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.calendar_permissions.by_calendarPermission_id(
+                    calendarPermission_id
+                )
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32246,7 +34112,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from users.
         Outlook operation: GET /users/{user-id}/calendar/calendarView
@@ -32302,9 +34168,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.calendar_view.get(request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).calendar.calendar_view.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32328,7 +34196,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendar/calendarView/delta()
@@ -32384,9 +34252,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32406,7 +34278,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for users.
         Outlook operation: POST /users/{user-id}/calendar/events
@@ -32458,9 +34330,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar.events.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32482,7 +34356,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/calendar/events
@@ -32536,9 +34410,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar.events.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32562,7 +34438,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendar/events/delta()
@@ -32618,9 +34494,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32641,7 +34521,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for users.
         Outlook operation: DELETE /users/{user-id}/calendar/events/{event-id}
@@ -32694,9 +34574,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32718,7 +34602,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/calendar/events/{event-id}
@@ -32772,9 +34656,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32795,7 +34683,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in users.
         Outlook operation: PATCH /users/{user-id}/calendar/events/{event-id}
@@ -32848,9 +34736,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32871,7 +34763,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/accept
@@ -32924,9 +34816,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -32947,7 +34843,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/attachments
@@ -33000,9 +34896,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33025,7 +34925,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/calendar/events/{event-id}/attachments
@@ -33080,9 +34980,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33103,7 +35007,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/attachments/createUploadSession
@@ -33156,9 +35060,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33180,7 +35090,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/calendar/events/{event-id}/attachments/{attachment-id}
@@ -33234,9 +35144,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33259,7 +35174,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/calendar/events/{event-id}/attachments/{attachment-id}
@@ -33314,9 +35229,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33338,7 +35258,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from users.
         Outlook operation: GET /users/{user-id}/calendar/events/{event-id}/calendar
@@ -33392,9 +35312,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33415,7 +35339,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/cancel
@@ -33468,9 +35392,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33491,7 +35419,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/decline
@@ -33544,9 +35472,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33566,7 +35498,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/dismissReminder
@@ -33618,9 +35550,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33641,7 +35577,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/forward
@@ -33694,9 +35630,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33721,7 +35661,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from users.
         Outlook operation: GET /users/{user-id}/calendar/events/{event-id}/instances
@@ -33778,9 +35718,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33805,7 +35749,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendar/events/{event-id}/instances/delta()
@@ -33862,9 +35806,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33884,7 +35833,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/permanentDelete
@@ -33936,9 +35885,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -33959,7 +35912,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/snoozeReminder
@@ -34012,9 +35965,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34035,7 +35992,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /users/{user-id}/calendar/events/{event-id}/tentativelyAccept
@@ -34088,9 +36045,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar.events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34110,7 +36073,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /users/{user-id}/calendar/getSchedule
@@ -34162,9 +36125,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.get_schedule.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).calendar.get_schedule.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34183,7 +36150,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/calendar/permanentDelete
@@ -34234,9 +36201,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar.permanent_delete.post(request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).calendar.permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34256,7 +36225,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarGroups for users.
         Outlook operation: POST /users/{user-id}/calendarGroups
@@ -34308,9 +36277,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar_groups.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34332,7 +36303,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarGroups from users.
         Outlook operation: GET /users/{user-id}/calendarGroups
@@ -34386,9 +36357,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar_groups.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34409,7 +36382,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarGroups for users.
         Outlook operation: DELETE /users/{user-id}/calendarGroups/{calendarGroup-id}
@@ -34462,9 +36435,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34486,7 +36463,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarGroups from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}
@@ -34540,9 +36517,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34563,7 +36544,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarGroups in users.
         Outlook operation: PATCH /users/{user-id}/calendarGroups/{calendarGroup-id}
@@ -34616,9 +36597,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34639,7 +36624,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendars for users.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars
@@ -34692,9 +36677,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34717,7 +36706,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendars from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars
@@ -34772,9 +36761,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34796,7 +36789,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendars for users.
         Outlook operation: DELETE /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}
@@ -34850,9 +36843,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34875,7 +36873,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendars from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}
@@ -34930,9 +36928,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -34954,7 +36957,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendars in users.
         Outlook operation: PATCH /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}
@@ -35008,9 +37011,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35032,7 +37040,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/allowedCalendarSharingRoles(User='{User}')
@@ -35086,9 +37094,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .allowed_calendar_sharing_roles(_user="{_user}")
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35110,7 +37124,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarPermissions for users.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions
@@ -35164,9 +37178,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35190,7 +37211,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions
@@ -35246,9 +37267,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35271,7 +37297,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarPermissions for users.
         Outlook operation: DELETE /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -35326,9 +37352,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35352,7 +37384,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -35408,9 +37440,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35433,7 +37471,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarPermissions in users.
         Outlook operation: PATCH /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -35488,9 +37526,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35516,7 +37560,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarView
@@ -35574,9 +37618,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_view.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_view.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35602,7 +37651,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/calendarView/delta()
@@ -35660,9 +37709,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35684,7 +37739,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for users.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events
@@ -35738,9 +37793,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35764,7 +37824,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events
@@ -35820,9 +37880,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35848,7 +37913,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/delta()
@@ -35906,9 +37971,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -35931,7 +38002,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for users.
         Outlook operation: DELETE /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}
@@ -35986,9 +38057,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36012,7 +38089,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}
@@ -36068,9 +38145,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36093,7 +38176,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in users.
         Outlook operation: PATCH /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}
@@ -36148,9 +38231,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36173,7 +38262,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/accept
@@ -36228,9 +38317,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36253,7 +38348,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments
@@ -36308,9 +38403,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36335,7 +38436,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments
@@ -36392,9 +38493,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36417,7 +38524,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments/createUploadSession
@@ -36472,9 +38579,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36498,7 +38613,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -36554,9 +38669,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36581,7 +38703,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -36638,9 +38760,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36664,7 +38793,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/calendar
@@ -36720,9 +38849,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36745,7 +38880,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/cancel
@@ -36800,9 +38935,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36825,7 +38966,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/decline
@@ -36880,9 +39021,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36904,7 +39051,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/dismissReminder
@@ -36958,9 +39105,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -36983,7 +39136,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/forward
@@ -37038,9 +39191,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37067,7 +39226,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from users.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/instances
@@ -37126,9 +39285,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37155,7 +39320,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/instances/delta()
@@ -37214,9 +39379,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37238,7 +39410,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/permanentDelete
@@ -37292,9 +39464,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37317,7 +39495,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/snoozeReminder
@@ -37372,9 +39550,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37397,7 +39581,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/events/{event-id}/tentativelyAccept
@@ -37452,9 +39636,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37476,7 +39668,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/getSchedule
@@ -37530,9 +39722,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).get_schedule.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .get_schedule.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37553,7 +39750,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/calendarGroups/{calendarGroup-id}/calendars/{calendar-id}/permanentDelete
@@ -37606,9 +39803,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_groups.by_calendarGroup_id(calendarGroup_id).calendars.by_calendar_id(calendar_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_groups.by_calendarGroup_id(calendarGroup_id)
+                .calendars.by_calendar_id(calendar_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37632,7 +39834,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from users.
         Outlook operation: GET /users/{user-id}/calendarView
@@ -37688,9 +39890,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_view.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendar_view.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37714,7 +39918,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendarView/delta()
@@ -37770,9 +39974,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37792,7 +40000,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendars for users.
         Outlook operation: POST /users/{user-id}/calendars
@@ -37844,9 +40052,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendars.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37868,7 +40078,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendars from users.
         Outlook operation: GET /users/{user-id}/calendars
@@ -37922,9 +40132,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).calendars.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -37945,7 +40157,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendars for users.
         Outlook operation: DELETE /users/{user-id}/calendars/{calendar-id}
@@ -37998,9 +40210,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38022,7 +40238,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendars from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}
@@ -38076,9 +40292,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38099,7 +40319,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendars in users.
         Outlook operation: PATCH /users/{user-id}/calendars/{calendar-id}
@@ -38152,9 +40372,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38175,7 +40399,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function allowedCalendarSharingRoles.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/allowedCalendarSharingRoles(User='{User}')
@@ -38228,9 +40452,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).allowed_calendar_sharing_roles(_user='{_user}').get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .allowed_calendar_sharing_roles(_user="{_user}")
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38251,7 +40480,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to calendarPermissions for users.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/calendarPermissions
@@ -38304,9 +40533,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_permissions.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38329,7 +40564,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/calendarPermissions
@@ -38384,9 +40619,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_permissions.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38408,7 +40647,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property calendarPermissions for users.
         Outlook operation: DELETE /users/{user-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -38462,9 +40701,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38487,7 +40731,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarPermissions from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -38542,9 +40786,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38566,7 +40815,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property calendarPermissions in users.
         Outlook operation: PATCH /users/{user-id}/calendars/{calendar-id}/calendarPermissions/{calendarPermission-id}
@@ -38620,9 +40869,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_permissions.by_calendarPermission_id(calendarPermission_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_permissions.by_calendarPermission_id(calendarPermission_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38647,7 +40901,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendarView from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/calendarView
@@ -38704,9 +40958,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_view.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_view.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38731,7 +40989,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/calendarView/delta()
@@ -38788,9 +41046,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).calendar_view.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .calendar_view.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38811,7 +41074,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for users.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events
@@ -38864,9 +41127,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38889,7 +41156,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events
@@ -38944,9 +41211,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -38971,7 +41242,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/delta()
@@ -39028,9 +41299,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39052,7 +41328,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for users.
         Outlook operation: DELETE /users/{user-id}/calendars/{calendar-id}/events/{event-id}
@@ -39106,9 +41382,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39131,7 +41412,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/{event-id}
@@ -39186,9 +41467,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39210,7 +41496,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in users.
         Outlook operation: PATCH /users/{user-id}/calendars/{calendar-id}/events/{event-id}
@@ -39264,9 +41550,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39288,7 +41579,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/accept
@@ -39342,9 +41633,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39366,7 +41662,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/attachments
@@ -39420,9 +41716,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39446,7 +41747,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/{event-id}/attachments
@@ -39502,9 +41803,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39526,7 +41832,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/attachments/createUploadSession
@@ -39580,9 +41886,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39605,7 +41918,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -39660,9 +41973,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39686,7 +42005,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/{event-id}/attachments/{attachment-id}
@@ -39742,9 +42061,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39767,7 +42092,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/{event-id}/calendar
@@ -39822,9 +42147,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39846,7 +42176,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/cancel
@@ -39900,9 +42230,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -39924,7 +42259,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/decline
@@ -39978,9 +42313,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40001,7 +42341,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/dismissReminder
@@ -40054,9 +42394,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40078,7 +42423,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/forward
@@ -40132,9 +42477,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40160,7 +42510,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from users.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/{event-id}/instances
@@ -40218,9 +42568,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40246,7 +42601,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/calendars/{calendar-id}/events/{event-id}/instances/delta()
@@ -40304,9 +42659,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40327,7 +42688,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/permanentDelete
@@ -40380,9 +42741,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40404,7 +42770,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/snoozeReminder
@@ -40458,9 +42824,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40482,7 +42853,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/events/{event-id}/tentativelyAccept
@@ -40536,9 +42907,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40559,7 +42937,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action getSchedule.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/getSchedule
@@ -40612,9 +42990,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).get_schedule.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .get_schedule.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40634,7 +43016,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/calendars/{calendar-id}/permanentDelete
@@ -40686,9 +43068,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).calendars.by_calendar_id(calendar_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .calendars.by_calendar_id(calendar_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40708,7 +43094,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to events for users.
         Outlook operation: POST /users/{user-id}/events
@@ -40760,9 +43146,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).events.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40784,7 +43172,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/events
@@ -40838,9 +43226,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).events.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40864,7 +43254,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/events/delta()
@@ -40920,9 +43310,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -40943,7 +43337,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property events for users.
         Outlook operation: DELETE /users/{user-id}/events/{event-id}
@@ -40996,9 +43390,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41020,7 +43418,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get events from users.
         Outlook operation: GET /users/{user-id}/events/{event-id}
@@ -41074,9 +43472,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41097,7 +43499,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property events in users.
         Outlook operation: PATCH /users/{user-id}/events/{event-id}
@@ -41150,9 +43552,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41173,7 +43579,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action accept.
         Outlook operation: POST /users/{user-id}/events/{event-id}/accept
@@ -41226,9 +43632,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .accept.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41249,7 +43659,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for users.
         Outlook operation: POST /users/{user-id}/events/{event-id}/attachments
@@ -41302,9 +43712,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41327,7 +43741,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/events/{event-id}/attachments
@@ -41382,9 +43796,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41405,7 +43823,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /users/{user-id}/events/{event-id}/attachments/createUploadSession
@@ -41458,9 +43876,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41482,7 +43906,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for users.
         Outlook operation: DELETE /users/{user-id}/events/{event-id}/attachments/{attachment-id}
@@ -41536,9 +43960,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41561,7 +43990,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from users.
         Outlook operation: GET /users/{user-id}/events/{event-id}/attachments/{attachment-id}
@@ -41616,9 +44045,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41640,7 +44074,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get calendar from users.
         Outlook operation: GET /users/{user-id}/events/{event-id}/calendar
@@ -41694,9 +44128,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).calendar.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .calendar.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41717,7 +44155,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action cancel.
         Outlook operation: POST /users/{user-id}/events/{event-id}/cancel
@@ -41770,9 +44208,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).cancel.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .cancel.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41793,7 +44235,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action decline.
         Outlook operation: POST /users/{user-id}/events/{event-id}/decline
@@ -41846,9 +44288,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).decline.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .decline.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41868,7 +44314,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action dismissReminder.
         Outlook operation: POST /users/{user-id}/events/{event-id}/dismissReminder
@@ -41920,9 +44366,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).dismiss_reminder.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .dismiss_reminder.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -41943,7 +44393,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action forward.
         Outlook operation: POST /users/{user-id}/events/{event-id}/forward
@@ -41996,9 +44446,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).forward.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .forward.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42023,7 +44477,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get instances from users.
         Outlook operation: GET /users/{user-id}/events/{event-id}/instances
@@ -42080,9 +44534,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).instances.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .instances.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42107,7 +44565,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/events/{event-id}/instances/delta()
@@ -42164,9 +44622,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).instances.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .instances.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42186,7 +44649,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/events/{event-id}/permanentDelete
@@ -42238,9 +44701,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42261,7 +44728,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action snoozeReminder.
         Outlook operation: POST /users/{user-id}/events/{event-id}/snoozeReminder
@@ -42314,9 +44781,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).snooze_reminder.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .snooze_reminder.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42337,7 +44808,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action tentativelyAccept.
         Outlook operation: POST /users/{user-id}/events/{event-id}/tentativelyAccept
@@ -42390,9 +44861,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).events.by_event_id(event_id).tentatively_accept.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .events.by_event_id(event_id)
+                .tentatively_accept.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42416,7 +44893,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List orgContacts.
         Outlook operation: GET /contacts
@@ -42470,7 +44947,7 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
             response = await self.client.contacts.get(request_configuration=config)
             return self._handle_outlook_response(response)
@@ -42493,7 +44970,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /contacts/delta()
@@ -42546,9 +45023,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.delta().get(request_configuration=config)
+            response = await self.client.contacts.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42567,7 +45046,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action validateProperties.
         Outlook operation: POST /contacts/validateProperties
@@ -42618,9 +45097,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.validate_properties.post(body=request_body, request_configuration=config)
+            response = await self.client.contacts.validate_properties.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42641,7 +45122,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get orgContact.
         Outlook operation: GET /contacts/{orgContact-id}
@@ -42694,9 +45175,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).get(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(orgContact_id).get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42716,7 +45199,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action checkMemberObjects.
         Outlook operation: POST /contacts/{orgContact-id}/checkMemberObjects
@@ -42768,9 +45251,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).check_member_objects.post(body=request_body, request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).check_member_objects.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42793,7 +45278,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List directReports.
         Outlook operation: GET /contacts/{orgContact-id}/directReports
@@ -42848,9 +45333,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).direct_reports.get(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).direct_reports.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42871,7 +45358,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get manager.
         Outlook operation: GET /contacts/{orgContact-id}/manager
@@ -42924,9 +45411,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).manager.get(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).manager.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -42949,7 +45438,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List memberOf.
         Outlook operation: GET /contacts/{orgContact-id}/memberOf
@@ -43004,9 +45493,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).member_of.get(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).member_of.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43025,7 +45516,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action retryServiceProvisioning.
         Outlook operation: POST /contacts/{orgContact-id}/retryServiceProvisioning
@@ -43076,9 +45567,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).retry_service_provisioning.post(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).retry_service_provisioning.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43100,7 +45593,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get serviceProvisioningErrors property value.
         Outlook operation: GET /contacts/{orgContact-id}/serviceProvisioningErrors
@@ -43154,9 +45647,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).service_provisioning_errors.get(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).service_provisioning_errors.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43179,7 +45674,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List transitiveMemberOf.
         Outlook operation: GET /contacts/{orgContact-id}/transitiveMemberOf
@@ -43234,9 +45729,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.contacts.by_contact_id(orgContact_id).transitive_member_of.get(request_configuration=config)
+            response = await self.client.contacts.by_contact_id(
+                orgContact_id
+            ).transitive_member_of.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43255,7 +45752,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create ContactFolder.
         Outlook operation: POST /me/contactFolders
@@ -43306,9 +45803,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.post(body=request_body, request_configuration=config)
+            response = await self.client.me.contact_folders.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43329,7 +45828,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List contactFolders.
         Outlook operation: GET /me/contactFolders
@@ -43382,9 +45881,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.get(request_configuration=config)
+            response = await self.client.me.contact_folders.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43405,7 +45906,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/contactFolders/delta()
@@ -43458,9 +45959,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.delta().get(request_configuration=config)
+            response = await self.client.me.contact_folders.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43480,7 +45983,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete contactFolder.
         Outlook operation: DELETE /me/contactFolders/{contactFolder-id}
@@ -43532,9 +46035,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).delete(request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43555,7 +46060,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contactFolder.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}
@@ -43608,9 +46113,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).get(request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43630,7 +46137,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update contactfolder.
         Outlook operation: PATCH /me/contactFolders/{contactFolder-id}
@@ -43682,9 +46189,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).patch(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43704,7 +46213,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create ContactFolder.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/childFolders
@@ -43756,9 +46265,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.post(body=request_body, request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).child_folders.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43780,7 +46291,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List childFolders.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/childFolders
@@ -43834,9 +46345,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.get(request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).child_folders.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43858,7 +46371,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/childFolders/delta()
@@ -43912,9 +46425,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -43935,7 +46454,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property childFolders for me.
         Outlook operation: DELETE /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}
@@ -43988,9 +46507,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).delete(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44012,7 +46537,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get childFolders from me.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}
@@ -44066,9 +46591,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44089,7 +46620,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property childFolders in me.
         Outlook operation: PATCH /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}
@@ -44142,9 +46673,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44165,7 +46702,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to contacts for me.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts
@@ -44218,9 +46755,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44243,7 +46786,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from me.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts
@@ -44298,9 +46841,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44323,7 +46872,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/delta()
@@ -44378,9 +46927,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44402,7 +46958,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property contacts for me.
         Outlook operation: DELETE /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}
@@ -44456,9 +47012,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44481,7 +47044,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from me.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}
@@ -44536,9 +47099,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44560,7 +47130,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property contacts in me.
         Outlook operation: PATCH /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}
@@ -44614,9 +47184,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44637,7 +47214,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}/permanentDelete
@@ -44690,9 +47267,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44712,7 +47296,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/permanentDelete
@@ -44764,9 +47348,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44786,7 +47376,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create contact.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/contacts
@@ -44838,9 +47428,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.post(body=request_body, request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).contacts.post(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44862,7 +47454,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List contacts.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/contacts
@@ -44916,9 +47508,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.get(request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).contacts.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -44940,7 +47534,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/contacts/delta()
@@ -44994,9 +47588,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.delta().get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .contacts.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45017,7 +47617,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property contacts for me.
         Outlook operation: DELETE /me/contactFolders/{contactFolder-id}/contacts/{contact-id}
@@ -45070,9 +47670,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .contacts.by_contact_id(contact_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45094,7 +47700,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from me.
         Outlook operation: GET /me/contactFolders/{contactFolder-id}/contacts/{contact-id}
@@ -45148,9 +47754,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).get(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .contacts.by_contact_id(contact_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45171,7 +47783,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property contacts in me.
         Outlook operation: PATCH /me/contactFolders/{contactFolder-id}/contacts/{contact-id}
@@ -45224,9 +47836,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .contacts.by_contact_id(contact_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45246,7 +47864,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/contacts/{contact-id}/permanentDelete
@@ -45298,9 +47916,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.me.contact_folders.by_contact_folder_id(
+                    contactFolder_id
+                )
+                .contacts.by_contact_id(contact_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45319,7 +47943,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/contactFolders/{contactFolder-id}/permanentDelete
@@ -45370,9 +47994,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contact_folders.by_contact_folder_id(contactFolder_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.contact_folders.by_contact_folder_id(
+                contactFolder_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45391,7 +48017,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create contact.
         Outlook operation: POST /me/contacts
@@ -45442,9 +48068,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contacts.post(body=request_body, request_configuration=config)
+            response = await self.client.me.contacts.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45465,7 +48093,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List contacts.
         Outlook operation: GET /me/contacts
@@ -45489,7 +48117,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            query_params = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -45508,7 +48138,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            config = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -45518,7 +48150,7 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
             response = await self.client.me.contacts.get(request_configuration=config)
             return self._handle_outlook_response(response)
@@ -45541,7 +48173,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /me/contacts/delta()
@@ -45565,7 +48197,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            query_params = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -45584,7 +48218,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            config = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -45594,9 +48230,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contacts.delta().get(request_configuration=config)
+            response = await self.client.me.contacts.delta().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45616,7 +48254,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete contact.
         Outlook operation: DELETE /me/contacts/{contact-id}
@@ -45668,9 +48306,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contacts.by_contact_id(contact_id).delete(request_configuration=config)
+            response = await self.client.me.contacts.by_contact_id(contact_id).delete(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45691,7 +48331,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contact.
         Outlook operation: GET /me/contacts/{contact-id}
@@ -45715,7 +48355,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            query_params = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -45734,7 +48376,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            config = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -45744,9 +48388,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contacts.by_contact_id(contact_id).get(request_configuration=config)
+            response = await self.client.me.contacts.by_contact_id(contact_id).get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45766,7 +48412,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update contact.
         Outlook operation: PATCH /me/contacts/{contact-id}
@@ -45818,9 +48464,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contacts.by_contact_id(contact_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.contacts.by_contact_id(contact_id).patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45839,7 +48487,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /me/contacts/{contact-id}/permanentDelete
@@ -45890,9 +48538,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.contacts.by_contact_id(contact_id).permanent_delete.post(request_configuration=config)
+            response = await self.client.me.contacts.by_contact_id(
+                contact_id
+            ).permanent_delete.post(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45912,7 +48562,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to contactFolders for users.
         Outlook operation: POST /users/{user-id}/contactFolders
@@ -45964,9 +48614,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).contact_folders.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -45988,7 +48640,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contactFolders from users.
         Outlook operation: GET /users/{user-id}/contactFolders
@@ -46042,9 +48694,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).contact_folders.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46066,7 +48720,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/contactFolders/delta()
@@ -46120,9 +48774,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46143,7 +48801,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property contactFolders for users.
         Outlook operation: DELETE /users/{user-id}/contactFolders/{contactFolder-id}
@@ -46196,9 +48854,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46220,7 +48882,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contactFolders from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}
@@ -46274,9 +48936,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46297,7 +48963,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property contactFolders in users.
         Outlook operation: PATCH /users/{user-id}/contactFolders/{contactFolder-id}
@@ -46350,9 +49016,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46373,7 +49043,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to childFolders for users.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/childFolders
@@ -46426,9 +49096,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46451,7 +49125,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get childFolders from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/childFolders
@@ -46506,9 +49180,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46531,7 +49209,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/delta()
@@ -46586,9 +49264,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46610,7 +49293,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property childFolders for users.
         Outlook operation: DELETE /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}
@@ -46664,9 +49347,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46689,7 +49377,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get childFolders from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}
@@ -46744,9 +49432,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46768,7 +49461,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property childFolders in users.
         Outlook operation: PATCH /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}
@@ -46822,9 +49515,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46846,7 +49544,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to contacts for users.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts
@@ -46900,9 +49598,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -46926,7 +49629,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts
@@ -46982,9 +49685,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47008,7 +49716,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/delta()
@@ -47064,9 +49772,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47089,7 +49803,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property contacts for users.
         Outlook operation: DELETE /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}
@@ -47144,9 +49858,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47170,7 +49890,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}
@@ -47226,9 +49946,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47251,7 +49977,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property contacts in users.
         Outlook operation: PATCH /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}
@@ -47306,9 +50032,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47330,7 +50062,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/contacts/{contact-id}/permanentDelete
@@ -47384,9 +50116,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).contacts.by_contact_id(contact_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .contacts.by_contact_id(contact_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47407,7 +50145,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/childFolders/{contactFolder-id1}/permanentDelete
@@ -47460,9 +50198,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).child_folders.by_childFolder_id(contactFolder_id1).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .child_folders.by_childFolder_id(contactFolder_id1)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47483,7 +50226,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to contacts for users.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/contacts
@@ -47536,9 +50279,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47561,7 +50308,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/contacts
@@ -47616,9 +50363,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47641,7 +50392,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/contacts/delta()
@@ -47696,9 +50447,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47720,7 +50476,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property contacts for users.
         Outlook operation: DELETE /users/{user-id}/contactFolders/{contactFolder-id}/contacts/{contact-id}
@@ -47774,9 +50530,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.by_contact_id(contact_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47799,7 +50560,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from users.
         Outlook operation: GET /users/{user-id}/contactFolders/{contactFolder-id}/contacts/{contact-id}
@@ -47854,9 +50615,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.by_contact_id(contact_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47878,7 +50644,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property contacts in users.
         Outlook operation: PATCH /users/{user-id}/contactFolders/{contactFolder-id}/contacts/{contact-id}
@@ -47932,9 +50698,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.by_contact_id(contact_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -47955,7 +50726,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/contacts/{contact-id}/permanentDelete
@@ -48008,9 +50779,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).contacts.by_contact_id(contact_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .contacts.by_contact_id(contact_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48030,7 +50806,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/contactFolders/{contactFolder-id}/permanentDelete
@@ -48082,9 +50858,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contact_folders.by_contact_folder_id(contactFolder_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contact_folders.by_contact_folder_id(contactFolder_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48104,7 +50884,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to contacts for users.
         Outlook operation: POST /users/{user-id}/contacts
@@ -48156,9 +50936,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).contacts.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48180,7 +50962,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from users.
         Outlook operation: GET /users/{user-id}/contacts
@@ -48205,7 +50987,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            query_params = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -48224,7 +51008,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            config = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -48234,9 +51020,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).contacts.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48258,7 +51046,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function delta.
         Outlook operation: GET /users/{user-id}/contacts/delta()
@@ -48283,7 +51071,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            query_params = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -48302,7 +51092,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            config = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -48312,9 +51104,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.delta().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contacts.delta()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48335,7 +51131,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property contacts for users.
         Outlook operation: DELETE /users/{user-id}/contacts/{contact-id}
@@ -48388,9 +51184,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.by_contact_id(contact_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contacts.by_contact_id(contact_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48412,7 +51212,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get contacts from users.
         Outlook operation: GET /users/{user-id}/contacts/{contact-id}
@@ -48437,7 +51237,9 @@ class OutlookCalendarContactsDataSource:
         # Build query parameters including OData for Outlook
         try:
             # Use typed query parameters
-            query_params = ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            query_params = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetQueryParameters()
+            )
 
             # Set query parameters using typed object properties
             if select:
@@ -48456,7 +51258,9 @@ class OutlookCalendarContactsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            config = (
+                ContactsRequestBuilder.ContactsRequestBuilderGetRequestConfiguration()
+            )
             config.query_parameters = query_params
 
             if headers:
@@ -48466,9 +51270,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.by_contact_id(contact_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contacts.by_contact_id(contact_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48489,7 +51297,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property contacts in users.
         Outlook operation: PATCH /users/{user-id}/contacts/{contact-id}
@@ -48542,9 +51350,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.by_contact_id(contact_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contacts.by_contact_id(contact_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48564,7 +51376,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action permanentDelete.
         Outlook operation: POST /users/{user-id}/contacts/{contact-id}/permanentDelete
@@ -48616,9 +51428,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).contacts.by_contact_id(contact_id).permanent_delete.post(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .contacts.by_contact_id(contact_id)
+                .permanent_delete.post(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48643,7 +51459,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for groups.
         Outlook operation: POST /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/attachments
@@ -48698,9 +51514,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48725,7 +51547,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/attachments
@@ -48782,9 +51604,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48807,7 +51635,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/attachments/createUploadSession
@@ -48862,9 +51690,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48888,7 +51724,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for groups.
         Outlook operation: DELETE /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/attachments/{attachment-id}
@@ -48944,9 +51780,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -48971,7 +51814,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/attachments/{attachment-id}
@@ -49028,9 +51871,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49053,7 +51903,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for groups.
         Outlook operation: POST /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments
@@ -49108,9 +51958,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49135,7 +51993,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments
@@ -49192,9 +52050,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49217,7 +52081,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments/createUploadSession
@@ -49272,9 +52136,17 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49298,7 +52170,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for groups.
         Outlook operation: DELETE /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments/{attachment-id}
@@ -49354,9 +52226,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49381,7 +52260,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/conversations/{conversation-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments/{attachment-id}
@@ -49438,9 +52317,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).conversations.by_conversation_id(conversation_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .conversations.by_conversation_id(conversation_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49462,7 +52348,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for groups.
         Outlook operation: POST /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/attachments
@@ -49516,9 +52402,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.post(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49542,7 +52433,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List attachments.
         Outlook operation: GET /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/attachments
@@ -49598,9 +52489,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49622,7 +52518,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/attachments/createUploadSession
@@ -49676,9 +52572,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49701,7 +52604,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for groups.
         Outlook operation: DELETE /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/attachments/{attachment-id}
@@ -49756,9 +52659,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49782,7 +52691,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/attachments/{attachment-id}
@@ -49838,9 +52747,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49862,7 +52777,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to attachments for groups.
         Outlook operation: POST /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments
@@ -49916,9 +52831,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -49942,7 +52864,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments
@@ -49998,9 +52920,14 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50022,7 +52949,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke action createUploadSession.
         Outlook operation: POST /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments/createUploadSession
@@ -50076,9 +53003,16 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.create_upload_session.post(body=request_body, request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.create_upload_session.post(
+                    body=request_body, request_configuration=config
+                )
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50101,7 +53035,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property attachments for groups.
         Outlook operation: DELETE /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments/{attachment-id}
@@ -50156,9 +53090,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.by_attachment_id(attachment_id).delete(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.by_attachment_id(attachment_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50182,7 +53122,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get attachments from groups.
         Outlook operation: GET /groups/{group-id}/threads/{conversationThread-id}/posts/{post-id}/inReplyTo/attachments/{attachment-id}
@@ -50238,9 +53178,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.groups.by_group_id(group_id).threads.by_thread_id(conversationThread_id).posts.by_post_id(post_id).in_reply_to.attachments.by_attachment_id(attachment_id).get(request_configuration=config)
+            response = (
+                await self.client.groups.by_group_id(group_id)
+                .threads.by_thread_id(conversationThread_id)
+                .posts.by_post_id(post_id)
+                .in_reply_to.attachments.by_attachment_id(attachment_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50263,7 +53209,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property extensionProperties in applications.
         Outlook operation: PATCH /applications/{application-id}/extensionProperties/{extensionProperty-id}
@@ -50316,9 +53262,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.applications.by_application_id(application_id).extension_properties.by_extensionPropertie_id(extensionProperty_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.applications.by_application_id(application_id)
+                .extension_properties.by_extensionPropertie_id(extensionProperty_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50340,7 +53290,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get inferenceClassification from me.
         Outlook operation: GET /me/inferenceClassification
@@ -50392,9 +53342,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.get(request_configuration=config)
+            response = await self.client.me.inference_classification.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50413,7 +53365,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property inferenceClassification in me.
         Outlook operation: PATCH /me/inferenceClassification
@@ -50464,9 +53416,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.patch(body=request_body, request_configuration=config)
+            response = await self.client.me.inference_classification.patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50485,7 +53439,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create inferenceClassificationOverride.
         Outlook operation: POST /me/inferenceClassification/overrides
@@ -50536,9 +53490,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.overrides.post(body=request_body, request_configuration=config)
+            response = await self.client.me.inference_classification.overrides.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50559,7 +53515,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List overrides.
         Outlook operation: GET /me/inferenceClassification/overrides
@@ -50612,9 +53568,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.overrides.get(request_configuration=config)
+            response = await self.client.me.inference_classification.overrides.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50634,7 +53592,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete inferenceClassificationOverride.
         Outlook operation: DELETE /me/inferenceClassification/overrides/{inferenceClassificationOverride-id}
@@ -50686,9 +53644,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.overrides.by_inference_classification_override_id(inferenceClassificationOverride_id).delete(request_configuration=config)
+            response = await self.client.me.inference_classification.overrides.by_inference_classification_override_id(
+                inferenceClassificationOverride_id
+            ).delete(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50709,7 +53669,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get overrides from me.
         Outlook operation: GET /me/inferenceClassification/overrides/{inferenceClassificationOverride-id}
@@ -50762,9 +53722,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.overrides.by_inference_classification_override_id(inferenceClassificationOverride_id).get(request_configuration=config)
+            response = await self.client.me.inference_classification.overrides.by_inference_classification_override_id(
+                inferenceClassificationOverride_id
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50784,7 +53746,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update inferenceclassificationoverride.
         Outlook operation: PATCH /me/inferenceClassification/overrides/{inferenceClassificationOverride-id}
@@ -50836,9 +53798,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.inference_classification.overrides.by_inference_classification_override_id(inferenceClassificationOverride_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.inference_classification.overrides.by_inference_classification_override_id(
+                inferenceClassificationOverride_id
+            ).patch(body=request_body, request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50859,7 +53823,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get inferenceClassification from users.
         Outlook operation: GET /users/{user-id}/inferenceClassification
@@ -50912,9 +53876,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.get(request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).inference_classification.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -50934,7 +53900,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property inferenceClassification in users.
         Outlook operation: PATCH /users/{user-id}/inferenceClassification
@@ -50986,9 +53952,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.patch(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).inference_classification.patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51008,7 +53978,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to overrides for users.
         Outlook operation: POST /users/{user-id}/inferenceClassification/overrides
@@ -51060,9 +54030,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.overrides.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).inference_classification.overrides.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51084,7 +54058,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get overrides from users.
         Outlook operation: GET /users/{user-id}/inferenceClassification/overrides
@@ -51138,9 +54112,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.overrides.get(request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).inference_classification.overrides.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51161,7 +54137,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property overrides for users.
         Outlook operation: DELETE /users/{user-id}/inferenceClassification/overrides/{inferenceClassificationOverride-id}
@@ -51214,9 +54190,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.overrides.by_inference_classification_override_id(inferenceClassificationOverride_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .inference_classification.overrides.by_inference_classification_override_id(
+                    inferenceClassificationOverride_id
+                )
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51238,7 +54220,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get overrides from users.
         Outlook operation: GET /users/{user-id}/inferenceClassification/overrides/{inferenceClassificationOverride-id}
@@ -51292,9 +54274,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.overrides.by_inference_classification_override_id(inferenceClassificationOverride_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .inference_classification.overrides.by_inference_classification_override_id(
+                    inferenceClassificationOverride_id
+                )
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51315,7 +54303,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property overrides in users.
         Outlook operation: PATCH /users/{user-id}/inferenceClassification/overrides/{inferenceClassificationOverride-id}
@@ -51368,9 +54356,15 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).inference_classification.overrides.by_inference_classification_override_id(inferenceClassificationOverride_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .inference_classification.overrides.by_inference_classification_override_id(
+                    inferenceClassificationOverride_id
+                )
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51391,7 +54385,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create Outlook category.
         Outlook operation: POST /me/outlook/masterCategories
@@ -51442,9 +54436,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.master_categories.post(body=request_body, request_configuration=config)
+            response = await self.client.me.outlook.master_categories.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51465,7 +54461,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """List masterCategories.
         Outlook operation: GET /me/outlook/masterCategories
@@ -51518,9 +54514,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.master_categories.get(request_configuration=config)
+            response = await self.client.me.outlook.master_categories.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51540,7 +54538,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete outlookCategory.
         Outlook operation: DELETE /me/outlook/masterCategories/{outlookCategory-id}
@@ -51592,9 +54590,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.master_categories.by_outlook_category_id(outlookCategory_id).delete(request_configuration=config)
+            response = (
+                await self.client.me.outlook.master_categories.by_outlook_category_id(
+                    outlookCategory_id
+                ).delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51615,7 +54617,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get Outlook category.
         Outlook operation: GET /me/outlook/masterCategories/{outlookCategory-id}
@@ -51668,9 +54670,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.master_categories.by_outlook_category_id(outlookCategory_id).get(request_configuration=config)
+            response = (
+                await self.client.me.outlook.master_categories.by_outlook_category_id(
+                    outlookCategory_id
+                ).get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51690,7 +54696,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update outlookCategory.
         Outlook operation: PATCH /me/outlook/masterCategories/{outlookCategory-id}
@@ -51742,9 +54748,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.master_categories.by_outlook_category_id(outlookCategory_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.me.outlook.master_categories.by_outlook_category_id(
+                    outlookCategory_id
+                ).patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51764,7 +54774,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Create new navigation property to masterCategories for users.
         Outlook operation: POST /users/{user-id}/outlook/masterCategories
@@ -51816,9 +54826,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.master_categories.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).outlook.master_categories.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51840,7 +54854,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get masterCategories from users.
         Outlook operation: GET /users/{user-id}/outlook/masterCategories
@@ -51894,9 +54908,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.master_categories.get(request_configuration=config)
+            response = await self.client.users.by_user_id(
+                user_id
+            ).outlook.master_categories.get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51917,7 +54933,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Delete navigation property masterCategories for users.
         Outlook operation: DELETE /users/{user-id}/outlook/masterCategories/{outlookCategory-id}
@@ -51970,9 +54986,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.master_categories.by_outlook_category_id(outlookCategory_id).delete(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .outlook.master_categories.by_outlook_category_id(outlookCategory_id)
+                .delete(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -51994,7 +55014,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get masterCategories from users.
         Outlook operation: GET /users/{user-id}/outlook/masterCategories/{outlookCategory-id}
@@ -52048,9 +55068,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.master_categories.by_outlook_category_id(outlookCategory_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .outlook.master_categories.by_outlook_category_id(outlookCategory_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52071,7 +55095,7 @@ class OutlookCalendarContactsDataSource:
         skip: Optional[int] = None,
         request_body: Optional[Mapping[str, Any]] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Update the navigation property masterCategories in users.
         Outlook operation: PATCH /users/{user-id}/outlook/masterCategories/{outlookCategory-id}
@@ -52124,9 +55148,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.master_categories.by_outlook_category_id(outlookCategory_id).patch(body=request_body, request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .outlook.master_categories.by_outlook_category_id(outlookCategory_id)
+                .patch(body=request_body, request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52149,7 +55177,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get people from me.
         Outlook operation: GET /me/people/{person-id}
@@ -52202,9 +55230,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.people.by_person_id(person_id).get(request_configuration=config)
+            response = await self.client.me.people.by_person_id(person_id).get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52226,7 +55256,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get people from users.
         Outlook operation: GET /users/{user-id}/people
@@ -52280,9 +55310,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).people.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).people.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52304,7 +55336,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get people from users.
         Outlook operation: GET /users/{user-id}/people/{person-id}
@@ -52358,9 +55390,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).people.by_person_id(person_id).get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .people.by_person_id(person_id)
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52382,7 +55418,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get outlook from me.
         Outlook operation: GET /me/outlook
@@ -52434,7 +55470,7 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
             response = await self.client.me.outlook.get(request_configuration=config)
             return self._handle_outlook_response(response)
@@ -52454,7 +55490,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function supportedLanguages.
         Outlook operation: GET /me/outlook/supportedLanguages()
@@ -52504,9 +55540,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.supported_languages().get(request_configuration=config)
+            response = await self.client.me.outlook.supported_languages().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52524,7 +55562,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function supportedTimeZones.
         Outlook operation: GET /me/outlook/supportedTimeZones()
@@ -52574,9 +55612,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.supported_time_zones().get(request_configuration=config)
+            response = await self.client.me.outlook.supported_time_zones().get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52595,7 +55635,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function supportedTimeZones.
         Outlook operation: GET /me/outlook/supportedTimeZones(TimeZoneStandard='{TimeZoneStandard}')
@@ -52646,9 +55686,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.me.outlook.supported_time_zones(_time_zone_standard='{_time_zone_standard}').get(request_configuration=config)
+            response = await self.client.me.outlook.supported_time_zones(
+                _time_zone_standard="{_time_zone_standard}"
+            ).get(request_configuration=config)
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52669,7 +55711,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Get outlook from users.
         Outlook operation: GET /users/{user-id}/outlook
@@ -52722,9 +55764,11 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.get(request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).outlook.get(
+                request_configuration=config
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52743,7 +55787,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function supportedLanguages.
         Outlook operation: GET /users/{user-id}/outlook/supportedLanguages()
@@ -52794,9 +55838,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.supported_languages().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .outlook.supported_languages()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52815,7 +55863,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function supportedTimeZones.
         Outlook operation: GET /users/{user-id}/outlook/supportedTimeZones()
@@ -52866,9 +55914,13 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.supported_time_zones().get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .outlook.supported_time_zones()
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
@@ -52888,7 +55940,7 @@ class OutlookCalendarContactsDataSource:
         top: Optional[int] = None,
         skip: Optional[int] = None,
         headers: Optional[Dict[str, str]] = None,
-        **kwargs
+        **kwargs,
     ) -> OutlookCalendarContactsResponse:
         """Invoke function supportedTimeZones.
         Outlook operation: GET /users/{user-id}/outlook/supportedTimeZones(TimeZoneStandard='{TimeZoneStandard}')
@@ -52940,13 +55992,18 @@ class OutlookCalendarContactsDataSource:
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config.headers["ConsistencyLevel"] = "eventual"
 
-            response = await self.client.users.by_user_id(user_id).outlook.supported_time_zones(_time_zone_standard='{_time_zone_standard}').get(request_configuration=config)
+            response = (
+                await self.client.users.by_user_id(user_id)
+                .outlook.supported_time_zones(
+                    _time_zone_standard="{_time_zone_standard}"
+                )
+                .get(request_configuration=config)
+            )
             return self._handle_outlook_response(response)
         except Exception as e:
             return OutlookCalendarContactsResponse(
                 success=False,
                 error=f"Outlook API call failed: {str(e)}",
             )
-
