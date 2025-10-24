@@ -1009,10 +1009,25 @@ class OutlookConnector(BaseConnector):
             if not response.success or not response.data:
                 return b''
 
-            # Extract attachment content from FileAttachment object
+            # Fast-path optimized: directly check for both attribute and dict keys
             attachment_data = response.data
-            content_bytes = (self._safe_get_attr(attachment_data, 'content_bytes') or
-                           self._safe_get_attr(attachment_data, 'contentBytes'))
+            # Optimize for the common case: attribute access first, then dict
+            content_bytes = None
+            # Try attribute "content_bytes"
+            if hasattr(attachment_data, "content_bytes"):
+                content_bytes = getattr(attachment_data, "content_bytes", None)
+            # Else attribute "contentBytes"
+            elif hasattr(attachment_data, "contentBytes"):
+                content_bytes = getattr(attachment_data, "contentBytes", None)
+            # Else check dict case
+            elif isinstance(attachment_data, dict):
+                # These branches cover both underscore and camel case dict keys
+                content_bytes = attachment_data.get("content_bytes") or attachment_data.get("contentBytes")
+            # Else fallback to generic method
+            if not content_bytes:
+                # If not found, fallback to slower safe getattr (for odd objects only)
+                content_bytes = (self._safe_get_attr(attachment_data, 'content_bytes') or
+                                 self._safe_get_attr(attachment_data, 'contentBytes'))
 
             if not content_bytes:
                 return b''
@@ -1073,9 +1088,13 @@ class OutlookConnector(BaseConnector):
 
     def _safe_get_attr(self, obj, attr_name: str, default=None) -> Optional[object]:
         """Safely get attribute from object that could be a class instance or dictionary."""
+        # Leave logic unchanged for the generic fallback
         if hasattr(obj, attr_name):
             return getattr(obj, attr_name, default)
+        elif isinstance(obj, dict):
+            return obj.get(attr_name, default)
         elif hasattr(obj, 'get'):
+            # Some SDK objects may masquerade get but aren't dicts
             return obj.get(attr_name, default)
         else:
             return default
