@@ -54,6 +54,9 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        # Cache access_token and version_string for faster attribute access
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -379,12 +382,13 @@ class LinkedInDataSource:
             >>> response = ds.get_post("urn:li:share:123456")
             >>> print(response.entity['commentary'])
         """
+        # Use the cached attributes for faster repeated access
         return self._restli_client.get(
             resource_path="/posts/{id}",
             path_keys={"id": post_id},
-            access_token=self.client.access_token,
+            access_token=self._access_token,
             query_params=query_params,
-            version_string=self.client.version_string
+            version_string=self._version_string
         )
 
     def update_post(
