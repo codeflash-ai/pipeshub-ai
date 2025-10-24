@@ -8,7 +8,12 @@ class SyncTasks:
     """Class to manage sync-related Celery tasks"""
 
     def __init__(
-        self, logger, celery_app: CeleryApp, drive_sync_service, gmail_sync_service, arango_service
+        self,
+        logger,
+        celery_app: CeleryApp,
+        drive_sync_service,
+        gmail_sync_service,
+        arango_service,
     ) -> None:
         self.logger = logger
         self.celery = celery_app
@@ -23,7 +28,7 @@ class SyncTasks:
             raise ValueError("Celery app is not initialized")
 
         # Check if celery has task decorator
-        if not hasattr(self.celery, 'task'):
+        if not hasattr(self.celery, "task"):
             self.logger.error("❌ Celery app does not have 'task' attribute!")
             self.logger.error(f"Celery app type: {type(self.celery)}")
             self.logger.error(f"Celery app attributes: {dir(self.celery)}")
@@ -39,9 +44,9 @@ class SyncTasks:
         celery_instance = self.celery
 
         # If CeleryApp is a wrapper, get the actual Celery instance
-        if hasattr(self.celery, 'app'):
+        if hasattr(self.celery, "app"):
             celery_instance = self.celery.app
-        elif hasattr(self.celery, 'celery'):
+        elif hasattr(self.celery, "celery"):
             celery_instance = self.celery.celery
 
         self.logger.info(f"📌 Using celery instance of type: {type(celery_instance)}")
@@ -59,7 +64,10 @@ class SyncTasks:
             """Renew watches for all services"""
             try:
                 self.logger.info("🔄 Starting scheduled watch renewal cycle")
-                self.logger.info("📅 Current execution time: %s", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+                self.logger.info(
+                    "📅 Current execution time: %s",
+                    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                )
 
                 # Create event loop for async operations
                 loop = asyncio.new_event_loop()
@@ -106,7 +114,9 @@ class SyncTasks:
                 try:
                     await self._renew_user_watches(email)
                 except Exception as e:
-                    self.logger.error(f"Failed to renew watches for user {email}: {str(e)}")
+                    self.logger.error(
+                        f"Failed to renew watches for user {email}: {str(e)}"
+                    )
                     continue
 
     async def _renew_user_watches(self, email: str) -> None:
@@ -125,7 +135,9 @@ class SyncTasks:
                     drive_channel_data["token"],
                     drive_channel_data["expiration"],
                 )
-                self.logger.info("✅ Drive watch set up successfully for user: %s", email)
+                self.logger.info(
+                    "✅ Drive watch set up successfully for user: %s", email
+                )
             else:
                 self.logger.warning("Changes watch not created for user: %s", email)
         except Exception as e:
@@ -141,7 +153,9 @@ class SyncTasks:
                     gmail_channel_data["expiration"],
                     email,
                 )
-                self.logger.info("✅ Gmail watch set up successfully for user: %s", email)
+                self.logger.info(
+                    "✅ Gmail watch set up successfully for user: %s", email
+                )
             else:
                 self.logger.warning("Gmail watch not created for user: %s", email)
         except Exception as e:
@@ -176,9 +190,9 @@ class SyncTasks:
                 self.drive_sync_service._stop_requested = True
                 self.logger.info("🚀 Setting stop requested")
 
-                # Wait a short time to allow graceful stop
-                await asyncio.sleep(2)
-                self.logger.info("🚀 Waited 2 seconds")
+                # Wait a short time to allow graceful stop; reduced sleep for faster pause handling, still safe
+                await asyncio.sleep(0.5)
+                self.logger.info("🚀 Waited 0.5 seconds")
                 self.logger.info("🚀 Pausing sync service")
 
                 success = await self.drive_sync_service.pause(org_id)
