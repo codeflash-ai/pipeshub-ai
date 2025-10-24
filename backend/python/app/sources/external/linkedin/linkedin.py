@@ -54,6 +54,8 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -1607,7 +1609,7 @@ class LinkedInDataSource:
         return self._restli_client.get(
             resource_path="/socialMetadata/{entityUrn}",
             path_keys={"entityUrn": entity_urn},
-            access_token=self.client.access_token,
+            access_token=self._access_token,
             query_params=query_params,
-            version_string=self.client.version_string
+            version_string=self._version_string
         )
