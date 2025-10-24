@@ -11,9 +11,7 @@ from app.core.celery_app import CeleryApp
 class GmailSyncTasks(BaseSyncTasks):
     """Gmail-specific sync tasks"""
 
-    def __init__(
-        self, logger, celery_app: CeleryApp, arango_service
-    ) -> None:
+    def __init__(self, logger, celery_app: CeleryApp, arango_service) -> None:
         super().__init__(logger, celery_app, arango_service)
 
         # Initialize sync services as None - they will be registered later
@@ -26,7 +24,12 @@ class GmailSyncTasks(BaseSyncTasks):
         self.register_connector_sync_control("gmail", self.gmail_manual_sync_control)
         self.logger.info("✅ Gmail sync service registered")
 
-    async def gmail_manual_sync_control(self, action: str, org_id: Optional[str] = None, user_email: Optional[str] = None) -> Dict[str, Any]:
+    async def gmail_manual_sync_control(
+        self,
+        action: str,
+        org_id: Optional[str] = None,
+        user_email: Optional[str] = None,
+    ) -> Dict[str, Any]:
         """
         Manual task to control Gmail sync operations
         Args:
@@ -88,11 +91,16 @@ class GmailSyncTasks(BaseSyncTasks):
                         "status": "accepted",
                         "message": "Sync initialization operation queued",
                     }
-                return {"status": "error", "message": "Failed to queue sync initialization"}
+                return {
+                    "status": "error",
+                    "message": "Failed to queue sync initialization",
+                }
 
             elif action == "user":
                 self.logger.info("Syncing user")
-                success = await self.gmail_sync_service.sync_specific_user(org_id, user_email)
+                success = await self.gmail_sync_service.sync_specific_user(
+                    org_id, user_email
+                )
                 if success:
                     return {
                         "status": "accepted",
@@ -108,19 +116,30 @@ class GmailSyncTasks(BaseSyncTasks):
                     user = await self.arango_service.get_entity_id_by_email(user_email)
                     if not user:
                         self.logger.error(f"User not found: {user_email}")
-                        return {"status": "error", "message": f"User not found: {user_email}"}
+                        return {
+                            "status": "error",
+                            "message": f"User not found: {user_email}",
+                        }
 
                     user_doc = await self.arango_service.get_document(user, "users")
                     if not user_doc:
                         self.logger.error(f"User document not found: {user_email}")
-                        return {"status": "error", "message": f"User document not found: {user_email}"}
+                        return {
+                            "status": "error",
+                            "message": f"User document not found: {user_email}",
+                        }
 
-                    success = await self.gmail_sync_service.resync_gmail(org_id, user_doc)
+                    success = await self.gmail_sync_service.resync_gmail(
+                        org_id, user_doc
+                    )
                     if success:
                         self.logger.info(f"Successfully resynced user: {user_email}")
                     else:
                         self.logger.error(f"Error resyncing Gmail user {user_email}")
-                        return {"status": "error", "message": f"Failed to resync user {user_email}"}
+                        return {
+                            "status": "error",
+                            "message": f"Failed to resync user {user_email}",
+                        }
                 else:
                     # Resync all users in the organization
                     self.logger.info("Resyncing all users in organization")
@@ -128,13 +147,18 @@ class GmailSyncTasks(BaseSyncTasks):
                     resync_success = True
                     for user in users:
                         if not await self.gmail_sync_service.resync_gmail(org_id, user):
-                            self.logger.error(f"Error resyncing Gmail user {user['email']}")
+                            self.logger.error(
+                                f"Error resyncing Gmail user {user['email']}"
+                            )
                             resync_success = False
                             continue
 
                     if not resync_success:
                         self.logger.error("Failed to resync some users")
-                        return {"status": "error", "message": "Failed to resync some users"}
+                        return {
+                            "status": "error",
+                            "message": "Failed to resync some users",
+                        }
 
                 return {
                     "status": "accepted",
@@ -179,7 +203,9 @@ class GmailSyncTasks(BaseSyncTasks):
                         gmail_channel_data["expiration"],
                         email,
                     )
-                    self.logger.info("✅ Gmail watch set up successfully for user: %s", email)
+                    self.logger.info(
+                        "✅ Gmail watch set up successfully for user: %s", email
+                    )
                 else:
                     self.logger.warning("Gmail watch not created for user: %s", email)
             except Exception as e:
