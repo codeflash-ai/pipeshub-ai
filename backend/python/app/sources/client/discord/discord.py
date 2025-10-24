@@ -32,7 +32,7 @@ class DiscordResponse(BaseModel):
 
     def to_dict(self) -> dict[str, object]:
         """Convert to dictionary for JSON serialization"""
-        return self.model_dump()
+        return self.__dict__.copy()
 
     def to_json(self) -> str:
         """Convert to JSON string"""
@@ -47,7 +47,9 @@ class DiscordRESTClientViaToken(HTTPClient):
     """
 
     def __init__(
-        self, token: str, base_url: str = "https://discord.com/api/v10",
+        self,
+        token: str,
+        base_url: str = "https://discord.com/api/v10",
     ) -> None:
         super().__init__(token, "Bot")
         self.base_url = base_url
@@ -76,7 +78,8 @@ class DiscordTokenConfig(BaseModel):
 
         """
         return DiscordRESTClientViaToken(
-            self.token, self.base_url or "https://discord.com/api/v10",
+            self.token,
+            self.base_url or "https://discord.com/api/v10",
         )
 
 
