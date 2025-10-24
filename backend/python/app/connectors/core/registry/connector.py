@@ -322,10 +322,11 @@ class  NotionConnector:
 
     def __init__(self) -> None:
         self.name = "Notion"
+        self._connect_msg = "Connecting to Notion"
 
     def connect(self) -> bool:
         """Connect to Notion"""
-        print(f"Connecting to {self.name}")
+        print(self._connect_msg)
         return True
 
 
