@@ -51,7 +51,9 @@ class GoogleDriveConnector:
 
     def connect(self) -> bool:
         """Connect to Google Drive"""
-        print(f"Connecting to {self.name}")
+        # Optimization: Use sys.stdout.write for faster console output
+        import sys
+        sys.stdout.write(f"Connecting to {self.name}\n")
         return True
 
 
