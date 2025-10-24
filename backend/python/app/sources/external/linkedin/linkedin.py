@@ -54,6 +54,9 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        # Local references to frequently accessed attributes for faster lookup
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -642,12 +645,15 @@ class LinkedInDataSource:
             >>> org = response.entity
             >>> print(org['localizedName'], org['websiteUrl'])
         """
+        # Avoid repeated attribute lookups for frequently accessed values
+        access_token = self._access_token
+        version_string = self._version_string
         return self._restli_client.get(
             resource_path="/organizations/{id}",
             path_keys={"id": org_id},
-            access_token=self.client.access_token,
+            access_token=access_token,
             query_params=query_params,
-            version_string=self.client.version_string
+            version_string=version_string
         )
 
     def update_organization(
