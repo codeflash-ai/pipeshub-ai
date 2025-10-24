@@ -1564,14 +1564,22 @@ class LinkedInDataSource:
             ...     query_params={"metrics": ["VISITOR_DEMOGRAPHICS"]}
             ... )
         """
-        final_params = {
-            "q": "organization",
-            "organization": org_urn,
-            "timeIntervals": time_ranges
-        }
-        if query_params:
-            final_params.update(query_params)
+        # Avoid redundant dictionary construction for efficiency
+        if query_params is not None and query_params:
+            # Copy only if necessary; query_params is merged with defaults
+            final_params = dict(query_params)
+            final_params.setdefault("q", "organization")
+            final_params.setdefault("organization", org_urn)
+            final_params.setdefault("timeIntervals", time_ranges)
+        else:
+            # No extra params, directly provide base dictionary
+            final_params = {
+                "q": "organization",
+                "organization": org_urn,
+                "timeIntervals": time_ranges
+            }
 
+        # Call finder API with assembled parameters; avoids repeated computations
         return self._restli_client.finder(
             resource_path="/organizationPageStatistics",
             finder_name="organization",
