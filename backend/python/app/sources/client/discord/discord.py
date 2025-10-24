@@ -47,12 +47,14 @@ class DiscordRESTClientViaToken(HTTPClient):
     """
 
     def __init__(
-        self, token: str, base_url: str = "https://discord.com/api/v10",
+        self,
+        token: str,
+        base_url: str = "https://discord.com/api/v10",
     ) -> None:
         super().__init__(token, "Bot")
         self.base_url = base_url
         # Add Discord-specific headers
-        self.headers.update({"Content-Type": "application/json"})
+        self.headers["Content-Type"] = "application/json"
 
     def get_base_url(self) -> str:
         """Get the base URL"""
@@ -76,7 +78,8 @@ class DiscordTokenConfig(BaseModel):
 
         """
         return DiscordRESTClientViaToken(
-            self.token, self.base_url or "https://discord.com/api/v10",
+            self.token,
+            self.base_url or "https://discord.com/api/v10",
         )
 
 
