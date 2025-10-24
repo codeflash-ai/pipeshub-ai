@@ -54,6 +54,9 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        # Cache frequently-used client info for efficiency
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -930,12 +933,13 @@ class LinkedInDataSource:
             ...     patch_data={"$set": {"name": "Updated Name"}}
             ... )
         """
+        # Avoid attribute lookup by using cached fields
         return self._restli_client.partial_update(
             resource_path="/adAccounts/{id}",
             path_keys={"id": account_id},
             patch_set_object=patch_data,
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     def delete_ad_account(self, account_id: str) -> object:
