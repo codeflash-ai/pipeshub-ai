@@ -8,7 +8,13 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from typing import List, Optional
 
+# Pre-compile regex pattern at module load for better performance
+_EMAIL_REGEX: re.Pattern = re.compile(
+    r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+)
+
 logger = logging.getLogger(__name__)
+
 
 class GmailUtils:
     @staticmethod
@@ -18,9 +24,8 @@ class GmailUtils:
             return False
 
         email = email.strip()
-        # RFC 5322 compliant email regex pattern
-        pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        return bool(re.match(pattern, email))
+        # Use pre-compiled regex for faster matching
+        return _EMAIL_REGEX.match(email) is not None
 
     @staticmethod
     def validate_email_list(email_list: List[str]) -> bool:
@@ -51,7 +56,8 @@ class GmailUtils:
         mail_body: Optional[str],
         mail_attachments: Optional[List[str]],
         thread_id: Optional[str] = None,
-        message_id: Optional[str] = None) -> dict:
+        message_id: Optional[str] = None,
+    ) -> dict:
         """Build the message body using MIME format
         Args:
             mail_to: List of email addresses to send the email to
@@ -97,9 +103,7 @@ class GmailUtils:
 
                     attachment = MIMEApplication(attachment_data, _subtype=sub_type)
                     attachment.add_header(
-                        "Content-Disposition",
-                        "attachment",
-                        filename=file_path_obj.name
+                        "Content-Disposition", "attachment", filename=file_path_obj.name
                     )
                     message.attach(attachment)
                 except Exception as e:
