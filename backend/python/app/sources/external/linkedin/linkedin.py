@@ -52,8 +52,11 @@ class LinkedInDataSource:
         Args:
             client: LinkedInClient instance (wraps official SDK)
         """
+        # Cache frequently accessed attributes for faster lookup
         self.client = client
         self._restli_client = client.get_client()
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -1340,21 +1343,24 @@ class LinkedInDataSource:
             ...     recipes=["urn:li:digitalmediaRecipe:feedshare-video"]
             ... )
         """
-        action_params = {
-            "initializeUploadRequest": {
-                "owner": owner,
-                "fileSizeBytes": file_size
-            }
+        # Preallocate dictionary for lower memory churn and minor speedup vs dynamic assignment
+        initialize_upload_request = {
+            "owner": owner,
+            "fileSizeBytes": file_size
         }
         if recipes:
-            action_params["initializeUploadRequest"]["recipes"] = recipes
+            initialize_upload_request["recipes"] = recipes
+
+        action_params = {
+            "initializeUploadRequest": initialize_upload_request
+        }
 
         return self._restli_client.action(
             resource_path="/videos",
             action_name="initializeUpload",
             action_params=action_params,
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     def get_asset(
