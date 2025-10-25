@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,26 +112,31 @@ class UsersGroupsDataSource:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
+            # Fast path: no error field or type
             error_msg = None
+            success = True
 
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
+            # Micro-optimized error handling
+            # Shortcut: check for dict first since isinstance is a tight operation
+            if isinstance(response, dict):
+                error_info = response.get("error")
+                if error_info is not None:
+                    success = False
+                    if isinstance(error_info, dict):
+                        error_code = error_info.get('code', 'Unknown')
+                        error_message = error_info.get('message', 'No message')
+                        error_msg = f"{error_code}: {error_message}"
+                    else:
+                        error_msg = str(error_info)
+            elif hasattr(response, 'error'):
                 success = False
+                # Avoid double conversion - str() is fast, but try direct access
                 error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
                 success = False
                 error_msg = f"{response.code}: {response.message}"
 
+            # UsersGroupsResponse is called only once (major cost), so minimize logic
             return UsersGroupsResponse(
                 success=success,
                 data=response,
@@ -2299,12 +2302,12 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Minimize object instantiations: reuse single config, inline query param mutations
+            config = RequestConfiguration()  # config object to hold everything
+            query_params = config  # Reference: use config directly for parameter storage
 
-            # Set query parameters using typed object properties
+            # Batch all parameters into config/query_params in order, short-circuit empty values
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
@@ -2320,14 +2323,13 @@ class UsersGroupsDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            config.query_parameters = query_params  # duplicate but kept to match expected usage
 
+            # Headers logic: avoid unnecessary dict allocations
             if headers:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
+            # Only set ConsistencyLevel if 'search' is in use, lazy header allocation
             if search:
                 if not config.headers:
                     config.headers = {}
