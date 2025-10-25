@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,15 +112,11 @@ class UsersGroupsDataSource:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
+            resp_error = getattr(response, 'error', None)
+            if resp_error is not None:
+                return UsersGroupsResponse(success=False, data=response, error=str(resp_error))
             elif isinstance(response, dict) and 'error' in response:
-                success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -130,14 +124,18 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
+                return UsersGroupsResponse(success=False, data=response, error=error_msg)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}"
+                )
 
             return UsersGroupsResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
@@ -14467,7 +14465,7 @@ class UsersGroupsDataSource:
                 query_params.skip = skip
 
             # Create proper typed request configuration
-            config = RequestConfiguration()
+            config = query_params
             config.query_parameters = query_params
 
             if headers:
