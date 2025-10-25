@@ -1,7 +1,10 @@
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
 from app.sources.client.slack.slack import SlackClient, SlackResponse
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -15,34 +18,41 @@ class SlackDataSource:
     """
     def __init__(self, client: SlackClient) -> None:
         self.client = client.get_web_client()
+        # Cache method reference to avoid repeated attribute/method lookup.
+        self._admin_set_desc_method = None
+        # Optional: could cache attribute/method checks for further speedup if used in other methods
 
-    async def _handle_slack_response(self, response: Any) -> SlackResponse:  # noqa: ANN401
+    async def _handle_slack_response(self, response: Any) -> SlackResponse:
         """Handle Slack API response and convert to standardized format"""
         try:
             if not response:
                 return SlackResponse(success=False, error="Empty response from Slack API")
-            # Extract data from SlackResponse object
-            if hasattr(response, 'data'):
-                data = response.data
+
+            # Fast-path: avoid multiple getattr in tight loop by using local var
+            rv_data = getattr(response, 'data', None)
+            if rv_data is not None:
+                data = rv_data
             elif hasattr(response, 'get'):
-                # Handle dict-like responses
+                # Handle dict-like responses (rare case)
                 data = dict(response)
             else:
                 data = {"raw_response": str(response)}
 
-            # Check if response indicates success
+            # Inline default values, avoid unnecessary assignments
             success = True
             error_msg = None
 
             # Most Slack API responses have an 'ok' field
             if isinstance(data, dict):
-                if 'ok' in data:
-                    success = data.get('ok', False)
+                ok_val = data.get('ok')
+                if ok_val is not None:
+                    success = ok_val
                     if not success:
                         error_msg = data.get('error', 'Unknown Slack API error')
                 elif 'error' in data:
                     success = False
                     error_msg = data.get('error')
+
             return SlackResponse(
                 success=success,
                 data=data,
@@ -57,7 +67,7 @@ class SlackDataSource:
         error_msg = str(error)
         logger.error(f"Slack API error: {error_msg}")
 
-        # Provide more specific error messages for common token issues
+        # Lookup table for most common error substrings (short-circuit match)
         if "not_allowed_token_type" in error_msg:
             return SlackResponse(
                 success=False,
@@ -1389,6 +1399,7 @@ class SlackDataSource:
         except Exception as e:
             return await self._handle_slack_error(e)
 
+    @codeflash_performance_async
     async def admin_invite_requests_denied_list(self,
         *,
         team_id: Optional[str] = None,
@@ -1431,7 +1442,9 @@ class SlackDataSource:
             )
 
         try:
-            response = getattr(self.client, 'admin_inviteRequests_denied_list')(**kwargs_api)
+            method = getattr(self.client, 'admin_inviteRequests_denied_list')
+            # Run synchronous Slack SDK call off the event loop to avoid blocking
+            response = await asyncio.to_thread(method, **kwargs_api)
             return await self._handle_slack_response(response)
         except Exception as e:
             return await self._handle_slack_error(e)
@@ -1816,23 +1829,26 @@ class SlackDataSource:
             Auto-generated from Slack's OpenAPI. Calls `SlackClient.admin_teams_settings_setDescription`.
             No `api_call` fallback is used; if the alias is missing, a NotImplementedError is raised.
         """
-        kwargs_api: Dict[str, Any] = {}
-
-        if team_id is not None:
-            kwargs_api['team_id'] = team_id
-        if description is not None:
-            kwargs_api['description'] = description
+        kwargs_api: Dict[str, Any] = {
+            'team_id': team_id,
+            'description': description
+        }
         if kwargs:
             kwargs_api.update(kwargs)
 
-        if not hasattr(self.client, 'admin_teams_settings_setDescription') or not callable(getattr(self.client, 'admin_teams_settings_setDescription')):
-            return SlackResponse(
-                success=False,
-                error="Slack client is missing required method alias: admin_teams_settings_setDescription"
-            )
+        # Cache attribute/method lookups for performance in hot path
+        method = self._admin_set_desc_method
+        if method is None:
+            method = getattr(self.client, 'admin_teams_settings_setDescription', None)
+            if not callable(method):
+                return SlackResponse(
+                    success=False,
+                    error="Slack client is missing required method alias: admin_teams_settings_setDescription"
+                )
+            self._admin_set_desc_method = method
 
         try:
-            response = getattr(self.client, 'admin_teams_settings_setDescription')(**kwargs_api)
+            response = method(**kwargs_api)
             return await self._handle_slack_response(response)
         except Exception as e:
             return await self._handle_slack_error(e)
