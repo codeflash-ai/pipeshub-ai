@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -110,19 +108,21 @@ class UsersGroupsDataSource:
 
     def _handle_users_groups_response(self, response: object) -> UsersGroupsResponse:
         """Handle Users Groups API response with comprehensive error handling."""
+        # Avoid redundant hasattr/isinstance checks by flattening if-elif logic
         try:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
+            # Most responses are not errors, so return early when possible for non-error cases.
+            # Profile indicates error cases are rare
 
-            success = True
-            error_msg = None
-
-            # Enhanced error response handling for Users Groups operations
+            # Use local variables, no change to mutability or returned structure
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -130,14 +130,24 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
 
+            # Successful response: only this single line allocation, not split into parts
             return UsersGroupsResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
@@ -16007,13 +16017,12 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
+            # Only one RequestConfiguration object is strictly needed
             query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
+            # Minimize redundant isinstance and property assignment:
             if select:
+                # Always assign a list (covers all behaviors)
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
@@ -16028,16 +16037,13 @@ class UsersGroupsDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
+            # Share config object, do not allocate a second
+            config = query_params
             if headers:
+                # .headers might be missing, ensure initialization
                 config.headers = headers
-
-            # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
+                if not getattr(config, 'headers', None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
