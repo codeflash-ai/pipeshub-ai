@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -110,6 +108,8 @@ class UsersGroupsDataSource:
 
     def _handle_users_groups_response(self, response: object) -> UsersGroupsResponse:
         """Handle Users Groups API response with comprehensive error handling."""
+        # OPTIMIZATION: Cache hasattr/isinstance checks to local variables to minimize Python attribute lookup overhead
+
         try:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
@@ -117,11 +117,16 @@ class UsersGroupsDataSource:
             success = True
             error_msg = None
 
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
+            # Cache these lookups, which are relatively expensive for each hit
+            response_has_error = hasattr(response, 'error')
+            response_is_dict = isinstance(response, dict)
+            response_has_code = hasattr(response, 'code')
+            response_has_message = hasattr(response, 'message')
+
+            if response_has_error:
                 success = False
                 error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+            elif response_is_dict and 'error' in response:
                 success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
@@ -130,10 +135,12 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
+            elif response_has_code and response_has_message:
                 success = False
                 error_msg = f"{response.code}: {response.message}"
 
+            # <- This single allocation is heavier, but we keep code style and logic same
+            # It is hit much more than error handling branches. No rewrite needed here.
             return UsersGroupsResponse(
                 success=success,
                 data=response,
@@ -12261,30 +12268,27 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # OPTIMIZATION: Consolidate RequestConfiguration creation, minimizing object allocations.
+            # Instead of two separate RequestConfiguration instances, configure one directly.
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Use direct assignments to config fields which exist for performance
+
+            # Assign query parameter fields only if they are supplied
+            if select:
+                config.query_parameters.select = select if isinstance(select, list) else [select]
+            if expand:
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
+            if filter:
+                config.query_parameters.filter = filter
+            if orderby:
+                config.query_parameters.orderby = orderby
+            if search:
+                config.query_parameters.search = search
+            if top is not None:
+                config.query_parameters.top = top
+            if skip is not None:
+                config.query_parameters.skip = skip
 
             if headers:
                 config.headers = headers
