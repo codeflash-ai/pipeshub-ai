@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -6255,38 +6253,43 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Use a single RequestConfiguration object for query parameters and headers
             config = RequestConfiguration()
-            config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Users Groups
+            # These lists are built directly, avoid unnecessary isinstance() checks at runtime
+            if select:
+                config.query_parameters.select = select if isinstance(select, list) else [select]
+            if expand:
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
+            if filter:
+                config.query_parameters.filter = filter
+            if orderby:
+                config.query_parameters.orderby = orderby
             if search:
-                if not config.headers:
-                    config.headers = {}
+                config.query_parameters.search = search
+            if top is not None:
+                config.query_parameters.top = top
+            if skip is not None:
+                config.query_parameters.skip = skip
+
+            # Only set headers if provided or necessary for consistency level
+            if headers:
+                config.headers = headers.copy() if type(headers) is dict else dict(headers)
+            elif search:
+                # Even if headers is None, we set headers for 'ConsistencyLevel'
+                config.headers = {}
+            
+            if search:
                 config.headers['ConsistencyLevel'] = 'eventual'
 
+            # The ETag (If-Match) handling: 
+            # This is a standard HTTP header, so we support it if passed.
+            if If_Match:
+                if not config.headers:
+                    config.headers = {}
+                config.headers['If-Match'] = If_Match
+
+            # Call SDK delete method (this chain is not optimized further unless SDK itself is changed)
             response = await self.client.users.by_user_id(user_id).scoped_role_member_of.by_scopedRoleMemberOf_id(scopedRoleMembership_id).delete(request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
