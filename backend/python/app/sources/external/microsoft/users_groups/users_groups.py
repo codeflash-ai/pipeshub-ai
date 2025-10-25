@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -4829,10 +4827,17 @@ class UsersGroupsDataSource:
             query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
 
             # Set query parameters using typed object properties
-            if select:
+            # Prefer dollar_select/dollar_expand if specified, otherwise select/expand
+            if dollar_select is not None:
+                query_params.select = dollar_select if isinstance(dollar_select, list) else [dollar_select]
+            elif select:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+
+            if dollar_expand is not None:
+                query_params.expand = dollar_expand if isinstance(dollar_expand, list) else [dollar_expand]
+            elif expand:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
+
             if filter:
                 query_params.filter = filter
             if orderby:
@@ -4848,15 +4853,16 @@ class UsersGroupsDataSource:
             config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
             config.query_parameters = query_params
 
+            # Merge headers efficiently
+            config.headers = {}
             if headers:
-                config.headers = headers
+                config.headers.update(headers)
 
             # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
+            # Await the Microsoft Graph get call for the managedAppRegistration
             response = await self.client.users.by_user_id(user_id).managed_app_registrations.by_managedAppRegistration_id(managedAppRegistration_id).get(request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
