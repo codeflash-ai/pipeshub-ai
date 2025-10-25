@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -3535,36 +3533,38 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # For performance, avoid unnecessary object instantiations when no parameters are provided.
+            query_params = None
+            # Check if any query parameter is set that would require the config object
+            if select or expand or filter or orderby or search or top is not None or skip is not None:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params is not None:
+                config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+            elif search:
+                # Only allocate headers dict if needed for 'ConsistencyLevel'.
+                config.headers = {}
 
             # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.users.by_user_id(user_id).app_role_assignments.by_appRoleAssignment_id(appRoleAssignment_id).delete(request_configuration=config)
