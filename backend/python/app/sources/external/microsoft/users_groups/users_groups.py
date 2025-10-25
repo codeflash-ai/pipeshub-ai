@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -4589,40 +4587,28 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
+            # Create request configuration and query parameters with reduced local assignments
+            query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters(
+                select=select if select is None or isinstance(select, list) else [select],
+                expand=expand if expand is None or isinstance(expand, list) else [expand],
+                filter=filter,
+                orderby=orderby,
+                search=search,
+                top=top,
+                skip=skip,
+            )
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
-                config.headers = headers
+            config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration(
+                query_parameters=query_params,
+                headers={**(headers or {})}
+            )
 
             # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
+            # Await the core API call directly
             response = await self.client.users.by_user_id(user_id).get_managed_app_diagnostic_statuses().get(request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
