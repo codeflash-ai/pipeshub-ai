@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,15 +112,17 @@ class UsersGroupsDataSource:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
-            error_msg = None
+            # Precompute attributes and error presence for efficiency
+            has_error_attr = hasattr(response, 'error')
+            has_code_and_message = hasattr(response, 'code') and hasattr(response, 'message')
 
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
+            if has_error_attr:
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
             elif isinstance(response, dict) and 'error' in response:
-                success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -130,14 +130,22 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+            elif has_code_and_message:
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}",
+                )
 
             return UsersGroupsResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
@@ -6333,28 +6341,33 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
+            # Only instantiate query params object when necessary
+            if any([select, expand, filter, orderby, search, top is not None, skip is not None]):
+                # Use typed query parameters
+                query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+                # Set query parameters using typed object properties
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
             # Create proper typed request configuration
             config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            if query_params is not None:
+                config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
