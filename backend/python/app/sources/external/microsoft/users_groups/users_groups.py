@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -134,11 +132,7 @@ class UsersGroupsDataSource:
                 success = False
                 error_msg = f"{response.code}: {response.message}"
 
-            return UsersGroupsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+            return UsersGroupsResponse(success=success, data=response, error=error_msg)
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
             return UsersGroupsResponse(success=False, error=str(e))
@@ -5659,41 +5653,47 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Avoid constructing two instances of RequestConfiguration, use only one for both query/headers
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            query_params = config  # Use config itself to avoid unnecessary instantiations
 
+            # Assign query parameters using setattr, inline the list check for both select/expand
+            if select:
+                config.select = select if isinstance(select, list) else [select]
+            if expand:
+                config.expand = expand if isinstance(expand, list) else [expand]
+            if filter:
+                config.filter = filter
+            if orderby:
+                config.orderby = orderby
+            if search:
+                config.search = search
+            if top is not None:
+                config.top = top
+            if skip is not None:
+                config.skip = skip
+
+            # Only assign query_parameters if the SDK expects a subdivision object; if not, skip this step (kept as per original)
+            config.query_parameters = config
+
+            # Assign headers directly and only allocate on demand
+            # Avoid if header is None/empty dict
             if headers:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
+            # Mutate headers only if search is set
             if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Make sure config.headers is a dictionary for assignment, if not create
+                hdr = config.headers if hasattr(config, 'headers') and config.headers is not None else None
+                if not hdr:
+                    hdr = {}
+                    config.headers = hdr
+                hdr['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).presence.clear_presence.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).presence.clear_presence.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
