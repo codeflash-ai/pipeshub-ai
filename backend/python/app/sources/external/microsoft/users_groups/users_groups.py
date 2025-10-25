@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -9579,12 +9577,9 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
+            # Build typed query parameters and config at once (no intermediate assignment for memory efficiency)
             query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
@@ -9600,20 +9595,28 @@ class UsersGroupsDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
             config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
+            if If_Match is not None:
+                if not hasattr(config, "headers") or config.headers is None:
+                    config.headers = {}
+                config.headers["If-Match"] = If_Match
+
+            # Consistency level header for search operations
             if search:
                 if not config.headers:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).permission_grants.by_permissionGrant_id(resourceSpecificPermissionGrant_id).delete(request_configuration=config)
+            # Await the delete operation (ensure only async code is executed here)
+            response = await self.client.groups.by_group_id(group_id)\
+                .permission_grants.by_permissionGrant_id(resourceSpecificPermissionGrant_id)\
+                .delete(request_configuration=config)
+
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
