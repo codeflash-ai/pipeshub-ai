@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -18193,30 +18191,25 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Prepare config with both query and header parameters using a single object to reduce allocations
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            qp = config.query_parameters
+
+            if select:
+                qp.select = select if isinstance(select, list) else [select]
+            if expand:
+                qp.expand = expand if isinstance(expand, list) else [expand]
+            if filter:
+                qp.filter = filter
+            if orderby:
+                qp.orderby = orderby
+            if search:
+                qp.search = search
+            if top is not None:
+                qp.top = top
+            if skip is not None:
+                qp.skip = skip
 
             if headers:
                 config.headers = headers
