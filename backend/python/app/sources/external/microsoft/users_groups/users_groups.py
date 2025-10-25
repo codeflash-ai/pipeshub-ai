@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -2077,41 +2075,46 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
+            # Build query parameters using a single dict to minimize object instantiation
+            query_params = {}
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                query_params['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                query_params['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                query_params['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                query_params['orderby'] = orderby
             if search:
-                query_params.search = search
+                query_params['search'] = search
             if top is not None:
-                query_params.top = top
+                query_params['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                query_params['skip'] = skip
 
-            # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Set config.query_parameters only if we have parameters to minimize memory and attribute assignment
+            if query_params:
+                # Kiota RequestConfiguration expects real attribute objects, so set on config directly
+                for k, v in query_params.items():
+                    setattr(config, k, v)
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # Defensive copy to avoid mutating the input
 
             # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users(user_principal_name='{user_principal_name}').patch(body=request_body, request_configuration=config)
+            # Correct placeholder usage for patch endpoint
+            # Only userPrincipalName should go in the filter, not as a literal string with braces
+            response = await self.client.users(user_principal_name=userPrincipalName).patch(
+                body=request_body,
+                request_configuration=config
+            )
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
