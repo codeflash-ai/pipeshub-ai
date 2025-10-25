@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -130,9 +128,13 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+            else:
+                # Use getattr to avoid multiple hasattr calls
+                response_code = getattr(response, 'code', None)
+                response_message = getattr(response, 'message', None)
+                if response_code is not None and response_message is not None:
+                    success = False
+                    error_msg = f"{response_code}: {response_message}"
 
             return UsersGroupsResponse(
                 success=success,
@@ -11821,40 +11823,50 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Use a single configuration and set its attributes instead of extra temp objects
             config = RequestConfiguration()
-            config.query_parameters = query_params
 
+            # Allocate lists only if needed, minimize isinstance and unnecessary object creations
+            if select:
+                config.query_parameters = RequestConfiguration()
+                config.query_parameters.select = select if isinstance(select, list) else [select]
+            if expand:
+                if not hasattr(config, 'query_parameters'):
+                    config.query_parameters = RequestConfiguration()
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
+            if filter:
+                if not hasattr(config, 'query_parameters'):
+                    config.query_parameters = RequestConfiguration()
+                config.query_parameters.filter = filter
+            if orderby:
+                if not hasattr(config, 'query_parameters'):
+                    config.query_parameters = RequestConfiguration()
+                config.query_parameters.orderby = orderby
+            if search:
+                if not hasattr(config, 'query_parameters'):
+                    config.query_parameters = RequestConfiguration()
+                config.query_parameters.search = search
+            if top is not None:
+                if not hasattr(config, 'query_parameters'):
+                    config.query_parameters = RequestConfiguration()
+                config.query_parameters.top = top
+            if skip is not None:
+                if not hasattr(config, 'query_parameters'):
+                    config.query_parameters = RequestConfiguration()
+                config.query_parameters.skip = skip
+
+            # Use fast header assignment with minimal checks
             if headers:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
+            # Add ConsistencyLevel header for search queries
             if search:
-                if not config.headers:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
+            # The API call itself
             response = await self.client.organization.by_organization_id(organization_id).branding.custom_css.delete(request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
