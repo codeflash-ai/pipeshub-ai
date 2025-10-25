@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -117,10 +115,14 @@ class UsersGroupsDataSource:
             success = True
             error_msg = None
 
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
+            # Use getattr to avoid repeated hasattr checks
+            error_attr = getattr(response, 'error', None)
+            code_attr = getattr(response, 'code', None)
+            message_attr = getattr(response, 'message', None)
+
+            if error_attr is not None:
                 success = False
-                error_msg = str(response.error)
+                error_msg = str(error_attr)
             elif isinstance(response, dict) and 'error' in response:
                 success = False
                 error_info = response['error']
@@ -130,9 +132,9 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
+            elif code_attr is not None and message_attr is not None:
                 success = False
-                error_msg = f"{response.code}: {response.message}"
+                error_msg = f"{code_attr}: {message_attr}"
 
             return UsersGroupsResponse(
                 success=success,
@@ -2225,38 +2227,34 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Avoid repetitive allocations by reusing config instead of separate query_params/config objects
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Use direct assignment with default to empty list to skip type checking on runtime for select/expand
+            if select is not None:
+                config.query_parameters.select = select if isinstance(select, list) else [select]
+            if expand is not None:
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
+            if filter is not None:
+                config.query_parameters.filter = filter
+            if orderby is not None:
+                config.query_parameters.orderby = orderby
+            if search is not None:
+                config.query_parameters.search = search
+            if top is not None:
+                config.query_parameters.top = top
+            if skip is not None:
+                config.query_parameters.skip = skip
 
             if headers:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
-            if search:
+            # Add consistency header for search, short circuit creation
+            # Avoid dict lookup by using setdefault if headers exist
+            if search is not None:
                 if not config.headers:
                     config.headers = {}
+                # Always set, since header write is cheap and occurrence is rare
                 config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.users.validate_properties.post(body=request_body, request_configuration=config)
