@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,31 +112,34 @@ class UsersGroupsDataSource:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
-            error_msg = None
-
-            # Enhanced error response handling for Users Groups operations
+            # Fast-path error handling using direct dictionary and attribute lookups without extra assignments
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return UsersGroupsResponse(success=False, data=response, error=str(response.error))
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
                     error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
+                    return UsersGroupsResponse(
+                        success=False,
+                        data=response,
+                        error=f"{error_code}: {error_message}"
+                    )
                 else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                    return UsersGroupsResponse(
+                        success=False,
+                        data=response,
+                        error=str(error_info)
+                    )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}"
+                )
 
-            return UsersGroupsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+            # Success case (no error markers found)
+            return UsersGroupsResponse(success=True, data=response, error=None)
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
             return UsersGroupsResponse(success=False, error=str(e))
