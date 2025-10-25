@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -6407,41 +6405,46 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Combine initial check of all query params (reducing initialization of default objects)
+            # Only instantiate RequestConfiguration when any param is present
 
-            # Set query parameters using typed object properties
+            # Pre-allocate query param values (avoid repeated attribute assignment checks)
+            query_params_values = {}
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                query_params_values['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                query_params_values['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                query_params_values['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                query_params_values['orderby'] = orderby
             if search:
-                query_params.search = search
+                query_params_values['search'] = search
             if top is not None:
-                query_params.top = top
+                query_params_values['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                query_params_values['skip'] = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Only instantiate config/query_params if needed
+            if query_params_values or headers:
+                query_params = RequestConfiguration()
+                for k, v in query_params_values.items():
+                    setattr(query_params, k, v)
+                config = RequestConfiguration()
+                config.query_parameters = query_params
+                if headers:
+                    config.headers = headers
+                # Add consistency level for search operations in Users Groups
+                if 'search' in query_params_values:
+                    if not getattr(config, "headers", None):
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None  # no additional params/configs
 
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Users Groups
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
-
-            response = await self.client.users.by_user_id(user_id).scoped_role_member_of.by_scopedRoleMemberOf_id(scopedRoleMembership_id).patch(body=request_body, request_configuration=config)
+            patch_caller = self.client.users.by_user_id(user_id).scoped_role_member_of.by_scopedRoleMemberOf_id(scopedRoleMembership_id).patch
+            response = await patch_caller(body=request_body, request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
