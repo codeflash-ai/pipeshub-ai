@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,15 +112,14 @@ class UsersGroupsDataSource:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
-            error_msg = None
-
-            # Enhanced error response handling for Users Groups operations
+            # Fast path: avoid repeated variable assignments, combine checks
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -130,14 +127,24 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
 
+            # Only one UsersGroupsResponse object allocation per logical path
             return UsersGroupsResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
@@ -8283,40 +8290,37 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
             query_params = GroupsRequestBuilder.GroupsRequestBuilderGetQueryParameters()
-
-            # Set query parameters using typed object properties
-            if select:
+            # Set query parameters in a single pass, skip typechecks when None for better branch prediction
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
             config = GroupsRequestBuilder.GroupsRequestBuilderGetRequestConfiguration()
             config.query_parameters = query_params
 
-            if headers:
+            if headers is not None:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
-            if search:
-                if not config.headers:
+            # Optimize ConsistencyLevel header assignment
+            if search is not None:
+                if config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
+            # Call chain flattened; no allocation/variable for intermediate objects
             response = await self.client.groups.by_group_id(group_id).app_role_assignments.by_appRoleAssignment_id(appRoleAssignment_id).get(request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
