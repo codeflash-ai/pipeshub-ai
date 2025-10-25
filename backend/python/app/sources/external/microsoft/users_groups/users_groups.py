@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,31 +112,41 @@ class UsersGroupsDataSource:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
-            error_msg = None
-
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
+            # Fast path: most common cases first, avoid repeated hasattr and isinstance checks
+            if isinstance(response, dict):
+                err = response.get('error')
+                if err is not None:
+                    # Dict error handling (most likely if triggered)
+                    if isinstance(err, dict):
+                        return UsersGroupsResponse(
+                            success=False,
+                            data=response,
+                            error=f"{err.get('code', 'Unknown')}: {err.get('message', 'No message')}",
+                        )
+                    return UsersGroupsResponse(
+                        success=False,
+                        data=response,
+                        error=str(err),
+                    )
+            elif hasattr(response, 'error'):
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
             elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-
-            return UsersGroupsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+                return UsersGroupsResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}",
+                )
+            else:
+                # Success case
+                return UsersGroupsResponse(
+                    success=True,
+                    data=response,
+                    error=None,
+                )
         except Exception as e:
             logger.error(f"Error handling Users Groups response: {e}")
             return UsersGroupsResponse(success=False, error=str(e))
@@ -5805,41 +5813,44 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
+            # Instantiate once, set only when param is provided
             query_params = RequestConfiguration()
 
-            # Set query parameters using typed object properties
+            # Use direct assignments without type checking as arguments are typed
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                query_params.select = select
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+                query_params.expand = expand
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
+            # Create request configuration object and set query parameters directly
             config = RequestConfiguration()
             config.query_parameters = query_params
 
+            # Direct assignment of headers, avoid unnecessary branching
             if headers:
                 config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
+            # Add ConsistencyLevel for search more efficiently
             if search:
-                if not config.headers:
+                # Guarantee config.headers exists and is a dict
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).presence.set_presence.post(body=request_body, request_configuration=config)
+            response = await self.client.users.by_user_id(user_id).presence.set_presence.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
