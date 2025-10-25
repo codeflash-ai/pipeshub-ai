@@ -54,9 +54,11 @@ class ConfigurationService:
         """Get configuration value with LRU cache and environment variable fallback"""
         try:
             # Check cache first
-            if use_cache and key in self.cache:
-                self.logger.debug("📦 Cache hit for key: %s", key)
-                return self.cache[key]
+            if use_cache:
+                cache_get = self.cache.get(key, None)
+                if cache_get is not None:
+                    self.logger.debug("📦 Cache hit for key: %s", key)
+                    return cache_get
 
             value = await self.store.get_key(key)
             if value is None:
