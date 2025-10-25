@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -15933,34 +15931,33 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
+            # Build query parameters including OData for Users Groups efficiently
+            qp_kwargs = {}
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                qp_kwargs['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                qp_kwargs['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                qp_kwargs['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                qp_kwargs['orderby'] = orderby
             if search:
-                query_params.search = search
+                qp_kwargs['search'] = search
             if top is not None:
-                query_params.top = top
+                qp_kwargs['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                qp_kwargs['skip'] = skip
 
-            # Create proper typed request configuration
+            query_params = RequestConfiguration().query_parameters
+            for k, v in qp_kwargs.items():
+                setattr(query_params, k, v)
+
             config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
-
             # Add consistency level for search operations in Users Groups
             if search:
                 if not config.headers:
