@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -103,6 +101,7 @@ class UsersGroupsDataSource:
 
     def __init__(self, client: MSGraphClient) -> None:
         """Initialize with Microsoft Graph SDK client optimized for Users Groups."""
+        # Directly get the internal GraphServiceClient once (no optimization to do here)
         self.client = client.get_client().get_ms_graph_service_client()
         if not hasattr(self.client, "users"):
             raise ValueError("Client must be a Microsoft Graph SDK client")
@@ -110,30 +109,35 @@ class UsersGroupsDataSource:
 
     def _handle_users_groups_response(self, response: object) -> UsersGroupsResponse:
         """Handle Users Groups API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            success = True
-            error_msg = None
+        # Fast path: avoid try-block until necessary
+        if response is None:
+            return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
+        # Reduce attribute checks by refactoring conditional control flow
+        success = True
+        error_msg = None
+
+        # Attribute lookup is more expensive than dict lookup, so we try dict first if possible
+        # Save attribute lookups for error corners
+        if isinstance(response, dict):
+            error_info = response.get('error')
+            if error_info is not None:
                 success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
                     error_message = error_info.get('message', 'No message')
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+        elif hasattr(response, 'error'):
+            success = False
+            error_msg = str(response.error)
+        elif hasattr(response, 'code') and hasattr(response, 'message'):
+            success = False
+            error_msg = f"{response.code}: {response.message}"
 
+        try:
             return UsersGroupsResponse(
                 success=success,
                 data=response,
@@ -4135,41 +4139,47 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
+            # Minimize allocation and property setting by using a dict for query params first, then set at once
+            qp = {}
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                qp['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                qp['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                qp['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                qp['orderby'] = orderby
             if search:
-                query_params.search = search
+                qp['search'] = search
             if top is not None:
-                query_params.top = top
+                qp['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                qp['skip'] = skip
 
-            # Create proper typed request configuration
+            # Create a single RequestConfiguration and set query_parameters only once
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if qp:
+                # Instead of repeatedly setting attributes (slower), set query_parameters via vars + setattr
+                # Because RequestConfiguration expects individual attributes, we set them by loop
+                query_params = RequestConfiguration()
+                for k, v in qp.items():
+                    setattr(query_params, k, v)
+                config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
-
+            # Prepare headers (optimized to mutate one dict, not multiple objects)
+            config_headers = headers if headers else {}
             # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                config_headers = dict(config_headers) if config_headers else {}
+                config_headers['ConsistencyLevel'] = 'eventual'
+            if config_headers:
+                config.headers = config_headers
 
-            response = await self.client.users.by_user_id(user_id).cloud_clipboard.items.post(body=request_body, request_configuration=config)
+            # Await call directly, without unnecessary intermediate objects
+            response = await self.client.users.by_user_id(user_id).cloud_clipboard.items.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
