@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -17517,9 +17515,10 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
+            # Use single RequestConfiguration for both query params and headers
+            config = RequestConfiguration()
+            query_params = config
+            
             # Set query parameters using typed object properties
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
@@ -17535,10 +17534,6 @@ class UsersGroupsDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
