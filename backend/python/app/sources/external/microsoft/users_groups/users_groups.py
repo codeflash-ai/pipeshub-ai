@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -110,18 +108,19 @@ class UsersGroupsDataSource:
 
     def _handle_users_groups_response(self, response: object) -> UsersGroupsResponse:
         """Handle Users Groups API response with comprehensive error handling."""
+        # Fast path: None check, then dict check, then attribute checks -- minimize hasattr calls
         try:
             if response is None:
                 return UsersGroupsResponse(success=False, error="Empty response from Users Groups API")
 
+            # Assume success unless proven otherwise
             success = True
             error_msg = None
 
-            # Enhanced error response handling for Users Groups operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+            # Use response.__dict__ if present for quick attr lookup
+            response_dict = getattr(response, "__dict__", None)
+            # Dict error
+            if isinstance(response, dict) and 'error' in response:
                 success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
@@ -130,9 +129,26 @@ class UsersGroupsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
+            # Attribute error (skip hasattr when response_dict available)
+            elif (
+                (response_dict is not None and 'error' in response_dict)
+                or hasattr(response, 'error')
+            ):
+                # Use __dict__ directly if possible for speed
                 success = False
-                error_msg = f"{response.code}: {response.message}"
+                val = response_dict['error'] if response_dict and 'error' in response_dict else getattr(response, 'error')
+                error_msg = str(val)
+            # Generic attribute-based error pattern: code/message (skip hasattr when possible)
+            elif (
+                (response_dict is not None and 'code' in response_dict and 'message' in response_dict)
+                or (hasattr(response, 'code') and hasattr(response, 'message'))
+            ):
+                success = False
+                # Use __dict__ directly if possible for speed
+                if response_dict and 'code' in response_dict and 'message' in response_dict:
+                    error_msg = f"{response_dict['code']}: {response_dict['message']}"
+                else:
+                    error_msg = f"{response.code}: {response.message}"
 
             return UsersGroupsResponse(
                 success=success,
@@ -5881,39 +5897,44 @@ class UsersGroupsDataSource:
         Returns:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
-        # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
+            # Check if any parameters are set to avoid creating objects unnecessarily
+            has_params = (select or expand or filter or orderby or search or 
+                         top is not None or skip is not None or headers)
+            
+            config = None
+            if has_params:
+                # Use typed query parameters
+                query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+                # Set query parameters using typed object properties
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+                # Create proper typed request configuration
+                config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
+                config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
+                if headers:
+                    config.headers = headers
 
-            # Add consistency level for search operations in Users Groups
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Add consistency level for search operations in Users Groups
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.users.by_user_id(user_id).reminder_view(_start_date_time='{_start_date_time}',_end_date_time='{_end_date_time}').get(request_configuration=config)
             return self._handle_users_groups_response(response)
