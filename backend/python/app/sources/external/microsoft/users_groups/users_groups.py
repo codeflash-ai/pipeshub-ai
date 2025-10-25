@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -8048,46 +8046,44 @@ class UsersGroupsDataSource:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
         # Build query parameters including OData for Users Groups
+        # Only wrap actual async I/O in try/except for efficient error path
+        # Precompute RequestConfiguration before network call
+        query_params = RequestConfiguration()
+        if select:
+            query_params.select = select if isinstance(select, list) else [select]
+        if expand:
+            query_params.expand = expand if isinstance(expand, list) else [expand]
+        if filter:
+            query_params.filter = filter
+        if orderby:
+            query_params.orderby = orderby
+        if search:
+            query_params.search = search
+        if top is not None:
+            query_params.top = top
+        if skip is not None:
+            query_params.skip = skip
+
+        config = RequestConfiguration()
+        config.query_parameters = query_params
+
+        if headers:
+            config.headers = headers
+
+        # Add consistency level for search operations in Users Groups
+        if search:
+            if not config.headers:
+                config.headers = {}
+            config.headers['ConsistencyLevel'] = 'eventual'
+
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Users Groups
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
-
             response = await self.client.groups.by_group_id(group_id).accepted_senders.ref.delete(request_configuration=config)
-            return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
                 success=False,
                 error=f"Users Groups API call failed: {str(e)}",
             )
+        return self._handle_users_groups_response(response)
 
     async def groups_list_app_role_assignments(
         self,
