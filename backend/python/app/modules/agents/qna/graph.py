@@ -30,29 +30,39 @@ def should_continue_with_limit(state: ChatState) -> str:
     # Log for debugging
     logger = state.get("logger")
     if logger:
-        logger.debug(f"Tool routing: pending={has_pending_calls}, count={tool_call_count}/{max_iterations}")
+        logger_debug = logger.debug
+        logger_warning = logger.warning
+        logger_info = logger.info
+
+        logger_debug(f"Tool routing: pending={has_pending_calls}, count={tool_call_count}/{max_iterations}")
 
         # Show recent tool usage for complex workflow tracking
-        if all_tool_results and len(all_tool_results) > 0:
-            recent_tools = [result.get("tool_name", "unknown") for result in all_tool_results[-LAST_N_TOOLS:]]
-            logger.debug(f"Recent tool chain: {' → '.join(recent_tools)}")
+        n_results = len(all_tool_results)
+        if n_results > 0:
+            # Fast path: direct slice, avoid per-iteration len checks
+            recent_results = all_tool_results[-LAST_N_TOOLS:]
+            # List comprehension is fast and necessary to mimic original behavior
+            recent_tools = [result.get("tool_name", "unknown") for result in recent_results]
+            logger_debug(f"Recent tool chain: {' → '.join(recent_tools)}")
 
             # Check for stuck loops - same tool called repeatedly
-            if len(all_tool_results) >= LAST_N_TOOLS:
-                last_5_tools = [result.get("tool_name", "unknown") for result in all_tool_results[-LAST_N_TOOLS:]]
+            if n_results >= LAST_N_TOOLS:
+                last_5_results = recent_results  # already sliced
+                last_5_tools = [result.get("tool_name", "unknown") for result in last_5_results]
+                # Fast path: set construction, no unnecessary operations
                 if len(set(last_5_tools)) == 1:  # All 5 recent tools are the same
-                    logger.warning(f"Detected potential stuck loop with tool: {last_5_tools[0]}")
-                    logger.warning("Forcing termination to prevent infinite recursion")
+                    logger_warning(f"Detected potential stuck loop with tool: {last_5_tools[0]}")
+                    logger_warning("Forcing termination to prevent infinite recursion")
                     return "final"
 
     # Simple routing logic - let LLM drive everything
+    # Avoid else after return for faster branch prediction
     if has_pending_calls and tool_call_count < max_iterations:
         return "execute_tools"
-    else:
-        if tool_call_count >= max_iterations and logger:
-            logger.warning(f"Reached maximum tool iterations ({max_iterations}), proceeding to final response")
-            logger.info("This prevents infinite loops while allowing complex enterprise workflows")
-        return "final"
+    if tool_call_count >= max_iterations and logger:
+        logger_warning(f"Reached maximum tool iterations ({max_iterations}), proceeding to final response")
+        logger_info("This prevents infinite loops while allowing complex enterprise workflows")
+    return "final"
 
 
 def llm_qna_graph() -> StateGraph:
