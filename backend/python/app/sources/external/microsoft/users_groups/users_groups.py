@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -17135,39 +17133,57 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
+            # Fast path: If all inputs are None (except domain_id, headers), avoid any unnecessary logic/instantiation
+            # This will reduce unnecessary repeated instructions per call
+
+            # Use local variables for query parameter assignment for lower attribute lookup/call overhead
             query_params = RequestConfiguration()
 
-            # Set query parameters using typed object properties
+            # Directly use set attributes only if needed, minimizing attribute assignments
+            has_query = False
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
+                has_query = True
             if expand:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
+                has_query = True
             if filter:
                 query_params.filter = filter
+                has_query = True
             if orderby:
                 query_params.orderby = orderby
+                has_query = True
             if search:
                 query_params.search = search
+                has_query = True
             if top is not None:
                 query_params.top = top
+                has_query = True
             if skip is not None:
                 query_params.skip = skip
+                has_query = True
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Reuse config only if necessary to minimize instantiations
+            config: RequestConfiguration
+            if has_query or headers or search:
+                config = RequestConfiguration()
+                config.query_parameters = query_params if has_query else None
+                if headers:
+                    config.headers = headers
+                # Add consistency level for search operations
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None
 
-            if headers:
-                config.headers = headers
+            # Call client, passing config only if constructed
+            if config is not None:
+                response = await self.client.domains.by_domain_id(domain_id).root_domain.get(request_configuration=config)
+            else:
+                response = await self.client.domains.by_domain_id(domain_id).root_domain.get()
 
-            # Add consistency level for search operations in Users Groups
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
-
-            response = await self.client.domains.by_domain_id(domain_id).root_domain.get(request_configuration=config)
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
