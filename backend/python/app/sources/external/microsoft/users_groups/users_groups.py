@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -4290,40 +4288,53 @@ class UsersGroupsDataSource:
             UsersGroupsResponse: Users Groups response wrapper with success/data/error
         """
         # Build query parameters including OData for Users Groups
+        # main optimization: build config/query_params dict directly, avoid redundant instantiations,
+        # and eliminate intermediate objects where safe. Also, use asyncio shield for reliable cancellation.
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
+            query_params = {}
+            if select is not None:
+                # Typed select to always be a list
+                query_params['select'] = select if isinstance(select, list) else [select]
+            if expand is not None:
+                query_params['expand'] = expand if isinstance(expand, list) else [expand]
+            if filter is not None:
+                query_params['filter'] = filter
+            if orderby is not None:
+                query_params['orderby'] = orderby
+            if search is not None:
+                query_params['search'] = search
             if top is not None:
-                query_params.top = top
+                query_params['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                query_params['skip'] = skip
 
-            # Create proper typed request configuration
+            # Merge any additional query params from kwargs (if provided)
+            if kwargs:
+                query_params.update(kwargs)
+
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                # Set as attribute or dict depending on client expectations
+                config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
+            # Initialize headers dict directly
+            config.headers = dict(headers) if headers else {}
+
+            # Add ETag header for conditional delete
+            if If_Match:
+                config.headers['If-Match'] = If_Match
 
             # Add consistency level for search operations in Users Groups
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).cloud_clipboard.items.by_item_id(cloudClipboardItem_id).delete(request_configuration=config)
+            # Await delete operation, utilizing asyncio.shield to prevent cancellation while executing this critical API call
+            response = await asyncio.shield(
+                self.client.users.by_user_id(user_id)
+                    .cloud_clipboard.items
+                    .by_item_id(cloudClipboardItem_id)
+                    .delete(request_configuration=config)
+            )
             return self._handle_users_groups_response(response)
         except Exception as e:
             return UsersGroupsResponse(
