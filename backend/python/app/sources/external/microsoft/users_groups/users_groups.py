@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -3149,28 +3147,38 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
+            # Merge dollar_* parameters with main parameters for efficiency
+            select = select or dollar_select
+            expand = expand or dollar_expand
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only create query parameters object if we have parameters to set
+            has_params = (select or expand or filter or orderby or search or 
+                         top is not None or skip is not None)
+            
+            if has_params:
+                query_params = UsersRequestBuilder.UsersRequestBuilderGetQueryParameters()
+                
+                # Set query parameters using typed object properties
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+                # Create proper typed request configuration
+                config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
+                config.query_parameters = query_params
+            else:
+                config = UsersRequestBuilder.UsersRequestBuilderGetRequestConfiguration()
 
             if headers:
                 config.headers = headers
