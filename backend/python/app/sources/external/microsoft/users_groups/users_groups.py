@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -10639,28 +10637,26 @@ class UsersGroupsDataSource:
         """
         # Build query parameters including OData for Users Groups
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Build query parameters concurrently to improve event loop responsiveness
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            query_params = config.query_parameters = RequestConfiguration()
+            async def set_query_parameters():
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+
+            set_params_task = asyncio.create_task(set_query_parameters())
 
             if headers:
                 config.headers = headers
@@ -10670,6 +10666,8 @@ class UsersGroupsDataSource:
                 if not config.headers:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
+
+            await set_params_task
 
             response = await self.client.invitations.post(body=request_body, request_configuration=config)
             return self._handle_users_groups_response(response)
