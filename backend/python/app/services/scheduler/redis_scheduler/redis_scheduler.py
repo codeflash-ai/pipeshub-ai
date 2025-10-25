@@ -83,14 +83,16 @@ class RedisScheduler(Scheduler):
         if not scoped_jwt_secret:
             raise ValueError("SCOPED_JWT_SECRET environment variable is not set")
 
+        now_utc = datetime.now(timezone.utc)
+
         # Add standard claims if not present
         if "exp" not in token_payload:
             # Set expiration to 1 hour from now
-            token_payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=1)
+            token_payload["exp"] = now_utc + timedelta(hours=1)
 
         if "iat" not in token_payload:
             # Set issued at to current time
-            token_payload["iat"] = datetime.now(timezone.utc)
+            token_payload["iat"] = now_utc
 
         # Generate the JWT token using jose
         token = jwt.encode(token_payload, scoped_jwt_secret, algorithm="HS256")
