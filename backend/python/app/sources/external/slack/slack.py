@@ -1,7 +1,10 @@
+import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
 from app.sources.client.slack.slack import SlackClient, SlackResponse
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 # Set up logger
 logger = logging.getLogger(__name__)
@@ -16,33 +19,42 @@ class SlackDataSource:
     def __init__(self, client: SlackClient) -> None:
         self.client = client.get_web_client()
 
-    async def _handle_slack_response(self, response: Any) -> SlackResponse:  # noqa: ANN401
+    async def _handle_slack_response(self, response: Any) -> SlackResponse:
         """Handle Slack API response and convert to standardized format"""
         try:
             if not response:
                 return SlackResponse(success=False, error="Empty response from Slack API")
-            # Extract data from SlackResponse object
-            if hasattr(response, 'data'):
-                data = response.data
+
+            # Fastest path: Slack WebClient responses will usually have .data as a dict
+            data = None
+            response_data = getattr(response, 'data', None)
+            if response_data is not None:
+                data = response_data
             elif hasattr(response, 'get'):
-                # Handle dict-like responses
-                data = dict(response)
+                # Only attempt casting to dict, not double-casting nor str conversion if already dict-like
+                try:
+                    data = dict(response)
+                except Exception:
+                    # Defensive: fallback to string format if dict conversion fails
+                    data = {"raw_response": str(response)}
             else:
                 data = {"raw_response": str(response)}
 
-            # Check if response indicates success
-            success = True
-            error_msg = None
-
-            # Most Slack API responses have an 'ok' field
+            # Direct dictionary handling
             if isinstance(data, dict):
-                if 'ok' in data:
-                    success = data.get('ok', False)
-                    if not success:
-                        error_msg = data.get('error', 'Unknown Slack API error')
-                elif 'error' in data:
+                # 'ok' field is most common in Slack API results
+                success = data.get("ok", True)
+                error_msg = None
+                if "ok" in data and not success:
+                    error_msg = data.get('error', 'Unknown Slack API error')
+                elif "ok" not in data and "error" in data:
                     success = False
-                    error_msg = data.get('error')
+                    error_msg = data.get("error")
+            else:
+                # Defensive: unlikely, but for non-dict, treat as unknown
+                success = True
+                error_msg = None
+
             return SlackResponse(
                 success=success,
                 data=data,
@@ -57,42 +69,21 @@ class SlackDataSource:
         error_msg = str(error)
         logger.error(f"Slack API error: {error_msg}")
 
-        # Provide more specific error messages for common token issues
-        if "not_allowed_token_type" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Slack token type not allowed for this operation. Please ensure you're using a bot token (xoxb-) with the required scopes. For search operations, you need the 'search:read' scope."
-            )
-        elif "invalid_auth" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Invalid Slack token. Please check your token configuration."
-            )
-        elif "missing_scope" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Missing required Slack scope. Please add the necessary scopes to your bot token."
-            )
-        elif "account_inactive" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Slack account is inactive. Please check your workspace status."
-            )
-        elif "token_revoked" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Slack token has been revoked. Please generate a new token."
-            )
-        elif "channel_not_found" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Channel not found. The channel may not exist, be private, or the bot may not have access to it."
-            )
-        elif "not_in_channel" in error_msg:
-            return SlackResponse(
-                success=False,
-                error="Bot is not a member of this channel. Please invite the bot to the channel first."
-            )
+        # Optimize: combine the most common error substrings in a dict for quick lookup
+        error_map = {
+            "not_allowed_token_type": (
+                "Slack token type not allowed for this operation. Please ensure you're using a bot token (xoxb-) with the required scopes. For search operations, you need the 'search:read' scope."
+            ),
+            "invalid_auth": "Invalid Slack token. Please check your token configuration.",
+            "missing_scope": "Missing required Slack scope. Please add the necessary scopes to your bot token.",
+            "account_inactive": "Slack account is inactive. Please check your workspace status.",
+            "token_revoked": "Slack token has been revoked. Please generate a new token.",
+            "channel_not_found": "Channel not found. The channel may not exist, be private, or the bot may not have access to it.",
+            "not_in_channel": "Bot is not a member of this channel. Please invite the bot to the channel first."
+        }
+        for key, description in error_map.items():
+            if key in error_msg:
+                return SlackResponse(success=False, error=description)
 
         return SlackResponse(success=False, error=error_msg)
 
@@ -1389,6 +1380,7 @@ class SlackDataSource:
         except Exception as e:
             return await self._handle_slack_error(e)
 
+    @codeflash_performance_async
     async def admin_invite_requests_denied_list(self,
         *,
         team_id: Optional[str] = None,
@@ -1431,7 +1423,9 @@ class SlackDataSource:
             )
 
         try:
-            response = getattr(self.client, 'admin_inviteRequests_denied_list')(**kwargs_api)
+            method = getattr(self.client, 'admin_inviteRequests_denied_list')
+            # Run synchronous Slack SDK call off the event loop to avoid blocking
+            response = await asyncio.to_thread(method, **kwargs_api)
             return await self._handle_slack_response(response)
         except Exception as e:
             return await self._handle_slack_error(e)
@@ -1732,21 +1726,23 @@ class SlackDataSource:
             Auto-generated from Slack's OpenAPI. Calls `SlackClient.admin_teams_settings_info`.
             No `api_call` fallback is used; if the alias is missing, a NotImplementedError is raised.
         """
-        kwargs_api: Dict[str, Any] = {}
-
+        # Only allocate and update if actually needed -- combine to avoid unnecessary dict copying
         if team_id is not None:
-            kwargs_api['team_id'] = team_id
+            kwargs_api: Dict[str, Any] = {'team_id': team_id}
+        else:
+            kwargs_api: Dict[str, Any] = {}
         if kwargs:
             kwargs_api.update(kwargs)
 
-        if not hasattr(self.client, 'admin_teams_settings_info') or not callable(getattr(self.client, 'admin_teams_settings_info')):
+        # Inline attribute/callable check, with direct getattr to avoid double getattr cost
+        meth = getattr(self.client, 'admin_teams_settings_info', None)
+        if not callable(meth):
             return SlackResponse(
                 success=False,
                 error="Slack client is missing required method alias: admin_teams_settings_info"
             )
-
         try:
-            response = getattr(self.client, 'admin_teams_settings_info')(**kwargs_api)
+            response = meth(**kwargs_api)
             return await self._handle_slack_response(response)
         except Exception as e:
             return await self._handle_slack_error(e)
