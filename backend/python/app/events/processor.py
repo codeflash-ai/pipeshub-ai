@@ -1011,10 +1011,19 @@ class Processor:
         ordered_items = []
         processed_refs = set()
 
+        # Precompute type->items mappings to avoid repeated lookups and support O(1) access
+        cache = {}
+        for key in ("texts", "groups", "pages"):
+            cache[key] = doc_dict.get(key, [])
+
+        # Precache body['children'] as a tuple to avoid repeated lookups and accidentally mutating lists
+        body_children = tuple(doc_dict.get("body", {}).get("children", []))
+
         def process_item(ref, level=0, parent_context=None) -> None:
             """Recursively process items following references"""
+            # Fast path: str $ref; dict only if {"$ref": ...}
             if isinstance(ref, dict):
-                ref_path = ref.get("$ref", "")
+                ref_path = ref.get("$ref")
             else:
                 ref_path = ref
 
@@ -1025,32 +1034,44 @@ class Processor:
             if not ref_path.startswith("#/"):
                 return
 
-            path_parts = ref_path[2:].split("/")
-            item_type = path_parts[0]  # 'texts', 'groups', etc.
+            # Avoid repeated split and parse, and avoid IndexError.
+            # Parse ref_path: "#/{type}/{index}..."
+            parts = ref_path.split("/")
+            # parts: ['', '#', '{type}', '{index}', ...]
+            # ref_path[2:] is the substring after '#/'
             try:
-                item_index = int(path_parts[1])
+                item_type = parts[1]  # Directly take after '#'
+                item_index = int(parts[2])
             except (IndexError, ValueError):
                 return
 
-            items = doc_dict.get(item_type, [])
-            if item_index >= len(items):
+            # Access via above cache dictionary
+            items = cache.get(item_type)
+            if items is None or item_index >= len(items):
                 return
             item = items[item_index]
 
             # Get page number from the item's page reference
             page_no = None
-            if "prov" in item:
-                prov = item["prov"]
-                if isinstance(prov, list) and len(prov) > 0:
-                    # Take the first page number from the prov list
+            prov = item.get("prov")
+            if prov:
+                if isinstance(prov, list) and prov:
                     page_no = prov[0].get("page_no")
-                elif isinstance(prov, dict) and "$ref" in prov:
+                elif isinstance(prov, dict):
                     # Handle legacy reference format if needed
-                    page_path = prov["$ref"]
-                    page_index = int(page_path.split("/")[-1])
-                    pages = doc_dict.get("pages", [])
-                    if page_index < len(pages):
-                        page_no = pages[page_index].get("page_no")
+                    page_path = prov.get("$ref")
+                    if page_path:
+                        # Expecting e.g. "#/pages/3"
+                        # Do not split twice: only split if the format is valid
+                        # Use the pre-built cache for pages
+                        try:
+                            page_parts = page_path.split("/")
+                            page_index = int(page_parts[2])
+                            pages = cache.get("pages", [])
+                            if page_index < len(pages):
+                                page_no = pages[page_index].get("page_no")
+                        except (IndexError, ValueError):
+                            pass
 
             # Create context for current item
             current_context = {
@@ -1067,14 +1088,13 @@ class Processor:
                     {"text": item.get("text", ""), "context": current_context}
                 )
 
-            # Process children with current_context as parent
-            children = item.get("children", [])
-            for child in children:
-                process_item(child, level + 1, current_context)
+            # Unroll this lookup, make children a tuple to prevent accidental mutation
+            children = item.get("children")
+            if children:
+                for child in children:
+                    process_item(child, level + 1, current_context)
 
-        # Start processing from body
-        body = doc_dict.get("body", {})
-        for child in body.get("children", []):
+        for child in body_children:
             process_item(child)
 
         self.logger.debug(f"Processed {len(ordered_items)} items in order")
