@@ -1089,15 +1089,12 @@ class Processor:
                 "Record not found in database",
                 doc_id=record_id,
             )
+        # Construct doc directly, updating keys in one go for efficiency
         doc = dict(record)
-        doc.update(
-            {
-                "indexingStatus": "COMPLETED",
-                "isDirty": False,
-                "lastIndexTimestamp": get_epoch_timestamp_in_ms(),
-                "virtualRecordId": virtual_record_id,
-            }
-        )
+        doc["indexingStatus"] = "COMPLETED"
+        doc["isDirty"] = False
+        doc["lastIndexTimestamp"] = get_epoch_timestamp_in_ms()
+        doc["virtualRecordId"] = virtual_record_id
 
         docs = [doc]
 
