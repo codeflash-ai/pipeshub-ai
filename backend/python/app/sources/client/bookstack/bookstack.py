@@ -10,6 +10,7 @@ from app.sources.client.iclient import IClient
 
 class BookStackResponse(BaseModel):
     """Standardized BookStack API response wrapper"""
+
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -38,15 +39,14 @@ class BookStackRESTClientViaToken(HTTPClient):
         token = f"{token_id}:{token_secret}"
         # Initialize with the combined token and "Token" as the auth type
         super().__init__(token, "Token")
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.token_id = token_id
         self.token_secret = token_secret
 
         # Add BookStack-specific headers
-        self.headers.update({
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        })
+        self.headers.update(
+            {"Content-Type": "application/json", "Accept": "application/json"}
+        )
 
     def get_base_url(self) -> str:
         """Get the base URL"""
@@ -61,6 +61,7 @@ class BookStackTokenConfig(BaseModel):
         token_secret: The token secret from BookStack
         ssl: Whether to use SSL (default: True)
     """
+
     base_url: str
     token_id: str
     token_secret: str
@@ -68,11 +69,13 @@ class BookStackTokenConfig(BaseModel):
 
     def create_client(self) -> BookStackRESTClientViaToken:
         """Create a BookStack client"""
-        return BookStackRESTClientViaToken(self.base_url, self.token_id, self.token_secret)
+        return BookStackRESTClientViaToken(
+            self.base_url, self.token_id, self.token_secret
+        )
 
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary"""
-        return self.model_dump()
+        return self.__dict__.copy()
 
 
 class BookStackClient(IClient):
