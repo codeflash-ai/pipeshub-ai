@@ -20,20 +20,23 @@ from app.models.entities import AppUser, AppUserGroup, FileRecord
 from app.models.permission import Permission, PermissionType
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
+_ROLE_TO_PERMISSION_TYPE: dict[str, PermissionType] = {
+    "owner": PermissionType.OWNER,
+    "fullcontrol": PermissionType.OWNER,
+    "write": PermissionType.WRITE,
+    "editor": PermissionType.WRITE,
+    "contributor": PermissionType.WRITE,
+    "writeaccess": PermissionType.WRITE,
+    "read": PermissionType.READ,
+    "reader": PermissionType.READ,
+    "readaccess": PermissionType.READ,
+}
+
 
 # Map Microsoft Graph roles to permission type
 def map_msgraph_role_to_permission_type(role: str) -> PermissionType:
     """Map Microsoft Graph permission roles to application permission types"""
-    role_lower = role.lower()
-    if role_lower in ["owner", "fullcontrol"]:
-        return PermissionType.OWNER
-    elif role_lower in ["write", "editor", "contributor", "writeaccess"]:
-        return PermissionType.WRITE
-    elif role_lower in ["read", "reader", "readaccess"]:
-        return PermissionType.READ
-    else:
-        # Default to read for unknown roles
-        return PermissionType.READ
+    return _ROLE_TO_PERMISSION_TYPE.get(role.lower(), PermissionType.READ)
 
 
 
