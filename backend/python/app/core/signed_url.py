@@ -90,7 +90,9 @@ class SignedUrlHandler:
             endpoints = await self.config_service.get_config(
                 config_node_constants.ENDPOINTS.value
             )
-            connector_endpoint = endpoints.get("connectors").get("endpoint", DefaultEndpoints.CONNECTOR_ENDPOINT.value)
+            connector_endpoint = endpoints.get("connectors").get(
+                "endpoint", DefaultEndpoints.CONNECTOR_ENDPOINT.value
+            )
 
             self.logger.info(f"user_id: {user_id}")
 
@@ -137,13 +139,15 @@ class SignedUrlHandler:
     ) -> TokenPayload:
         """Validate the JWT token and optional required claims"""
         try:
-            self.logger.debug(f"Validating token: {token}")
+            if self.logger.isEnabledFor(10):
+                self.logger.debug(f"Validating token: {token}")
             payload = jwt.decode(
                 token,
                 self.signed_url_config.private_key,
                 algorithms=[self.signed_url_config.algorithm],
             )
-            self.logger.debug(f"Payload: {payload}")
+            if self.logger.isEnabledFor(10):
+                self.logger.debug(f"Payload: {payload}")
 
             # Convert timestamps back to datetime for validation
             if "exp" in payload:
@@ -152,7 +156,8 @@ class SignedUrlHandler:
                 payload["iat"] = datetime.fromtimestamp(payload["iat"])
 
             token_data = TokenPayload(**payload)
-            self.logger.debug(f"Token data: {token_data}")
+            if self.logger.isEnabledFor(10):
+                self.logger.debug(f"Token data: {token_data}")
 
             if required_claims:
                 for key, value in required_claims.items():
