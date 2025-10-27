@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from logging import Logger
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 from aiolimiter import AsyncLimiter
 from kiota_abstractions.base_request_configuration import RequestConfiguration
@@ -81,11 +81,13 @@ class DeltaGetResponse(BaseDeltaFunctionResponse, Parsable):
         The deserialization information for the current model
         Returns: Dict[str, Callable[[ParseNode], None]]
         """
-        fields: Dict[str, Callable[[Any], None]] = {
-            "value": lambda n: setattr(self, 'value', n.get_collection_of_object_values(DriveItem)),
-        }
-        super_fields = super().get_field_deserializers()
-        fields.update(super_fields)
+        # Use a local variable to reference self.value for improved attribute access speed in the lambda
+        value_setter = self.__setattr__
+
+        # Pull the super's fields first, then assign 'value' key directly, reducing the number of dict operations
+        fields = super().get_field_deserializers()
+        # Directly assign instead of dict.update to avoid the cost of copying and merging
+        fields["value"] = lambda n: value_setter('value', n.get_collection_of_object_values(DriveItem))
         return fields
 
     def serialize(self, writer: SerializationWriter) -> None:
