@@ -356,13 +356,17 @@ class ExcelParser:
             # Prepare context for LLM with all tables
             tables_context = []
             for idx, table in enumerate(tables, 1):
-                table_data = [[cell["value"] for cell in row] for row in table["data"][:10]]
+                table_data = [
+                    [cell["value"] for cell in row] for row in table["data"][:10]
+                ]
                 tables_context.append(f"Table {idx}:\n{table_data}")
 
             # Process each table with LLM
             processed_tables = []
             for idx, table in enumerate(tables, 1):
-                table_data = [[cell["value"] for cell in row] for row in table["data"][:10]]
+                table_data = [
+                    [cell["value"] for cell in row] for row in table["data"][:10]
+                ]
 
                 # Use prompt from prompt_template.py
                 formatted_prompt = prompt.format(
@@ -384,8 +388,8 @@ class ExcelParser:
                     {"role": "user", "content": formatted_prompt},
                 ]
                 response = await self._call_llm(messages)
-                if '</think>' in response.content:
-                    response.content = response.content.split('</think>')[-1]
+                if "</think>" in response.content:
+                    response.content = response.content.split("</think>")[-1]
 
                 try:
                     # Parse LLM response to get headers
@@ -446,8 +450,8 @@ class ExcelParser:
                 headers=table["headers"], sample_data=json.dumps(sample_data, indent=2)
             )
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             return response.content
 
         except Exception:
@@ -458,35 +462,37 @@ class ExcelParser:
     ) -> List[str]:
         """Convert multiple rows into natural language text using context from summaries in a single prompt"""
         try:
-            # Prepare rows data
-            rows_data = [
-                {
-                    cell["header"]: (
-                        cell["value"].isoformat()
-                        if isinstance(cell["value"], datetime)
-                        else cell["value"]
-                    )
-                    for cell in row
-                }
-                for row in rows
-            ]
+            # Prepare rows data efficiently and minimize function call overhead
+            rows_data = []
+            append = rows_data.append
+            for row in rows:
+                row_dict = {}
+                for cell in row:
+                    value = cell["value"]
+                    if isinstance(value, datetime):
+                        value = value.isoformat()
+                    row_dict[cell["header"]] = value
+                append(row_dict)
 
-            # Get natural language text from LLM with retry
+            # Stringify `rows_data` without indents (saves CPU/memory if LLM does not care)
+            rows_data_json = json.dumps(rows_data)  # Removed indent=2 for speed/memory
+
+            # Prepare messages once
             messages = self.row_text_prompt.format_messages(
-                table_summary=table_summary, rows_data=json.dumps(rows_data, indent=2)
+                table_summary=table_summary, rows_data=rows_data_json
             )
 
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            content = response.content
+            if "</think>" in content:
+                # Use partition to avoid split-all if possible (more efficient)
+                _, _, content = content.partition("</think>")
+
             # Try to extract JSON array from response
             try:
-                # First try direct JSON parsing
-                return json.loads(response.content)
+                return json.loads(content)
             except json.JSONDecodeError:
                 # If that fails, try to find and parse a JSON array in the response
-                content = response.content
-                # Look for array between [ and ]
                 start = content.find("[")
                 end = content.rfind("]")
                 if start != -1 and end != -1:
@@ -627,7 +633,9 @@ class ExcelParser:
                     source_group_id=None,
                     table_metadata=TableMetadata(
                         num_of_rows=len(rows),
-                        num_of_cols=len(headers) if headers else (len(rows[0]["raw_data"]) if rows else 0),
+                        num_of_cols=len(headers)
+                        if headers
+                        else (len(rows[0]["raw_data"]) if rows else 0),
                     ),
                     data={
                         "table_summary": table.get("summary", ""),
@@ -639,7 +647,9 @@ class ExcelParser:
                     format=DataFormat.JSON,
                 )
                 block_groups.append(table_group)
-                sheet_group_children.append(BlockContainerIndex(block_group_index=table_group_index))
+                sheet_group_children.append(
+                    BlockContainerIndex(block_group_index=table_group_index)
+                )
 
                 # Create TABLE_ROW blocks under this table
                 for i, row in enumerate(rows):
@@ -651,7 +661,9 @@ class ExcelParser:
                             type=BlockType.TABLE_ROW,
                             format=DataFormat.JSON,
                             data={
-                                "row_natural_language_text": row.get("natural_language_text", ""),
+                                "row_natural_language_text": row.get(
+                                    "natural_language_text", ""
+                                ),
                                 "row_number": int(row.get("row_num") or (i + 1)),
                                 "row": json.dumps(row_data, default=self._json_default),
                                 "sheet_number": sheet_idx,
@@ -660,7 +672,9 @@ class ExcelParser:
                             parent_index=table_group_index,
                         )
                     )
-                    table_group_children.append(BlockContainerIndex(block_index=block_index))
+                    table_group_children.append(
+                        BlockContainerIndex(block_index=block_index)
+                    )
 
                 # attach table children
                 block_groups[table_group_index].children = table_group_children
@@ -713,4 +727,3 @@ class ExcelParser:
             markdown_lines.append(data_row)
 
         return "\n".join(markdown_lines)
-
