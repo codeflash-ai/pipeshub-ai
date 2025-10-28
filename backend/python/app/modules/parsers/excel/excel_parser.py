@@ -172,32 +172,47 @@ class ExcelParser:
             tables = []
             visited_cells = set()  # Track already processed cells
 
+            # Pre-fetch cell values to avoid repeatedly calling sheet.cell
+            max_row = sheet.max_row
+            max_col = sheet.max_column
+            # Using 1-based indexing to match openpyxl's cell references
+            cell_matrix = [
+                [sheet.cell(row=row, column=col) for col in range(1, max_col + 1)]
+                for row in range(1, max_row + 1)
+            ]
+
             def get_table(start_row: int, start_col: int) -> Dict[str, Any]:
                 """Extract a table starting from (start_row, start_col)."""
-                # Find the last column of the table
-                max_col = start_col
-                for col in range(start_col, sheet.max_column + 1):
-                    has_data = False
-                    for r in range(start_row, sheet.max_row + 1):
-                        cell = sheet.cell(row=r, column=col)
+                start_row0 = start_row - 1
+                start_col0 = start_col - 1
+
+                # Find the last column of the table efficiently
+                max_table_col = start_col
+                for col in range(start_col, max_col + 1):
+                    # Check the starting row, and possibly a few rows below for significant nonempty cells
+                    found = False
+                    for r in range(start_row0, min(start_row0 + 3, max_row)):
+                        cell = cell_matrix[r][col - 1]
                         if cell.value is not None:
-                            has_data = True
-                            max_col = col
+                            found = True
                             break
-                    if not has_data:
+                    if found:
+                        max_table_col = col
+                    else:
                         break
 
-                # Find the last row of the table
-                max_row = start_row
-                for row in range(start_row, sheet.max_row + 1):
-                    has_data = False
-                    for col in range(start_col, max_col + 1):
-                        cell = sheet.cell(row=row, column=col)
+                # Find the last row of the table efficiently
+                max_table_row = start_row
+                for row in range(start_row, max_row + 1):
+                    found = False
+                    for c in range(start_col0, max_table_col):
+                        cell = cell_matrix[row - 1][c]
                         if cell.value is not None:
-                            has_data = True
-                            max_row = row
+                            found = True
                             break
-                    if not has_data:
+                    if found:
+                        max_table_row = row
+                    else:
                         break
 
                 # Now process the rectangular table region
@@ -206,8 +221,8 @@ class ExcelParser:
 
                 # Process header row
                 header_cells = []
-                for col in range(start_col, max_col + 1):
-                    cell = sheet.cell(row=start_row, column=col)
+                for col in range(start_col, max_table_col + 1):
+                    cell = cell_matrix[start_row0][col - 1]
                     header_value = self._process_cell(cell, None, start_row, col)
                     header_cells.append(header_value)
                     if cell.value is not None:
@@ -228,10 +243,10 @@ class ExcelParser:
                     }
 
                 # Process data rows within the determined boundaries
-                for row in range(start_row + 1, max_row + 1):
+                for row in range(start_row + 1, max_table_row + 1):
                     row_data = []
-                    for col in range(start_col, max_col + 1):
-                        cell = sheet.cell(row=row, column=col)
+                    for col in range(start_col, max_table_col + 1):
+                        cell = cell_matrix[row - 1][col - 1]
                         header = (
                             headers[col - start_col]
                             if col - start_col < len(headers)
@@ -248,16 +263,15 @@ class ExcelParser:
                     "data": table_data[1:] if table_data else [],
                     "start_row": start_row,
                     "start_col": start_col,
-                    "end_row": max_row,
-                    "end_col": max_col,
+                    "end_row": max_table_row,
+                    "end_col": max_table_col,
                 }
 
-            # Find all tables in the sheet
-            for row in range(1, sheet.max_row + 1):
-                for col in range(1, sheet.max_column + 1):
-                    cell = sheet.cell(row=row, column=col)
-
-                    # Possible table header detection (assumes headers are text-based)
+            for row in range(1, max_row + 1):
+                for col in range(1, max_col + 1):
+                    if (row, col) in visited_cells:
+                        continue
+                    cell = cell_matrix[row - 1][col - 1]
                     if (
                         cell.value
                         and isinstance(cell.value, str)
@@ -353,20 +367,29 @@ class ExcelParser:
             sheet = self.workbook[sheet_name]
             tables = self.find_tables(sheet)
 
-            # Prepare context for LLM with all tables
+            # Only assemble up to 10 rows for table context, avoiding generator expression overhead
             tables_context = []
             for idx, table in enumerate(tables, 1):
-                table_data = [[cell["value"] for cell in row] for row in table["data"][:10]]
-                tables_context.append(f"Table {idx}:\n{table_data}")
+                data = table["data"]
+                table_subset = (
+                    [[cell["value"] for cell in row] for row in data[:10]]
+                    if data
+                    else []
+                )
+                tables_context.append(f"Table {idx}:\n{table_subset}")
 
-            # Process each table with LLM
             processed_tables = []
             for idx, table in enumerate(tables, 1):
-                table_data = [[cell["value"] for cell in row] for row in table["data"][:10]]
+                data = table["data"]
+                table_subset = (
+                    [[cell["value"] for cell in row] for row in data[:10]]
+                    if data
+                    else []
+                )
 
                 # Use prompt from prompt_template.py
                 formatted_prompt = prompt.format(
-                    table_data=table_data,
+                    table_data=table_subset,
                     tables_context=tables_context,
                     start_row=table["start_row"],
                     start_col=table["start_col"],
@@ -384,8 +407,8 @@ class ExcelParser:
                     {"role": "user", "content": formatted_prompt},
                 ]
                 response = await self._call_llm(messages)
-                if '</think>' in response.content:
-                    response.content = response.content.split('</think>')[-1]
+                if hasattr(response, "content") and "</think>" in response.content:
+                    response.content = response.content.split("</think>")[-1]
 
                 try:
                     # Parse LLM response to get headers
@@ -446,8 +469,8 @@ class ExcelParser:
                 headers=table["headers"], sample_data=json.dumps(sample_data, indent=2)
             )
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             return response.content
 
         except Exception:
@@ -477,8 +500,8 @@ class ExcelParser:
             )
 
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             # Try to extract JSON array from response
             try:
                 # First try direct JSON parsing
@@ -627,7 +650,9 @@ class ExcelParser:
                     source_group_id=None,
                     table_metadata=TableMetadata(
                         num_of_rows=len(rows),
-                        num_of_cols=len(headers) if headers else (len(rows[0]["raw_data"]) if rows else 0),
+                        num_of_cols=len(headers)
+                        if headers
+                        else (len(rows[0]["raw_data"]) if rows else 0),
                     ),
                     data={
                         "table_summary": table.get("summary", ""),
@@ -639,7 +664,9 @@ class ExcelParser:
                     format=DataFormat.JSON,
                 )
                 block_groups.append(table_group)
-                sheet_group_children.append(BlockContainerIndex(block_group_index=table_group_index))
+                sheet_group_children.append(
+                    BlockContainerIndex(block_group_index=table_group_index)
+                )
 
                 # Create TABLE_ROW blocks under this table
                 for i, row in enumerate(rows):
@@ -651,7 +678,9 @@ class ExcelParser:
                             type=BlockType.TABLE_ROW,
                             format=DataFormat.JSON,
                             data={
-                                "row_natural_language_text": row.get("natural_language_text", ""),
+                                "row_natural_language_text": row.get(
+                                    "natural_language_text", ""
+                                ),
                                 "row_number": int(row.get("row_num") or (i + 1)),
                                 "row": json.dumps(row_data, default=self._json_default),
                                 "sheet_number": sheet_idx,
@@ -660,7 +689,9 @@ class ExcelParser:
                             parent_index=table_group_index,
                         )
                     )
-                    table_group_children.append(BlockContainerIndex(block_index=block_index))
+                    table_group_children.append(
+                        BlockContainerIndex(block_index=block_index)
+                    )
 
                 # attach table children
                 block_groups[table_group_index].children = table_group_children
@@ -713,4 +744,3 @@ class ExcelParser:
             markdown_lines.append(data_row)
 
         return "\n".join(markdown_lines)
-
