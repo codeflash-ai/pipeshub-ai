@@ -50,6 +50,8 @@ class BookStackDataSource:
             raise ValueError('HTTP client is not initialized')
         try:
             self.base_url = self.http.get_base_url().rstrip('/')
+            # Precompute role endpoint for efficiency
+            self._role_url_prefix = f"{self.base_url}/api/roles/"
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
 
@@ -2209,9 +2211,9 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/roles/{id}".format(id=id)
+        url = f"{self._role_url_prefix}{id}"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="GET",
