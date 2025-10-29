@@ -13,7 +13,7 @@ class HTTPClient(IClient):
         token: str,
         token_type: str = "Bearer",
         timeout: float = 30.0,
-        follow_redirects: bool = True
+        follow_redirects: bool = True,
     ) -> None:
         self.headers = {
             "Authorization": f"{token_type} {token}",
@@ -30,8 +30,7 @@ class HTTPClient(IClient):
         """Ensure client is created and available"""
         if self.client is None:
             self.client = httpx.AsyncClient(
-                timeout=self.timeout,
-                follow_redirects=self.follow_redirects
+                timeout=self.timeout, follow_redirects=self.follow_redirects
             )
         return self.client
 
@@ -43,7 +42,11 @@ class HTTPClient(IClient):
         Returns:
             A HTTPResponse object containing the response from the server
         """
-        url = f"{request.url.format(**request.path_params)}"
+        # Fast URL construction using f-string if path_params present
+        if request.path_params:
+            url = request.url.format(**request.path_params)
+        else:
+            url = request.url
         client = await self._ensure_client()
 
         # Merge client headers with request headers (request headers take precedence)
@@ -51,20 +54,18 @@ class HTTPClient(IClient):
         request_kwargs = {
             "params": request.query_params,
             "headers": merged_headers,
-            **kwargs
+            **kwargs,
         }
 
-        if isinstance(request.body, dict):
-            # Check if Content-Type indicates form data
-            content_type = request.headers.get("Content-Type", "").lower()
+        body = request.body
+        content_type = request.headers.get("Content-Type", "").lower()
+        if isinstance(body, dict):
             if "application/x-www-form-urlencoded" in content_type:
-                # Send as form data
-                request_kwargs["data"] = request.body
+                request_kwargs["data"] = body
             else:
-                # Send as JSON (default behavior)
-                request_kwargs["json"] = request.body
-        elif isinstance(request.body, bytes):
-            request_kwargs["content"] = request.body
+                request_kwargs["json"] = body
+        elif isinstance(body, bytes):
+            request_kwargs["content"] = body
 
         response = await client.request(request.method, url, **request_kwargs)
         return HTTPResponse(response)

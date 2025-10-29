@@ -2481,6 +2481,7 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
+        # Build body dict with conditional assignments (more efficient than repeated updates)
         body: Dict[str, Union[str, int, bool, List, Dict, None]] = {}
         if owner_id is not None:
             body["owner_id"] = owner_id
@@ -2489,9 +2490,10 @@ class BookStackDataSource:
         if fallback_permissions is not None:
             body["fallback_permissions"] = fallback_permissions
 
-        url = self.base_url + "/api/content-permissions/{content_type}/{content_id}".format(content_type=content_type, content_id=content_id)
+        # Faster URL formatting via f-string instead of str.format
+        url = f"{self.base_url}/api/content-permissions/{content_type}/{content_id}"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers.copy()
         headers['Content-Type'] = 'application/json'
 
         request = HTTPRequest(
