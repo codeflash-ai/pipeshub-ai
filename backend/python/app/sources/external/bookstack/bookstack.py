@@ -209,8 +209,7 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
-        params: Dict[str, Union[str, int]] = {}
-
+        # Optimization: Use early assignment and mutable update
         body: Dict[str, Union[str, int, bool, List, Dict, None]] = {}
         if name is not None:
             body["name"] = name
@@ -223,9 +222,13 @@ class BookStackDataSource:
         if file is not None:
             files["file"] = file
 
-        url = self.base_url + "/api/attachments/{id}".format(id=id)
+        params: Dict[str, Union[str, int]] = {}
 
-        headers = dict(self.http.headers)
+        # Optimization: f-string instead of concatenation
+        url = f"{self.base_url}/api/attachments/{id}"
+
+        # Optimization: Use headers directly, avoid extra dict copy if headers is a dict
+        headers = self.http.headers if isinstance(self.http.headers, dict) else dict(self.http.headers)
         # Note: multipart/form-data requests need special handling
         # The HTTPRequest should handle multipart encoding when files are present
 
