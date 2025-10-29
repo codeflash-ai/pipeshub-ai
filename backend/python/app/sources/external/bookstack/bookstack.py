@@ -2407,9 +2407,10 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/recycle-bin/{deletion_id}".format(deletion_id=deletion_id)
+        url = f"{self.base_url}/api/recycle-bin/{deletion_id}"
 
-        headers = dict(self.http.headers)
+        # No mutation of headers occurs, so direct reference is safe and avoids copying
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="DELETE",
