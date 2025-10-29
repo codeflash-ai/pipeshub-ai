@@ -44,14 +44,22 @@ class BookStackDataSource:
         Args:
             client: BookStackClient instance with authentication configured
         """
-        self._client = client
-        self.http = client.get_client()
-        if self.http is None:
+        # Cache attribute lookups for a small speed gain and direct assignment
+        http = client.get_client()
+        if http is None:
             raise ValueError('HTTP client is not initialized')
+        # Minimize rstrip and getattr calls
         try:
-            self.base_url = self.http.get_base_url().rstrip('/')
+            base_url = http.get_base_url()
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
+        self._client = client
+        self.http = http
+        # Avoid redundant rstrip if not needed
+        if base_url.endswith('/'):
+            self.base_url = base_url.rstrip('/')
+        else:
+            self.base_url = base_url
 
     def get_data_source(self) -> 'BookStackDataSource':
         """Return the data source instance."""
