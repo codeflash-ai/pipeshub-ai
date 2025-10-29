@@ -1317,23 +1317,19 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
-        params: Dict[str, Union[str, int]] = {}
-
-        url = self.base_url + "/api/pages/{id}/export/plaintext".format(id=id)
-
-        headers = dict(self.http.headers)
+        url = f'{self.base_url}/api/pages/{id}/export/plaintext'
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="GET",
             url=url,
             headers=headers,
-            query_params=params,
+            query_params=None,
             body=None
         )
 
         try:
             response = await self.http.execute(request)
-            # PDF exports return binary data, not JSON
             return BookStackResponse(success=True, data={"content": base64.b64encode(response.bytes()).decode('utf-8'), "content_type": response.content_type})
         except Exception as e:
             return BookStackResponse(success=False, error=str(e))
