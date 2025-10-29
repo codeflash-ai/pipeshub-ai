@@ -2263,9 +2263,11 @@ class BookStackDataSource:
         if permissions is not None:
             body["permissions"] = permissions
 
-        url = self.base_url + "/api/roles/{id}".format(id=id)
+        # Faster string formatting using f-string
+        url = f"{self.base_url}/api/roles/{id}"
 
-        headers = dict(self.http.headers)
+        # Use .copy() as headers is a dict
+        headers = self.http.headers.copy()
         headers['Content-Type'] = 'application/json'
 
         request = HTTPRequest(
