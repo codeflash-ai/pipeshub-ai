@@ -8,6 +8,7 @@ class HTTPResponse:
     Args:
         response: The httpx response object
     """
+
     def __init__(self, response: httpx.Response) -> None:
         self.response = response
 
