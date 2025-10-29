@@ -554,11 +554,12 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
+        # Avoid dict() copy if headers not mutated below
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/books/{id}/export/pdf".format(id=id)
+        url = f"{self.base_url}/api/books/{id}/export/pdf"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="GET",
@@ -569,9 +570,16 @@ class BookStackDataSource:
         )
 
         try:
-            response = await self.http.execute(request)
-            # PDF exports return binary data, not JSON
-            return BookStackResponse(success=True, data={"content": base64.b64encode(response.bytes()).decode('utf-8'), "content_type": response.content_type})
+            execute = self.http.execute  # avoid repeated attribute lookup
+            response = await execute(request)
+            content = response.bytes()
+            return BookStackResponse(
+                success=True,
+                data={
+                    "content": base64.b64encode(content).decode('utf-8'),
+                    "content_type": response.content_type
+                }
+            )
         except Exception as e:
             return BookStackResponse(success=False, error=str(e))
 
