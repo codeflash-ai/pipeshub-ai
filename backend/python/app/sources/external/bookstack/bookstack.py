@@ -2441,9 +2441,9 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/content-permissions/{content_type}/{content_id}".format(content_type=content_type, content_id=content_id)
+        url = f"{self.base_url}/api/content-permissions/{content_type}/{content_id}"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="GET",
