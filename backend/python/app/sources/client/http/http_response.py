@@ -8,6 +8,7 @@ class HTTPResponse:
     Args:
         response: The httpx response object
     """
+
     def __init__(self, response: httpx.Response) -> None:
         self.response = response
 
@@ -56,3 +57,8 @@ class HTTPResponse:
     def raise_for_status(self) -> None:
         """Raise an exception if the response status indicates an error"""
         self.response.raise_for_status()
+
+    @property
+    def content_type(self) -> str:
+        """Get content type header"""
+        return self.response.headers.get("content-type", "")

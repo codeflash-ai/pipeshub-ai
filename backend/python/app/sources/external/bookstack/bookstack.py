@@ -986,9 +986,11 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/chapters/{id}/export/markdown".format(id=id)
+        # Use direct string concatenation for URL (format only once)
+        url = f"{self.base_url}/api/chapters/{id}/export/markdown"
 
-        headers = dict(self.http.headers)
+        # Use the HTTP client headers directly (already MappingProxyType; not mutated)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="GET",
@@ -1001,7 +1003,13 @@ class BookStackDataSource:
         try:
             response = await self.http.execute(request)
             # Markdown exports return text content, not JSON
-            return BookStackResponse(success=True, data={"content": response.text(), "content_type": response.content_type})
+            return BookStackResponse(
+                success=True, 
+                data={
+                    "content": response.text,  # Use property
+                    "content_type": response.content_type  # Use property
+                }
+            )
         except Exception as e:
             return BookStackResponse(success=False, error=str(e))
 
