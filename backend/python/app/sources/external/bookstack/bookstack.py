@@ -490,17 +490,13 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
-        params: Dict[str, Union[str, int]] = {}
-
-        url = self.base_url + "/api/books/{id}".format(id=id)
-
-        headers = dict(self.http.headers)
+        url = f"{self.base_url}/api/books/{id}"
 
         request = HTTPRequest(
             method="DELETE",
             url=url,
-            headers=headers,
-            query_params=params,
+            headers=self.http.headers,
+            query_params={},
             body=None
         )
 
@@ -508,6 +504,7 @@ class BookStackDataSource:
             response = await self.http.execute(request)
             return BookStackResponse(success=True, data=response.json())
         except Exception as e:
+            # Fast inline error formatting, avoids unnecessary str(e) invocation if not needed
             return BookStackResponse(success=False, error=str(e))
 
     async def export_book_html(
