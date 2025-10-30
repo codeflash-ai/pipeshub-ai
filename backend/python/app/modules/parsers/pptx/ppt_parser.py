@@ -23,13 +23,24 @@ class PPTParser:
             FileNotFoundError: If the converted file is not found
             Exception: For other conversion errors
         """
-        with tempfile.TemporaryDirectory() as temp_dir:
+        if not hasattr(self.__class__, "_libreoffice_found"):
             try:
-                # Check if LibreOffice is installed
                 subprocess.run(
                     ["which", "libreoffice"], check=True, capture_output=True
                 )
+                self.__class__._libreoffice_found = True
+            except subprocess.CalledProcessError as e:
+                error_msg = "LibreOffice is not installed. Please install it using: sudo apt-get install libreoffice"
+                if e.stderr:
+                    error_msg += (
+                        f"\nError details: {e.stderr.decode('utf-8', errors='replace')}"
+                    )
+                raise subprocess.CalledProcessError(
+                    e.returncode, e.cmd, output=e.output, stderr=error_msg.encode()
+                )
 
+        with tempfile.TemporaryDirectory() as temp_dir:
+            try:
                 # Create input file path
                 temp_ppt = os.path.join(temp_dir, "input.ppt")
 
@@ -63,9 +74,7 @@ class PPTParser:
 
                 # Read the converted file into bytes
                 with open(pptx_file, "rb") as f:
-                    pptx_content = f.read()
-
-                return pptx_content
+                    return f.read()
 
             except subprocess.CalledProcessError as e:
                 error_msg = "LibreOffice is not installed. Please install it using: sudo apt-get install libreoffice"
