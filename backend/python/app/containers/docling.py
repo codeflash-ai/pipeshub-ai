@@ -19,7 +19,9 @@ class DoclingAppContainer(BaseAppContainer):
 
     # Override config_service to use the service-specific logger
     key_value_store = providers.Singleton(Etcd3EncryptedKeyValueStore, logger=logger)
-    config_service = providers.Singleton(ConfigurationService, logger=logger, key_value_store=key_value_store)
+    config_service = providers.Singleton(
+        ConfigurationService, logger=logger, key_value_store=key_value_store
+    )
 
     # Docling-specific wiring configuration
     wiring_config = containers.WiringConfiguration(
@@ -35,12 +37,13 @@ class DoclingAppContainer(BaseAppContainer):
 async def initialize_container(container: DoclingAppContainer) -> bool:
     """Initialize container resources for Docling service"""
     logger = container.logger()
-    logger.info("🚀 Initializing Docling service resources")
 
     try:
         # For Docling service, we mainly need configuration and logging
         # No database connections required for the Docling service itself
-        logger.info("✅ Docling service configuration initialized")
+        logger.info(
+            "🚀 Initializing Docling service resources\n✅ Docling service configuration initialized"
+        )
 
         # Skip system health checks for Docling service as it doesn't need databases
         return True
