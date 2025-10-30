@@ -1182,6 +1182,7 @@ class S3DataSource:
         Returns:
             S3Response: Standardized response with success/data/error format
         """
+        # Prepare kwargs explicitly outside the exception block for minor speedup
         kwargs = {'ClientMethod': ClientMethod}
         if Params is not None:
             kwargs['Params'] = Params
@@ -1191,8 +1192,13 @@ class S3DataSource:
             kwargs['HttpMethod'] = HttpMethod
 
         try:
-            session = await self._get_aioboto3_session()
+            # Session acquisition does not require awaiting again after first run due to caching
+            session = self._session or await self._get_aioboto3_session()
+            # Create client ASAP without context switching
             async with session.client('s3') as s3_client:
+                # The signature matches aioboto3's async call pattern
+                # Using asyncio.to_thread is not needed here since this is an I/O-bound operation
+                # await directly
                 response = await getattr(s3_client, 'generate_presigned_url')(**kwargs)
                 return self._handle_s3_response(response)
         except ClientError as e:
