@@ -26,19 +26,11 @@ class S3DataSource:
         self._s3_client = s3_client
         self._session = None
 
-    async def _get_aioboto3_session(self) -> aioboto3.Session:  # type: ignore[valid-type]
+    async def _get_aioboto3_session(self) -> aioboto3.Session:
         """Get or create the aioboto3 session."""
+        # The session construction is fast and thread-safe for aioboto3, so no reason for additional locking
         if self._session is None:
-            # Option 1: Get the existing session directly from S3Client (recommended)
             self._session = self._s3_client.get_session()
-
-            # Option 2: Create new session from credentials (if needed)
-            # credentials = self._s3_client.get_credentials()
-            # self._session = aioboto3.Session(
-            #     aws_access_key_id=credentials['aws_access_key_id'],
-            #     aws_secret_access_key=credentials['aws_secret_access_key'],
-            #     region_name=credentials['region_name']
-            # )
         return self._session
 
     def _handle_s3_response(self, response: object) -> S3Response:
@@ -1078,8 +1070,16 @@ class S3DataSource:
 
         try:
             session = await self._get_aioboto3_session()
+            # Use an async context for the S3 client.
             async with session.client('s3') as s3_client:
-                response = await getattr(s3_client, 'download_file')(**kwargs)
+                # Download file should NOT block the event loop, but does synchronous local file IO.
+                # Use asyncio.to_thread for the download_file call to keep event loop fast.
+                # boto3's download_file is blocking in terms of local file IO. aioboto3 keeps API async, but the file write is blocking.
+                # To optimize, run in a thread.
+                response = await asyncio.to_thread(getattr(s3_client, 'download_file'), **kwargs)
+                # download_file returns None on success. If so, wrap as success in S3Response.
+                if response is None:
+                    return S3Response(success=True, data={"Bucket": Bucket, "Key": Key, "Filename": Filename})
                 return self._handle_s3_response(response)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
