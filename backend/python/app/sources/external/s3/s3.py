@@ -26,19 +26,15 @@ class S3DataSource:
         self._s3_client = s3_client
         self._session = None
 
-    async def _get_aioboto3_session(self) -> aioboto3.Session:  # type: ignore[valid-type]
+    async def _get_aioboto3_session(self) -> aioboto3.Session:
         """Get or create the aioboto3 session."""
+        # The S3Client.get_session() is not async, so to avoid blocking the event loop,
+        # run it in a thread (if needed, e.g. complex initialization). The logic remains the same.
         if self._session is None:
             # Option 1: Get the existing session directly from S3Client (recommended)
-            self._session = self._s3_client.get_session()
-
-            # Option 2: Create new session from credentials (if needed)
-            # credentials = self._s3_client.get_credentials()
-            # self._session = aioboto3.Session(
-            #     aws_access_key_id=credentials['aws_access_key_id'],
-            #     aws_secret_access_key=credentials['aws_secret_access_key'],
-            #     region_name=credentials['region_name']
-            # )
+            # S3Client.get_session() appears to be a simple getter, but if future logic is added,
+            # asyncio.to_thread ensures async compatibility
+            self._session = await asyncio.to_thread(self._s3_client.get_session)
         return self._session
 
     def _handle_s3_response(self, response: object) -> S3Response:
@@ -1338,8 +1334,10 @@ class S3DataSource:
 
         try:
             session = await self._get_aioboto3_session()
+            # Using aioboto3's async client pool efficiently: context manager is async and must be awaited
             async with session.client('s3') as s3_client:
-                response = await getattr(s3_client, 'get_bucket_encryption')(**kwargs)
+                # Direct async call; nothing to parallelize here, but could batch gets for multiple buckets via gather
+                response = await s3_client.get_bucket_encryption(**kwargs)
                 return self._handle_s3_response(response)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
