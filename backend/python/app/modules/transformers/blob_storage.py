@@ -303,64 +303,68 @@ class BlobStorage(Transformer):
             raise e
 
     async def get_record_from_storage(self, virtual_record_id: str, org_id: str) -> str:
-            """
+        """
             Retrieve a record's content from blob storage using the virtual_record_id.
             Returns:
                 str: The content of the record if found, else an empty string.
             """
-            self.logger.info("🔍 Retrieving record from storage for virtual_record_id: %s", virtual_record_id)
-            try:
-                # Generate JWT token for authorization
-                payload = {
-                    "orgId": org_id,
-                    "scopes": [TokenScopes.STORAGE_TOKEN.value],
-                }
-                secret_keys = await self.config_service.get_config(
-                    config_node_constants.SECRET_KEYS.value
-                )
-                scoped_jwt_secret = secret_keys.get("scopedJwtSecret")
-                if not scoped_jwt_secret:
-                    raise ValueError("Missing scoped JWT secret")
+        self.logger.info("🔍 Retrieving record from storage for virtual_record_id: %s", virtual_record_id)
+        try:
+            # Generate JWT token for authorization
+            payload = {
+                "orgId": org_id,
+                "scopes": [TokenScopes.STORAGE_TOKEN.value],
+            }
 
-                jwt_token = jwt.encode(payload, scoped_jwt_secret, algorithm="HS256")
-                headers = {
-                    "Authorization": f"Bearer {jwt_token}"
-                }
+            # Fetch secret keys only once
+            secret_keys = await self.config_service.get_config(
+                config_node_constants.SECRET_KEYS.value
+            )
+            scoped_jwt_secret = secret_keys.get("scopedJwtSecret") if secret_keys else None
+            if not scoped_jwt_secret:
+                raise ValueError("Missing scoped JWT secret")
 
-                # Get endpoint configuration
-                endpoints = await self.config_service.get_config(
-                    config_node_constants.ENDPOINTS.value
-                )
-                nodejs_endpoint = endpoints.get("cm", {}).get("endpoint", DefaultEndpoints.NODEJS_ENDPOINT.value)
-                if not nodejs_endpoint:
-                    raise ValueError("Missing CM endpoint configuration")
+            jwt_token = jwt.encode(payload, scoped_jwt_secret, algorithm="HS256")
+            headers = {
+                "Authorization": f"Bearer {jwt_token}"
+            }
 
-                document_id = await self.get_document_id_by_virtual_record_id(virtual_record_id)
-                if not document_id:
-                    self.logger.info("No document ID found for virtual record ID: %s", virtual_record_id)
-                    return None
+            # Endpoints fetch and lookup only once
+            endpoints = await self.config_service.get_config(
+                config_node_constants.ENDPOINTS.value
+            )
+            nodejs_endpoint = (
+                endpoints.get("cm", {}).get("endpoint") if endpoints and "cm" in endpoints else DefaultEndpoints.NODEJS_ENDPOINT.value
+            )
+            if not nodejs_endpoint:
+                raise ValueError("Missing CM endpoint configuration")
 
-                # Build the download URL
-                download_url = f"{nodejs_endpoint}{Routes.STORAGE_DOWNLOAD.value.format(documentId=document_id)}"
-                async with aiohttp.ClientSession() as session:
-                    async with session.get(download_url, headers=headers) as resp:
-                        if resp.status == HttpStatusCode.SUCCESS.value:
-                            data = await resp.json()
-                            if(data.get("signedUrl")):
-                                signed_url = data.get("signedUrl")
-                                # Reuse the same session for signed URL fetch
-                                async with session.get(signed_url, headers=headers) as resp:
-                                        if resp.status == HttpStatusCode.OK.value:
-                                            data = await resp.json()
-                            self.logger.info("✅ Successfully retrieved record for virtual_record_id from blob storage: %s", virtual_record_id)
-                            return data.get("record")
-                        else:
-                            self.logger.error("❌ Failed to retrieve record: status %s, virtual_record_id: %s", resp.status, virtual_record_id)
-                            raise Exception("Failed to retrieve record from storage")
-            except Exception as e:
-                self.logger.error("❌ Error retrieving record from storage: %s", str(e))
-                self.logger.exception("Detailed error trace:")
-                raise e
+            document_id = await self.get_document_id_by_virtual_record_id(virtual_record_id)
+            if not document_id:
+                self.logger.info("No document ID found for virtual record ID: %s", virtual_record_id)
+                return None
+
+            # Build the download URL
+            download_url = f"{nodejs_endpoint}{Routes.STORAGE_DOWNLOAD.value.format(documentId=document_id)}"
+            async with aiohttp.ClientSession() as session:
+                async with session.get(download_url, headers=headers) as resp:
+                    if resp.status == HttpStatusCode.SUCCESS.value:
+                        data = await resp.json()
+                        signed_url = data.get("signedUrl")
+                        # Only fetch if signed_url is present
+                        if signed_url:
+                            async with session.get(signed_url, headers=headers) as resp2:
+                                if resp2.status == HttpStatusCode.OK.value:
+                                    data = await resp2.json()
+                        self.logger.info("✅ Successfully retrieved record for virtual_record_id from blob storage: %s", virtual_record_id)
+                        return data.get("record")
+                    else:
+                        self.logger.error("❌ Failed to retrieve record: status %s, virtual_record_id: %s", resp.status, virtual_record_id)
+                        raise Exception("Failed to retrieve record from storage")
+        except Exception as e:
+            self.logger.error("❌ Error retrieving record from storage: %s", str(e))
+            self.logger.exception("Detailed error trace:")
+            raise e
 
     async def store_virtual_record_mapping(self, virtual_record_id: str, document_id: str) -> bool:
         """
