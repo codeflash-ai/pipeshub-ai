@@ -23,7 +23,7 @@ class ServiceNowResponse(BaseModel):
 
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
-        return self.model_dump()
+        return dict(self.__dict__)
 
     def to_json(self) -> str:
         """Convert to JSON string"""
