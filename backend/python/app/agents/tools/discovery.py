@@ -60,9 +60,8 @@ class ModuleImporter:
             "imported": self.imported_modules,
             "failed": self.failed_imports,
             "success_rate": (
-                len(self.imported_modules) / len(module_paths)
-                if module_paths else 0
-            )
+                len(self.imported_modules) / len(module_paths) if module_paths else 0
+            ),
         }
 
 
@@ -125,15 +124,12 @@ class NestedAppDiscovery(DiscoveryStrategy):
         if not app_dir.exists():
             return []
 
-        modules = []
-        for subdir in self.subdirs:
-            subdir_path = app_dir / subdir
-            if subdir_path.exists():
-                main_file = subdir_path / f"{subdir}.py"
-                if main_file.exists():
-                    modules.append(
-                        f"app.agents.actions.{self.app_name}.{subdir}.{subdir}"
-                    )
+        # Use list comprehension for faster and more memory-efficient collection.
+        modules = [
+            f"app.agents.actions.{self.app_name}.{subdir}.{subdir}"
+            for subdir in self.subdirs
+            if (app_dir / subdir / f"{subdir}.py").exists()
+        ]
 
         return modules
 
@@ -204,18 +200,15 @@ class ToolsDiscovery:
         self.logger.info(f"Modules imported: {len(self.importer.imported_modules)}")
 
         if self.importer.failed_imports:
-            self.logger.warning(
-                f"Failed imports: {len(self.importer.failed_imports)}"
-            )
+            self.logger.warning(f"Failed imports: {len(self.importer.failed_imports)}")
             for failure in self.importer.failed_imports[:5]:  # Show first 5
                 self.logger.warning(f"  - {failure}")
 
     def _get_discovery_results(self) -> Dict[str, Any]:
         """Get discovery results"""
         registered_tools = _global_tools_registry.list_tools()
-        total_attempts = (
-            len(self.importer.imported_modules) +
-            len(self.importer.failed_imports)
+        total_attempts = len(self.importer.imported_modules) + len(
+            self.importer.failed_imports
         )
 
         return {
@@ -225,8 +218,9 @@ class ToolsDiscovery:
             "total_tools": len(registered_tools),
             "success_rate": (
                 len(self.importer.imported_modules) / total_attempts
-                if total_attempts > 0 else 0
-            )
+                if total_attempts > 0
+                else 0
+            ),
         }
 
 
