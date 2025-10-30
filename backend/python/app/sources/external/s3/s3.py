@@ -1309,10 +1309,9 @@ class S3DataSource:
             kwargs['ExpectedBucketOwner'] = ExpectedBucketOwner
 
         try:
-            session = await self._get_aioboto3_session()
-            async with session.client('s3') as s3_client:
-                response = await getattr(s3_client, 'get_bucket_cors')(**kwargs)
-                return self._handle_s3_response(response)
+            s3_client = await self._get_persistent_s3_client()
+            response = await getattr(s3_client, 'get_bucket_cors')(**kwargs)
+            return self._handle_s3_response(response)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             error_message = e.response.get('Error', {}).get('Message', str(e))
@@ -4318,3 +4317,10 @@ class S3DataSource:
             'service': 's3'
         }
         return S3Response(success=True, data=info)
+
+    async def _get_persistent_s3_client(self):
+        """Get a persistent aioboto3 s3 client object if none exists."""
+        if self._s3_client_obj is None:
+            session = await self._get_aioboto3_session()
+            self._s3_client_obj = await session.client('s3').__aenter__()
+        return self._s3_client_obj
