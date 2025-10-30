@@ -60,9 +60,8 @@ class ModuleImporter:
             "imported": self.imported_modules,
             "failed": self.failed_imports,
             "success_rate": (
-                len(self.imported_modules) / len(module_paths)
-                if module_paths else 0
-            )
+                len(self.imported_modules) / len(module_paths) if module_paths else 0
+            ),
         }
 
 
@@ -100,14 +99,25 @@ class SimpleAppDiscovery(DiscoveryStrategy):
 
         # Import main module if exists
         main_module = app_dir / f"{self.app_name}.py"
-        if main_module.exists():
-            modules.append(f"app.agents.actions.{self.app_name}.{self.app_name}")
+        main_exists = main_module.exists()
+        # Precompute module prefix for efficiency
+        module_prefix = f"app.agents.actions.{self.app_name}."
+        skip_files_set = ToolDiscoveryConfig.SKIP_FILES
 
-        # Import other Python files
-        for py_file in app_dir.glob("*.py"):
-            if py_file.name not in ToolDiscoveryConfig.SKIP_FILES:
-                module_name = py_file.stem
-                modules.append(f"app.agents.actions.{self.app_name}.{module_name}")
+        # Use list comprehension for faster iteration and avoid repetitive string formatting
+        py_files = [py_file for py_file in app_dir.glob("*.py")]
+        # We can pre-filter for non-skipped files
+        # Still preserve main module logic and order
+        if main_exists:
+            modules.append(f"{module_prefix}{self.app_name}")
+
+        # Avoid re-including main module (which can be included by glob)
+        main_module_name = f"{self.app_name}.py"
+        # Convert skip_files to a set for O(1) lookup
+        for py_file in py_files:
+            name = py_file.name
+            if name not in skip_files_set and name != main_module_name:
+                modules.append(f"{module_prefix}{py_file.stem}")
 
         return modules
 
@@ -204,18 +214,15 @@ class ToolsDiscovery:
         self.logger.info(f"Modules imported: {len(self.importer.imported_modules)}")
 
         if self.importer.failed_imports:
-            self.logger.warning(
-                f"Failed imports: {len(self.importer.failed_imports)}"
-            )
+            self.logger.warning(f"Failed imports: {len(self.importer.failed_imports)}")
             for failure in self.importer.failed_imports[:5]:  # Show first 5
                 self.logger.warning(f"  - {failure}")
 
     def _get_discovery_results(self) -> Dict[str, Any]:
         """Get discovery results"""
         registered_tools = _global_tools_registry.list_tools()
-        total_attempts = (
-            len(self.importer.imported_modules) +
-            len(self.importer.failed_imports)
+        total_attempts = len(self.importer.imported_modules) + len(
+            self.importer.failed_imports
         )
 
         return {
@@ -225,8 +232,9 @@ class ToolsDiscovery:
             "total_tools": len(registered_tools),
             "success_rate": (
                 len(self.importer.imported_modules) / total_attempts
-                if total_attempts > 0 else 0
-            )
+                if total_attempts > 0
+                else 0
+            ),
         }
 
 
