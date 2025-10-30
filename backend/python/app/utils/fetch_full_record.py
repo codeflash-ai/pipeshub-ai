@@ -72,11 +72,9 @@ async def _fetch_full_record_impl(
       ...
     }
     """
-    records = list(virtual_record_id_to_result.values())
-
-    record = next((record for record in records if  record is not None and record.get("id") == record_id), None)
-    if record:
-        return {"ok": True, "record": record}
+    for record in virtual_record_id_to_result.values():
+        if record is not None and record.get("id") == record_id:
+            return {"ok": True, "record": record}
 
     # Nothing found
     return {"ok": False, "error": f"Record '{record_id}' not found via blob store or arango."}
