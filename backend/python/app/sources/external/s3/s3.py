@@ -26,11 +26,12 @@ class S3DataSource:
         self._s3_client = s3_client
         self._session = None
 
-    async def _get_aioboto3_session(self) -> aioboto3.Session:  # type: ignore[valid-type]
+    async def _get_aioboto3_session(self) -> aioboto3.Session:
         """Get or create the aioboto3 session."""
         if self._session is None:
             # Option 1: Get the existing session directly from S3Client (recommended)
-            self._session = self._s3_client.get_session()
+            # S3Client.get_session is synchronous, so run it in a thread
+            self._session = await asyncio.to_thread(self._s3_client.get_session)
 
             # Option 2: Create new session from credentials (if needed)
             # credentials = self._s3_client.get_credentials()
@@ -964,8 +965,9 @@ class S3DataSource:
 
         try:
             session = await self._get_aioboto3_session()
+            # Use a single async context for client creation/execution for memory efficiency
             async with session.client('s3') as s3_client:
-                response = await getattr(s3_client, 'delete_object_tagging')(**kwargs)
+                response = await s3_client.delete_object_tagging(**kwargs)
                 return self._handle_s3_response(response)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
