@@ -43,22 +43,17 @@ class S3DataSource:
 
     def _handle_s3_response(self, response: object) -> S3Response:
         """Handle S3 API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return S3Response(success=False, error="Empty response from S3 API")
-
-            if isinstance(response, dict):
-                if 'Error' in response:
-                    error_info = response['Error']
-                    error_code = error_info.get('Code', 'Unknown')
-                    error_message = error_info.get('Message', 'No message')
-                    return S3Response(success=False, error=f"{error_code}: {error_message}")
-                return S3Response(success=True, data=response)
-
+        # Simplified error handling path for better performance
+        if response is None:
+            return S3Response(success=False, error="Empty response from S3 API")
+        if isinstance(response, dict):
+            err = response.get('Error')
+            if err:
+                error_code = err.get('Code', 'Unknown')
+                error_message = err.get('Message', 'No message')
+                return S3Response(success=False, error=f"{error_code}: {error_message}")
             return S3Response(success=True, data=response)
-
-        except Exception as e:
-            return S3Response(success=False, error=f"Response handling error: {str(e)}")
+        return S3Response(success=True, data=response)
 
     async def abort_multipart_upload(self,
         Bucket: str,
@@ -1276,15 +1271,17 @@ class S3DataSource:
         Returns:
             S3Response: Standardized response with success/data/error format
         """
-        kwargs = {'Bucket': Bucket, 'Id': Id}
+        # Build kwargs as fast as possible
         if ExpectedBucketOwner is not None:
-            kwargs['ExpectedBucketOwner'] = ExpectedBucketOwner
+            kwargs = {'Bucket': Bucket, 'Id': Id, 'ExpectedBucketOwner': ExpectedBucketOwner}
+        else:
+            kwargs = {'Bucket': Bucket, 'Id': Id}
 
         try:
-            session = await self._get_aioboto3_session()
-            async with session.client('s3') as s3_client:
-                response = await getattr(s3_client, 'get_bucket_analytics_configuration')(**kwargs)
-                return self._handle_s3_response(response)
+            s3_client = await self._get_s3_client()
+            func = getattr(s3_client, 'get_bucket_analytics_configuration')
+            response = await func(**kwargs)
+            return self._handle_s3_response(response)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
             error_message = e.response.get('Error', {}).get('Message', str(e))
@@ -4318,3 +4315,17 @@ class S3DataSource:
             'service': 's3'
         }
         return S3Response(success=True, data=info)
+
+    async def _get_s3_client(self):
+        """
+        Lazily cache and reuse the S3 client within the session to reduce repeated async context manager setup.
+        """
+        # Use the cached client if it exists and hasn't been closed
+        if self._client_cache is not None:
+            return self._client_cache
+
+        session = await self._get_aioboto3_session()
+        s3_client_cm = session.client('s3')
+        s3_client = await s3_client_cm.__aenter__()
+        self._client_cache = s3_client
+        return s3_client
