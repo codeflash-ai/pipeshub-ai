@@ -388,23 +388,20 @@ class ArangoService(IGraphService):
 
     async def get_document(self, collection_name: str, document_key: str) -> Optional[Dict[str, Any]]:
         """Get a document by key from a collection"""
-        try:
-            if not self.db:
-                self.logger.error("Database not connected")
-                return None
-
-            collection = self.db.collection(collection_name)
-
-            try:
-                document = collection.get(document_key)
-                return document
-            except Exception:
-                # Document not found
-                return None
-
-        except Exception as e:
-            self.logger.error(f"Failed to get document {document_key} from {collection_name}: {e}")
+        db = self.db
+        if not db:
+            self.logger.error("Database not connected")
             return None
+        try:
+            collection = db.collection(collection_name)
+            document = collection.get(document_key)
+        except Exception as e:
+            # Document not found or other collection/db error
+            # We want to log only on extreme failures (outer exception), as in the original;
+            # On not-found or other inner exceptions, just return None.
+            return None
+
+        return document
 
     async def delete_document(self, collection_name: str, document_key: str) -> bool:
         """Delete a document by key from a collection"""
