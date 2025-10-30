@@ -265,61 +265,58 @@ class ArangoService(IGraphService):
             The upserted document or None if failed
         """
         try:
-            if not self.db:
+            db = self.db
+            if not db:
                 self.logger.error("Database not connected")
                 return None
 
             # Ensure document has a _key for upsert operation
-            if "_key" not in document:
+            doc_key = document.get("_key")
+            if doc_key is None:
                 self.logger.error("Document must have a _key for upsert operation")
                 return None
-
-            # Build merge logic based on strategy
             if merge_strategy == "merge":
                 # Merge: combine existing and new fields
-                upsert_query = f"""
-                UPSERT {{ _key: @_key }}
-                INSERT @document
-                UPDATE MERGE(OLD, @document)
-                IN {collection_name}
-                RETURN NEW
-                """
+                upsert_query = (
+                    f"UPSERT {{ _key: @_key }}\n"
+                    "INSERT @document\n"
+                    "UPDATE MERGE(OLD, @document)\n"
+                    f"IN {collection_name}\nRETURN NEW"
+                )
             elif merge_strategy == "replace":
                 # Replace: completely replace existing document
-                upsert_query = f"""
-                UPSERT {{ _key: @_key }}
-                INSERT @document
-                UPDATE @document
-                IN {collection_name}
-                RETURN NEW
-                """
+                upsert_query = (
+                    f"UPSERT {{ _key: @_key }}\n"
+                    "INSERT @document\n"
+                    "UPDATE @document\n"
+                    f"IN {collection_name}\nRETURN NEW"
+                )
             elif merge_strategy == "keep":
                 # Keep: only insert if doesn't exist, don't update
-                upsert_query = f"""
-                UPSERT {{ _key: @_key }}
-                INSERT @document
-                UPDATE OLD
-                IN {collection_name}
-                RETURN NEW
-                """
+                upsert_query = (
+                    f"UPSERT {{ _key: @_key }}\n"
+                    "INSERT @document\n"
+                    "UPDATE OLD\n"
+                    f"IN {collection_name}\nRETURN NEW"
+                )
             else:
                 self.logger.error(f"Invalid merge strategy: {merge_strategy}")
                 return None
-
             bind_vars = {
-                "_key": document["_key"],
-                "document": document
+                "_key": doc_key,
+                "document": document,
             }
-
             result = await self.execute_query(upsert_query, bind_vars)
-
-            if result is not None and len(result) > 0:
-                self.logger.debug(f"Upserted document {document['_key']} in {collection_name} with strategy '{merge_strategy}'")
+            if result:
+                self.logger.debug(
+                    f"Upserted document {doc_key} in {collection_name} with strategy '{merge_strategy}'"
+                )
                 return result[0]  # Return the upserted document
             else:
-                self.logger.error(f"Upsert operation failed for document {document['_key']} in {collection_name}")
+                self.logger.error(
+                    f"Upsert operation failed for document {doc_key} in {collection_name}"
+                )
                 return None
-
         except Exception as e:
             self.logger.error(f"Failed to upsert document in {collection_name}: {e}")
             return None
@@ -430,19 +427,17 @@ class ArangoService(IGraphService):
     async def execute_query(self, query: str, bind_vars: Optional[Dict[str, Any]] = None) -> Optional[List[Dict[str, Any]]]:
         """Execute an AQL query"""
         try:
-            if not self.db:
+            db = self.db
+            if not db:
                 self.logger.error("Database not connected")
                 return None
-
             if bind_vars is None:
                 bind_vars = {}
 
-            cursor = self.db.aql.execute(query, bind_vars=bind_vars)
-            result = [doc for doc in cursor]
-
+            # Use list cursor directly instead of comprehension for efficiency
+            result = list(db.aql.execute(query, bind_vars=bind_vars))
             self.logger.debug(f"Executed query: {query}")
             return result
-
         except Exception as e:
             self.logger.error(f"Failed to execute query: {e}")
             return None
