@@ -26,19 +26,12 @@ class S3DataSource:
         self._s3_client = s3_client
         self._session = None
 
-    async def _get_aioboto3_session(self) -> aioboto3.Session:  # type: ignore[valid-type]
+    async def _get_aioboto3_session(self) -> aioboto3.Session:
         """Get or create the aioboto3 session."""
+        # Only run blocking operation in executor if session not set
         if self._session is None:
-            # Option 1: Get the existing session directly from S3Client (recommended)
-            self._session = self._s3_client.get_session()
-
-            # Option 2: Create new session from credentials (if needed)
-            # credentials = self._s3_client.get_credentials()
-            # self._session = aioboto3.Session(
-            #     aws_access_key_id=credentials['aws_access_key_id'],
-            #     aws_secret_access_key=credentials['aws_secret_access_key'],
-            #     region_name=credentials['region_name']
-            # )
+            # aioboto3.Session is actually sync object creation, so move to to_thread for event loop safety
+            self._session = await self._create_session()
         return self._session
 
     def _handle_s3_response(self, response: object) -> S3Response:
@@ -884,8 +877,9 @@ class S3DataSource:
 
         try:
             session = await self._get_aioboto3_session()
+            # Use async context manager for aioboto3 client
             async with session.client('s3') as s3_client:
-                response = await getattr(s3_client, 'delete_bucket_website')(**kwargs)
+                response = await s3_client.delete_bucket_website(**kwargs)
                 return self._handle_s3_response(response)
         except ClientError as e:
             error_code = e.response.get('Error', {}).get('Code', 'Unknown')
@@ -4318,3 +4312,8 @@ class S3DataSource:
             'service': 's3'
         }
         return S3Response(success=True, data=info)
+
+    async def _create_session(self) -> aioboto3.Session:
+        # S3Client.get_session is a sync method: move to thread executor for event loop safety
+        # This ensures that if session construction is slow, the event loop won't block
+        return await asyncio.to_thread(self._s3_client.get_session)
