@@ -27,7 +27,7 @@ class RateLimiterFactory:
         self,
         connector_type: ConnectorType,
         rate_limiter_class: Type[IRateLimiter],
-        config: Optional[Dict] = None
+        config: Optional[Dict] = None,
     ) -> None:
         """
         Register a rate limiter implementation for a connector type.
@@ -45,9 +45,7 @@ class RateLimiterFactory:
         )
 
     def create_rate_limiter(
-        self,
-        connector_type: ConnectorType,
-        custom_config: Optional[Dict] = None
+        self, connector_type: ConnectorType, custom_config: Optional[Dict] = None
     ) -> IRateLimiter:
         """
         Create a rate limiter for the specified connector type.
@@ -57,24 +55,33 @@ class RateLimiterFactory:
         Returns:
             IRateLimiter: The created rate limiter instance
         """
-        # Check if a specific rate limiter is registered for this connector type
-        if connector_type in self._rate_limiter_registry:
-            rate_limiter_class = self._rate_limiter_registry[connector_type]
-            config = custom_config or self._rate_limiter_configs.get(connector_type, {})
+        # Avoid attribute lookups and redundant dict hits by collapsing lookups
+        registry = self._rate_limiter_registry
+        configs = self._rate_limiter_configs
 
-            self.logger.info(
-                f"Creating registered rate limiter '{rate_limiter_class.__name__}' "
-                f"for connector type '{connector_type.value}'"
+        rate_limiter_class = registry.get(connector_type)
+        if rate_limiter_class is not None:
+            # Using get for config, preventing double lookup on registry
+            config = (
+                custom_config
+                if custom_config is not None
+                else configs.get(connector_type, {})
             )
 
+            # Avoid repeated format work by building the string in one step
+            self.logger.info(
+                "Creating registered rate limiter '%s' for connector type '%s'",
+                rate_limiter_class.__name__,
+                connector_type.value,
+            )
+            # Direct instantiation without redundant line splits
             return rate_limiter_class(self.logger, **config)
 
-        # Default to NoOpRateLimiter if no specific rate limiter is registered
+        # NoOp fallback for missing registration, format optimization as above
         self.logger.info(
-            f"No specific rate limiter registered for connector type '{connector_type.value}'. "
-            f"Using NoOpRateLimiter"
+            "No specific rate limiter registered for connector type '%s'. Using NoOpRateLimiter",
+            connector_type.value,
         )
-
         return NoOpRateLimiter(logger=self.logger)
 
     def get_registered_rate_limiters(self) -> Dict[ConnectorType, Type[IRateLimiter]]:
