@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -113,38 +111,24 @@ class OneDriveDataSource:
 
     def _handle_onedrive_response(self, response: object) -> OneDriveResponse:
         """Handle OneDrive API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return OneDriveResponse(success=False, error="Empty response from OneDrive API")
-
-            success = True
-            error_msg = None
-
-            # Enhanced error response handling for OneDrive operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-
-            return OneDriveResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
-        except Exception as e:
-            logger.error(f"Error handling OneDrive response: {e}")
-            return OneDriveResponse(success=False, error=str(e))
+        # Fast-paths to reduce branching and object creation
+        if response is None:
+            return OneDriveResponse(success=False, error="Empty response from OneDrive API")
+        # The tops below are structured to short-circuit as soon as an error is confirmed
+        if hasattr(response, 'error'):
+            return OneDriveResponse(success=False, data=response, error=str(response.error))
+        if isinstance(response, dict) and 'error' in response:
+            error_info = response['error']
+            if isinstance(error_info, dict):
+                error_code = error_info.get('code', 'Unknown')
+                error_message = error_info.get('message', 'No message')
+                error_msg = f"{error_code}: {error_message}"
+            else:
+                error_msg = str(error_info)
+            return OneDriveResponse(success=False, data=response, error=error_msg)
+        if hasattr(response, 'code') and hasattr(response, 'message'):
+            return OneDriveResponse(success=False, data=response, error=f"{response.code}: {response.message}")
+        return OneDriveResponse(success=True, data=response, error=None)
 
     def get_data_source(self) -> 'OneDriveDataSource':
         """Get the underlying OneDrive client."""
@@ -20662,35 +20646,35 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            any_query_value = select or expand or filter or orderby or search or top is not None or skip is not None
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Only construct & set query parameters object if anything would be set
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            query_params = None
+            if any_query_value:
+                query_params = RequestConfiguration()
+                # Combine all params in one go for speed
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+                config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in OneDrive
+                config.headers = headers.copy() if hasattr(headers, "copy") else dict(headers)
+            # Add consistency level for search
             if search:
-                if not config.headers:
+                if not hasattr(config, "headers") or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
