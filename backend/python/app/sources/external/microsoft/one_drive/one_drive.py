@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -20584,28 +20582,42 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Create proper typed request configuration
+            config = RequestConfiguration()
+            query_params = None
 
             # Set query parameters using typed object properties
             if select:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.expand = expand if isinstance(expand, list) else [expand]
             if filter:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.filter = filter
             if orderby:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.orderby = orderby
             if search:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.search = search
             if top is not None:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.top = top
             if skip is not None:
+                if query_params is None:
+                    query_params = RequestConfiguration()
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params is not None:
+                config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
