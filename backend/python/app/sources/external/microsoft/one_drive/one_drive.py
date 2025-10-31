@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -19824,8 +19822,9 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Create proper typed request configuration
+            config = RequestConfiguration()
+            query_params = config.query_parameters
 
             # Set query parameters using typed object properties
             if select:
@@ -19842,10 +19841,6 @@ class OneDriveDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
