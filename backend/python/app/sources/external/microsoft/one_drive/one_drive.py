@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -19748,8 +19746,11 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Use a single RequestConfiguration instance for both headers and query parameters
+            config = RequestConfiguration()
+            query_params = config.query_parameters
+
+            # Set query parameters using typed object properties efficiently
 
             # Set query parameters using typed object properties
             if select:
@@ -19767,17 +19768,13 @@ class OneDriveDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
-                config.headers = headers
+            # Set headers including If-Match and ConsistencyLevel for search, efficiently
+            config.headers = headers.copy() if headers else {}
+            if If_Match:
+                config.headers['If-Match'] = If_Match
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.shares.by_share_id(sharedDriveItem_id).list.delete(request_configuration=config)
