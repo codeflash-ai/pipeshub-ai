@@ -4,6 +4,9 @@ from app.sources.client.confluence.confluence import ConfluenceClient
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 
+# Precompute the empty string dict so we don't redo the work for constant calls
+_EMPTY_STR_DICT: Dict[str, str] = {}
+
 
 class ConfluenceDataSource:
     def __init__(self, client: ConfluenceClient) -> None:
@@ -72,21 +75,27 @@ class ConfluenceDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Disable Admin Key\n\nHTTP DELETE /admin-key"""
+        """Auto-generated from OpenAPI: Disable Admin Key
+
+HTTP DELETE /admin-key"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # Use headers directly if already dict
+        _headers: Dict[str, Any] = headers if headers is not None else {}
+        # Path and query params never change so reuse empty tuples and cached results
         _path: Dict[str, Any] = {}
         _query: Dict[str, Any] = {}
         _body = None
         rel_path = '/admin-key'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}{_safe_format_url(rel_path, _path)}"
+        # If all param dicts are empty, avoid repeated helpers
         req = HTTPRequest(
             method='DELETE',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict(_headers) if _headers else _EMPTY_STR_DICT,
+            path_params=_EMPTY_STR_DICT,
+            query_params=_EMPTY_STR_DICT,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -7103,9 +7112,6 @@ class ConfluenceDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -7124,4 +7130,8 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Fast path for empty input
+    if not d:
+        return _EMPTY_STR_DICT
+    # Retain actual function as used
+    return {str(k): _serialize_value(v) for k, v in d.items()}
