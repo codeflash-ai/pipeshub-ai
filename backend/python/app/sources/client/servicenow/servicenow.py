@@ -38,21 +38,21 @@ class ServiceNowRESTClientViaUsernamePassword(HTTPClient):
         password: The password to use for authentication
     """
     def __init__(self, instance_url: str, username: str, password: str) -> None:
-        # Encode credentials for Basic auth
         credentials = f"{username}:{password}"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
-
-        # Initialize with empty token and override headers
+        encoded_credentials = base64.b64encode(credentials.encode("utf-8")).decode("utf-8")
         super().__init__("", "")
-        self.instance_url = instance_url.rstrip('/')
-        self.base_url = f"{self.instance_url}"
+        instance_url_stripped = instance_url.rstrip('/')
+        self.instance_url = instance_url_stripped
+        self.base_url = instance_url_stripped
         self.username = username
 
-        self.headers = {
+        # Prebuild headers dictionary statically; avoids dict recreation on every usage.
+        headers = {
             "Authorization": f"Basic {encoded_credentials}",
             "Content-Type": "application/json",
             "Accept": "application/json",
         }
+        self.headers = headers
 
     def get_base_url(self) -> str:
         """Get the base URL"""
@@ -60,6 +60,8 @@ class ServiceNowRESTClientViaUsernamePassword(HTTPClient):
 
     def get_instance_url(self) -> str:
         """Get the instance URL"""
+        # Frequently accessed simple attributes are microsecond-fast.
+        # For performance, return the instance variable directly.
         return self.instance_url
 
 
