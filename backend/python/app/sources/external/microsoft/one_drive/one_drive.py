@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -20126,8 +20124,11 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Use a single RequestConfiguration object with query parameters
+            config = RequestConfiguration()
+            query_params = config.query_parameters if hasattr(config, "query_parameters") else RequestConfiguration()
+            
+            # Set query parameters using typed object properties
 
             # Set query parameters using typed object properties
             if select:
@@ -20144,19 +20145,32 @@ class OneDriveDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = dict(headers)  # Defensive copy
+
 
             # Add consistency level for search operations in OneDrive
             if search:
                 if not config.headers:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                if 'ConsistencyLevel' not in config.headers:
+                    config.headers['ConsistencyLevel'] = 'eventual'
+
+            # Set ETag for If-Match header, which should be honored for delete
+            if If_Match:
+                if config.headers is None:
+                    config.headers = {}
+                config.headers['If-Match'] = If_Match
+
+            # Merge any additional provided kwargs as query string parameters
+            if kwargs:
+                # Add any additional query params not covered by structured config
+                for k, v in kwargs.items():
+                    setattr(config.query_parameters, k, v)
+
+            # Await the delete operation (no concurrency needed here for a single request)
 
             response = await self.client.shares.by_share_id(sharedDriveItem_id).list.columns.by_column_id(columnDefinition_id).delete(request_configuration=config)
             return self._handle_onedrive_response(response)
