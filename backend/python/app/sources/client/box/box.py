@@ -37,12 +37,15 @@ class BoxRESTClientViaToken:
     """Box client via Developer Token or OAuth2 access token."""
     def __init__(self, access_token: str) -> None:
         self.access_token = access_token
+        self._auth = BoxDeveloperTokenAuth(token=self.access_token)
         self.box_client = None
 
     async def create_client(self) -> BoxSDKClient:  # type: ignore[valid-type]
         """Create Box client using Developer Token or OAuth2 token."""
-        auth = BoxDeveloperTokenAuth(token=self.access_token)
-        self.box_client = BoxSDKClient(auth=auth)
+        # Reuse initialized auth object for efficiency
+        # Only re-instantiate client when necessary
+        if self.box_client is None:
+            self.box_client = BoxSDKClient(auth=self._auth)
         return self.box_client
 
     def get_box_client(self) -> BoxSDKClient:  # type: ignore[valid-type]
