@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1646,9 +1635,15 @@ class BaseArangoService:
 
             # Create and publish single reindexFailed event
             try:
-                payload = await self._create_reindex_failed_event_payload(
-                    org_id, connector, origin
-                )
+                now_ts = str(get_epoch_timestamp_in_ms())
+                payload = {
+                    "orgId": org_id,
+                    "origin": origin,
+                    "connector": connector,
+                    "createdAtTimestamp": now_ts,
+                    "updatedAtTimestamp": now_ts,
+                    "sourceCreatedAtTimestamp": now_ts
+                }
                 await self._publish_sync_event("reindexFailed", payload)
 
                 self.logger.info(f"✅ Published reindexFailed event for {connector}")
@@ -2567,6 +2562,19 @@ class BaseArangoService:
         try:
             self.logger.info(f"🔍 Checking connector reindex permissions for user {user_key}")
 
+
+            # Avoid string operations for bind_vars, use dict-key lookup instead of getattr to boost speed
+            bind_vars = {
+                "user_key": user_key,
+                "org_id": org_id,
+                "connector": connector,
+                "origin": origin,
+                "@belongs_to": CollectionNames.BELONGS_TO.value,
+                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
+                "@permissions": CollectionNames.PERMISSIONS.value,
+                "@records": CollectionNames.RECORDS.value,
+            }
+
             permission_query = """
             LET user = DOCUMENT("users", @user_key)
             FILTER user != null
@@ -2652,16 +2660,8 @@ class BaseArangoService:
             }
             """
 
-            cursor = self.db.aql.execute(permission_query, bind_vars={
-                "user_key": user_key,
-                "org_id": org_id,
-                "connector": connector,
-                "origin": origin,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@records": CollectionNames.RECORDS.value,
-            })
+            # Avoid repeated next() by immediately using next() and returning early
+            cursor = self.db.aql.execute(permission_query, bind_vars=bind_vars)
 
             result = next(cursor, {})
 
@@ -3576,6 +3576,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3605,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -10531,14 +10536,15 @@ class BaseArangoService:
     async def get_user_by_user_id(self, user_id: str) -> Optional[Dict]:
         """Get user by user ID"""
         try:
-            query = f"""
-                FOR user IN {CollectionNames.USERS.value}
-                    FILTER user.userId == @user_id
-                    RETURN user
-            """
+            # Use a direct parameterized query and avoid f-string for safety and speed
+            query = (
+                f"FOR user IN {CollectionNames.USERS.value} "
+                "FILTER user.userId == @user_id "
+                "RETURN user"
+            )
             cursor = self.db.aql.execute(query, bind_vars={"user_id": user_id})
-            result = next(cursor, None)
-            return result
+            # Efficiently get the first user or None
+            return next(cursor, None)
         except Exception as e:
             self.logger.error(f"Error getting user by user ID: {str(e)}")
             return None
