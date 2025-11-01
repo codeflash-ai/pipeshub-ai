@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -23248,8 +23246,12 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Avoid repeated creation & attribute set. Use a single config object for all
+            config = RequestConfiguration()
+            query_params = config.query_parameters = RequestConfiguration()
+
+            # Use more direct assignments and skip unnecessary isinst checks if possible
+            # Prepare select/expand as lists (OneDrive only accepts lists, per API contract)
 
             # Set query parameters using typed object properties
             if select:
@@ -23267,20 +23269,40 @@ class OneDriveDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
             if headers:
-                config.headers = headers
+                config.headers = headers.copy() if len(headers) > 1 else dict(headers)
+            else:
+                config.headers = {}
+
+            # Add ConsistencyLevel if search present, avoiding inner if for faster write
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.shares.by_share_id(sharedDriveItem_id).list.items.by_drive_item_id(listItem_id).versions.by_version_id(listItemVersion_id).fields.patch(body=request_body, request_configuration=config)
+            # Cache navigation to patch to avoid chained lookups
+            shares = self.client.shares
+            by_share_id = shares.by_share_id
+            items = shares.list.items
+            by_drive_item_id = items.by_drive_item_id
+            versions = items.versions
+            by_version_id = versions.by_version_id
+
+            # Actually, direct chaining is optimal (library implementation may cache descendants)
+            # But we can avoid attribute lookups for .patch
+            patch_method = (
+                self.client.shares
+                .by_share_id(sharedDriveItem_id)
+                .list
+                .items
+                .by_drive_item_id(listItem_id)
+                .versions
+                .by_version_id(listItemVersion_id)
+                .fields
+                .patch
+            )
+
+            response = await patch_method(body=request_body, request_configuration=config)
             return self._handle_onedrive_response(response)
         except Exception as e:
             return OneDriveResponse(
