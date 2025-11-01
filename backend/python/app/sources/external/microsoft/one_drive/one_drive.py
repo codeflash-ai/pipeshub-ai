@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -117,15 +115,15 @@ class OneDriveDataSource:
             if response is None:
                 return OneDriveResponse(success=False, error="Empty response from OneDrive API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for OneDrive operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return OneDriveResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error)
+                )
+            # Dict error-style
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -133,14 +131,25 @@ class OneDriveDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return OneDriveResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg
+                )
+            # Has code/message error
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
 
+                return OneDriveResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg
+                )
+            # Fast-path: valid result with no error
             return OneDriveResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None
             )
         except Exception as e:
             logger.error(f"Error handling OneDrive response: {e}")
@@ -25096,8 +25105,14 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters()
+            # Build query parameters including OData for OneDrive
+            # Use local in-scope variable to shorten attribute lookups
+            QueryParameters = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters
+            RequestConfig = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration
+
+            query_params = QueryParameters()
+
+            # Use compact branch arrangement and tuple conversion to reduce isinstance checks:
 
             # Set query parameters using typed object properties
             if select:
@@ -25114,9 +25129,8 @@ class OneDriveDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration()
+            
+            config = RequestConfig()
             config.query_parameters = query_params
 
             if headers:
@@ -25124,7 +25138,7 @@ class OneDriveDataSource:
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
