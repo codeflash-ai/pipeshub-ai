@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -21284,37 +21282,49 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Minimize RequestConfiguration/attribute construction: prepare a single pass dict and only create attributes if needed.
+            qp = {}
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                qp['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                qp['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                qp['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                qp['orderby'] = orderby
             if search:
-                query_params.search = search
+                qp['search'] = search
             if top is not None:
-                query_params.top = top
+                qp['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                qp['skip'] = skip
+
+            # Create a single RequestConfiguration instance
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Only assign query_parameters if any present
+            if qp:
+                qparams = RequestConfiguration()
+                for k, v in qp.items():
+                    setattr(qparams, k, v)
+                config.query_parameters = qparams
+
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+            # Add consistency level for search operations in OneDrive
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Avoid overwriting if already set
+                if 'ConsistencyLevel' not in config.headers:
+                    config.headers['ConsistencyLevel'] = 'eventual'
+
 
             response = await self.client.shares.by_share_id(sharedDriveItem_id).list.items.by_drive_item_id(listItem_id).created_by_user.service_provisioning_errors.get(request_configuration=config)
             return self._handle_onedrive_response(response)
