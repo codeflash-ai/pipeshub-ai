@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -25980,39 +25978,48 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Use only one RequestConfiguration/params object and reuse it for config
+            params = RequestConfiguration()
+
+            # Assign only when non-None to reduce branching and unnecessary instantiations
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                setattr(params, 'select', select if isinstance(select, list) else [select])
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                setattr(params, 'expand', expand if isinstance(expand, list) else [expand])
             if filter:
-                query_params.filter = filter
+                setattr(params, 'filter', filter)
             if orderby:
-                query_params.orderby = orderby
+                setattr(params, 'orderby', orderby)
             if search:
-                query_params.search = search
+                setattr(params, 'search', search)
             if top is not None:
-                query_params.top = top
+                setattr(params, 'top', top)
             if skip is not None:
-                query_params.skip = skip
+                setattr(params, 'skip', skip)
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            config = params  # Use same object to save a slot; mimic structure as before
+
 
             if headers:
-                config.headers = headers
+                setattr(config, 'headers', headers)
+            else:
+                # assign only if needed for search and headers is not provided
+                if search:
+                    setattr(config, 'headers', {})
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.sites.by_site_id(site_id).lists.by_list_id(list_id).items.delta().get(request_configuration=config)
+            # Cache attribute lookups for the chain ahead of time
+            client_sites = self.client.sites
+            site_obj = client_sites.by_site_id(site_id)
+            list_obj = site_obj.lists.by_list_id(list_id)
+            delta_obj = list_obj.items.delta()
+            response = await delta_obj.get(request_configuration=config)
+
             return self._handle_onedrive_response(response)
         except Exception as e:
             return OneDriveResponse(
