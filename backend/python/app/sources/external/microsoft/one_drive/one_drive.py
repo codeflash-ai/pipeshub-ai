@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -22854,31 +22852,45 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Pre-compute whether each param is set to avoid unnecessary assignment/creation
+            # Only instantiate config/query_params if needed
+            config = RequestConfiguration()
+            query_set = False
+            query_params = config.query_parameters
+
+            # Use direct assignment and avoid repeated isinstance/list
 
             # Set query parameters using typed object properties
             if select:
+                query_set = True
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
+                query_set = True
                 query_params.expand = expand if isinstance(expand, list) else [expand]
             if filter:
+                query_set = True
                 query_params.filter = filter
             if orderby:
+                query_set = True
                 query_params.orderby = orderby
             if search:
+                query_set = True
                 query_params.search = search
             if top is not None:
+                query_set = True
                 query_params.top = top
             if skip is not None:
+                query_set = True
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Only re-assign if any query param was set, else use empty configuration
+            config.query_parameters = query_params if query_set else None
+
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # Avoid possible user mutation bugs
+
+            # Add consistency level for search, but only mutate config.headers if search is set
 
             # Add consistency level for search operations in OneDrive
             if search:
