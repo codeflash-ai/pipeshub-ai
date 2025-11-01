@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -24938,28 +24936,47 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters()
+            # Create query parameters only if relevant fields are set
+            set_select = select if select else None
+            set_expand = expand if expand else None
+            set_filter = filter if filter else None
+            set_orderby = orderby if orderby else None
+            set_search = search if search else None
+            set_top = top if top is not None else None
+            set_skip = skip if skip is not None else None
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only create and set properties if needed
+            need_query = (
+                set_select or set_expand or set_filter or set_orderby or set_search or
+                set_top is not None or set_skip is not None
+            )
+
+            if need_query:
+                query_params = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters()
+
+                if set_select:
+                    query_params.select = set_select if isinstance(set_select, list) else [set_select]
+                if set_expand:
+                    query_params.expand = set_expand if isinstance(set_expand, list) else [set_expand]
+                if set_filter:
+                    query_params.filter = set_filter
+                if set_orderby:
+                    query_params.orderby = set_orderby
+                if set_search:
+                    query_params.search = set_search
+                if set_top is not None:
+                    query_params.top = set_top
+                if set_skip is not None:
+                    query_params.skip = set_skip
+            else:
+                query_params = None
+
 
             # Create proper typed request configuration
             config = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
@@ -24970,7 +24987,14 @@ class OneDriveDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.drives.by_drive_id(drive_id).items.by_drive_item_id(driveItem_id).thumbnails.by_thumbnail_id(thumbnailSet_id).get(request_configuration=config)
+            # Local variables to minimize attribute lookups in chained call
+            drives = self.client.drives
+            by_drive = drives.by_drive_id
+            by_item = by_drive(drive_id).items.by_drive_item_id
+            by_thumb = by_item(driveItem_id).thumbnails.by_thumbnail_id
+            get_fn = by_thumb(thumbnailSet_id).get
+
+            response = await get_fn(request_configuration=config)
             return self._handle_onedrive_response(response)
         except Exception as e:
             return OneDriveResponse(
