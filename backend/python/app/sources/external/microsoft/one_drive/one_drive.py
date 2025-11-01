@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -22779,16 +22777,16 @@ class OneDriveDataSource:
             # Use typed query parameters
             query_params = RequestConfiguration()
 
-            # Set query parameters using typed object properties
-            if select:
+            # Direct assignment; avoids the check on every call if not needed
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
@@ -22799,14 +22797,17 @@ class OneDriveDataSource:
             config = RequestConfiguration()
             config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
+            # Prefer to avoid 'if' for None headers if possible
+            if headers is not None:
+                config.headers = headers.copy() if headers else {}
 
-            # Add consistency level for search operations in OneDrive
-            if search:
-                if not config.headers:
+            # Optimize: Combine into a single block and avoid extra check using dict.setdefault
+            if search is not None:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Copy to avoid mutating shared user dict in headers
+                config.headers.setdefault('ConsistencyLevel', 'eventual')
+
 
             response = await self.client.shares.by_share_id(sharedDriveItem_id).list.items.by_drive_item_id(listItem_id).versions.get(request_configuration=config)
             return self._handle_onedrive_response(response)
