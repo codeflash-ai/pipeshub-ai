@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -25254,28 +25252,31 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters()
+            # Only instantiate query_params if any query argument is provided
+            if any([select, expand, filter, orderby, search, top is not None, skip is not None]):
+                query_params = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+                # Set query parameters using typed object properties
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+                # Create proper typed request configuration
+                config = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration()
+                config.query_parameters = query_params
+            else:
+                config = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration()
 
             if headers:
                 config.headers = headers
