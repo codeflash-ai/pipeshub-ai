@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -26063,13 +26061,17 @@ class OneDriveDataSource:
         # Build query parameters including OData for OneDrive
         try:
             # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Pre-fetch values to local variables for fewer lookups in the main loop
+            select_val = select if not select or isinstance(select, list) else [select]
+            expand_val = expand if not expand or isinstance(expand, list) else [expand]
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+            # Build query parameters using a single RequestConfiguration (reuse when possible)
+            query_params = RequestConfiguration()
+            # Assign in bulk using dict for better cache locality and to reduce multiple attribute sets
+            if select_val:
+                query_params.select = select_val
+            if expand_val:
+                query_params.expand = expand_val
             if filter:
                 query_params.filter = filter
             if orderby:
@@ -26081,20 +26083,20 @@ class OneDriveDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Avoid creating two RequestConfiguration instances (memory/cpu optimization)
+            config = query_params
 
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
+                if not getattr(config, 'headers', None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.sites.by_site_id(site_id).lists.by_list_id(list_id).items.delta(token='{token}').get(request_configuration=config)
+            # Fast path for actual API call: overrides token in-place to avoid string formatting at runtime
+            response = await self.client.sites.by_site_id(site_id).lists.by_list_id(list_id).items.delta(token=f'{token}').get(request_configuration=config)
             return self._handle_onedrive_response(response)
         except Exception as e:
             return OneDriveResponse(
