@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -7078,20 +7076,21 @@ class PlannerDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Re-use one config object, populate as needed
+            config = query_params
 
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if not getattr(config, "headers", None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).assigned_to_task_board_format.delete(request_configuration=config)
+            response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id) \
+                        .tasks.by_planner_task_id(plannerTask_id) \
+                        .assigned_to_task_board_format.delete(request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
