@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -6001,15 +5999,33 @@ class PlannerDataSource:
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+            else:
+                config.headers = {}
+
+            # Add consistency level for search operations in Planner
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).details.delete(request_configuration=config)
+            # Add If-Match header if provided (for concurrency, can be important for DELETE/MODIFY ops)
+            if If_Match is not None:
+                config.headers['If-Match'] = If_Match
+
+            # Compose the call chain outside of await for slight speedup
+            req_builder = (
+                self.client
+                .me.planner.plans
+                .by_planner_plan_id(plannerPlan_id)
+                .buckets
+                .by_planner_bucket_id(plannerBucket_id)
+                .tasks
+                .by_planner_task_id(plannerTask_id)
+                .details
+            )
+
+            response = await req_builder.delete(request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
