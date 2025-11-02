@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -108,15 +106,11 @@ class PlannerDataSource:
         try:
             if response is None:
                 return PlannerResponse(success=False, error="Empty response from Planner API")
-            success = True
-            error_msg = None
 
             # Enhanced error response handling for Planner operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return PlannerResponse(success=False, data=response, error=str(response.error))
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -124,14 +118,15 @@ class PlannerDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return PlannerResponse(success=False, data=response, error=error_msg)
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return PlannerResponse(success=False, data=response, error=f"{response.code}: {response.message}")
+
 
             return PlannerResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Planner response: {e}")
@@ -5661,35 +5656,41 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Only construct and set query parameters if user actually provides any
+            any_query_param = select or expand or filter or orderby or search or top is not None or skip is not None
+            if any_query_param:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                # Always create headers dict, don't re-check header existence
+                if not getattr(config, "headers", None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
