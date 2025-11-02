@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -7526,34 +7524,34 @@ class PlannerDataSource:
             # Use typed query parameters
             query_params = RequestConfiguration()
 
-            # Set query parameters using typed object properties
-            if select:
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
+            # Use a single RequestConfiguration instance for config, reducing object creation
+            config = query_params
+            # Allow 'headers' to be set directly
+            if headers is not None:
                 config.headers = headers
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                hdrs = config.headers if config.headers is not None else {}
+                # Minimize "not" and dict creation by direct assignment
+                hdrs['ConsistencyLevel'] = 'eventual'
+                config.headers = hdrs
+
 
             response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).details.delete(request_configuration=config)
             return self._handle_planner_response(response)
