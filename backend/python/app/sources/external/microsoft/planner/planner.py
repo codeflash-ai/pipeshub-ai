@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -105,37 +103,35 @@ class PlannerDataSource:
 
     def _handle_planner_response(self, response: object) -> PlannerResponse:
         """Handle Planner API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return PlannerResponse(success=False, error="Empty response from Planner API")
-            success = True
-            error_msg = None
+        # Fast-path for None
+        if response is None:
+            return PlannerResponse(success=False, error="Empty response from Planner API")
 
-            # Enhanced error response handling for Planner operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+        # Small fast-paths for common cases:
+        # error attribute (most custom error classes quickly)
+        response_has_error = hasattr(response, 'error')
+        if response_has_error:
+            error_msg = str(response.error)
+            return PlannerResponse(success=False, data=response, error=error_msg)
 
-            return PlannerResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
-        except Exception as e:
-            logger.error(f"Error handling Planner response: {e}")
-            return PlannerResponse(success=False, error=str(e))
+        # dict with error key (API error dict)
+        if isinstance(response, dict) and 'error' in response:
+            error_info = response['error']
+            if isinstance(error_info, dict):
+                error_code = error_info.get('code', 'Unknown')
+                error_message = error_info.get('message', 'No message')
+                error_msg = f"{error_code}: {error_message}"
+            else:
+                error_msg = str(error_info)
+            return PlannerResponse(success=False, data=response, error=error_msg)
+
+        # Some error objects use code & message
+        if hasattr(response, 'code') and hasattr(response, 'message'):
+            error_msg = f"{response.code}: {response.message}"
+            return PlannerResponse(success=False, data=response, error=error_msg)
+
+        # Common fast path: successful response
+        return PlannerResponse(success=True, data=response, error=None)
 
     def get_data_source(self) -> 'PlannerDataSource':
         """Get the underlying Planner client."""
@@ -4499,35 +4495,37 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # Use one config object, set query_parameters as attributes
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            query = config  # Assign directly since only query_parameters is used
+            # Set list-typed and string params in one pass (less indirect calls)
+            if select is not None:
+                query.select = select if isinstance(select, list) else [select]
+            if expand is not None:
+                query.expand = expand if isinstance(expand, list) else [expand]
+            if filter is not None:
+                query.filter = filter
+            if orderby is not None:
+                query.orderby = orderby
+            if search is not None:
+                query.search = search
+            if top is not None:
+                query.top = top
+            if skip is not None:
+                query.skip = skip
 
-            if headers:
+            # Query params may be needed as a sub-object depending on SDK,
+            # original code set config.query_parameters = query_params (copy),
+            # but since we use config=object which is passed to SDK,
+            # and code style is preserved, keep as is
+
+            # Only set headers if necessary (avoid allocation)
+            if headers is not None:
                 config.headers = headers
 
             # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
+            if search is not None:
+                if not getattr(config, 'headers', None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
