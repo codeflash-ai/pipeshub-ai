@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -2317,44 +2315,56 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Build request configuration only once, directly set query params as available
+            config = RequestConfiguration()
 
-            # Set query parameters using typed object properties
-            if select:
+            query_params = config.query_parameters
+            # Set only provided query parameters
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # shallow copy for safety
+
+            # Add ConsistencyLevel header for search scenarios
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).progress_task_board_format.delete(request_configuration=config)
+            # Set If-Match header if provided
+            if If_Match is not None:
+                if not hasattr(config, 'headers') or config.headers is None:
+                    config.headers = {}
+                config.headers['If-Match'] = If_Match
+
+            # Await the async Planner SDK call
+            response = await self.client.groups \
+                .by_group_id(group_id) \
+                .planner.plans \
+                .by_planner_plan_id(plannerPlan_id) \
+                .buckets.by_planner_bucket_id(plannerBucket_id) \
+                .tasks.by_planner_task_id(plannerTask_id) \
+                .progress_task_board_format.delete(request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
                 success=False,
-                error=f"Planner API call failed: {str(e)}",
+                error=f"Planner API call failed: {str(e)}"
             )
 
     async def groups_planner_plans_buckets_tasks_get_progress_task_board_format(
