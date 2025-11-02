@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -2017,7 +2015,9 @@ class PlannerDataSource:
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # ensure we don't mutate input
+
+            # Add consistency level for search operations in Planner
 
             # Add consistency level for search operations in Planner
             if search:
@@ -2025,7 +2025,20 @@ class PlannerDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format.patch(body=request_body, request_configuration=config)
+            # Ensure If-Match header is set (as it's required)
+            if not config.headers:
+                config.headers = {}
+            config.headers['If-Match'] = If_Match
+
+            # Await PATCH call directly and handle errors at response level
+            response = await self.client.groups.by_group_id(group_id) \
+                .planner.plans.by_planner_plan_id(plannerPlan_id) \
+                .buckets.by_planner_bucket_id(plannerBucket_id) \
+                .tasks.by_planner_task_id(plannerTask_id) \
+                .bucket_task_board_format.patch(
+                    body=request_body,
+                    request_configuration=config
+                )
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
