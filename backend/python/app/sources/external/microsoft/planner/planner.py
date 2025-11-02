@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,22 +109,27 @@ class PlannerDataSource:
             success = True
             error_msg = None
 
-            # Enhanced error response handling for Planner operations
-            if hasattr(response, 'error'):
+            # Local variable assignments to reduce attribute/dict lookups
+            response_dict = isinstance(response, dict)
+            # In order of most likely/least expensive
+            if response_dict:
+                error_info = response.get('error', None)
+                if error_info is not None:
+                    success = False
+                    if isinstance(error_info, dict):
+                        error_code = error_info.get('code', 'Unknown')
+                        error_message = error_info.get('message', 'No message')
+                        error_msg = f"{error_code}: {error_message}"
+                    else:
+                        error_msg = str(error_info)
+            elif hasattr(response, 'error'):
                 success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
+                error_msg = str(getattr(response, 'error'))
             elif hasattr(response, 'code') and hasattr(response, 'message'):
                 success = False
-                error_msg = f"{response.code}: {response.message}"
+                error_msg = f"{getattr(response, 'code')}: {getattr(response, 'message')}"
+
+            # Single PlannerResponse construction for every path except the fast-exit None
 
             return PlannerResponse(
                 success=success,
@@ -5899,39 +5902,63 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Batch build query params in a dict and set in one go
+            _query_params = {}
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                _query_params['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                _query_params['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                _query_params['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                _query_params['orderby'] = orderby
             if search:
-                query_params.search = search
+                _query_params['search'] = search
             if top is not None:
-                query_params.top = top
+                _query_params['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                _query_params['skip'] = skip
+
+            # Only construct RequestConfiguration/query object if needed
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if _query_params:
+                # Copy values to the actual config's query_parameters object for strong typing,
+                # but assign all at once to minimize attribute set overhead
+                query_params_obj = RequestConfiguration()
+                for k, v in _query_params.items():
+                    setattr(query_params_obj, k, v)
+                config.query_parameters = query_params_obj
+
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy() if not isinstance(headers, dict) else headers
+            # Only deal with ConsistencyLevel when search is actually used
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format.patch(body=request_body, request_configuration=config)
+            # Shortcut: get the request callable up front to reduce chained lookups
+            req_patch = (
+                self.client
+                .me
+                .planner
+                .plans
+                .by_planner_plan_id(plannerPlan_id)
+                .buckets
+                .by_planner_bucket_id(plannerBucket_id)
+                .tasks
+                .by_planner_task_id(plannerTask_id)
+                .bucket_task_board_format
+                .patch
+            )
+            response = await req_patch(body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
