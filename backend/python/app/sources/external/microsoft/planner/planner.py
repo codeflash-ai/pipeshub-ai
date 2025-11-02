@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -3421,37 +3419,57 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Use single RequestConfiguration (avoid redundant objects)
+            config = RequestConfiguration()
+
+            # Direct assignment for builtins—avoid per-field dynamic attribute assignment if value is None or empty
+            qp = config
+
+            has_qp = False
+
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                qp.select = select if isinstance(select, list) else [select]
+                has_qp = True
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                qp.expand = expand if isinstance(expand, list) else [expand]
+                has_qp = True
             if filter:
-                query_params.filter = filter
+                qp.filter = filter
+                has_qp = True
             if orderby:
-                query_params.orderby = orderby
+                qp.orderby = orderby
+                has_qp = True
             if search:
-                query_params.search = search
+                qp.search = search
+                has_qp = True
             if top is not None:
-                query_params.top = top
+                qp.top = top
+                has_qp = True
             if skip is not None:
-                query_params.skip = skip
+                qp.skip = skip
+                has_qp = True
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Only assign query_parameters if any query param was actually set
+            if has_qp:
+                config.query_parameters = qp
+
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # Prevent side effects for caller
+
+            # Optimize header handling for ConsistencyLevel
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if not hasattr(config, "headers") or config.headers is None:
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Avoid unnecessary dict assignment if it's already set
+                if config.headers.get('ConsistencyLevel') != 'eventual':
+                    config.headers['ConsistencyLevel'] = 'eventual'
+
+            # Single chained call, as original
 
             response = await self.client.groups.by_group_id(group_id).planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format.delete(request_configuration=config)
             return self._handle_planner_response(response)
