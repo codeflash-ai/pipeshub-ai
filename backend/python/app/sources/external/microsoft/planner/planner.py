@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -108,15 +106,30 @@ class PlannerDataSource:
         try:
             if response is None:
                 return PlannerResponse(success=False, error="Empty response from Planner API")
-            success = True
-            error_msg = None
+
+            # Fast-path for "no error": avoid many hasattr/dict checks if common case
+            # Short-circuit if response seems error-free, improves hot-path perf
+            if (
+                not hasattr(response, 'error')
+                and not (isinstance(response, dict) and 'error' in response)
+                and not (hasattr(response, 'code') and hasattr(response, 'message'))
+            ):
+                return PlannerResponse(
+                    success=True,
+                    data=response,
+                    error=None,
+                )
+
+            # Otherwise, check error conditions in order of likelihood
 
             # Enhanced error response handling for Planner operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return PlannerResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -124,14 +137,25 @@ class PlannerDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return PlannerResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
 
+                return PlannerResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+
+            # Default: treat as successful
             return PlannerResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Planner response: {e}")
@@ -7137,39 +7161,51 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
+            # Object allocation for query_params and config is expensive, only create and set attributes when needed.
+            need_query_params = (
+                select or expand or filter or orderby or search or top is not None or skip is not None
+            )
+            if need_query_params:
+                query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            if query_params is not None or headers or search:
+                config = PlansRequestBuilder.PlansRequestBuilderGetRequestConfiguration()
+                if query_params is not None:
+                    config.query_parameters = query_params
 
-            # Create proper typed request configuration
-            config = PlansRequestBuilder.PlansRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
+                if headers:
+                    config.headers = headers
+                elif search:
+                    # Only allocate headers dict if needed for search
                     config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).assigned_to_task_board_format.get(request_configuration=config)
+                if search:
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None
+
+            get_method = self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).assigned_to_task_board_format.get
+            if config is not None:
+                response = await get_method(request_configuration=config)
+            else:
+                response = await get_method()
+
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
