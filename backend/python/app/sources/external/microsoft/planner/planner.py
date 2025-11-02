@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -7246,6 +7244,11 @@ class PlannerDataSource:
                 if not config.headers:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
+
+            # Set If-Match header for concurrency
+            if not config.headers:
+                config.headers = {}
+            config.headers['If-Match'] = If_Match
 
             response = await self.client.me.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).assigned_to_task_board_format.patch(body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
