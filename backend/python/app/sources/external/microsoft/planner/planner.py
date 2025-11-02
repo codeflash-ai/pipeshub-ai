@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -6217,33 +6215,32 @@ class PlannerDataSource:
         try:
             # Use typed query parameters
             query_params = RequestConfiguration()
+            config = query_params  # reuse query_params object, save allocation
 
-            # Set query parameters using typed object properties
-            if select:
+            # Set query parameters using typed object properties; don't repeatedly check type for lists
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Headers optimization: set once, update if search
+            if headers is not None:
+                config.headers = headers.copy()  # Prevent mutating caller's dict
+            else:
+                config.headers = None
 
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
+            if search is not None:
+                if config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
