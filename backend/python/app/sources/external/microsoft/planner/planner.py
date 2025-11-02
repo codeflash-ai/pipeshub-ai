@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -1425,39 +1423,57 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
+            # Build query parameters efficiently (short-circuit for all Nones)
+            has_query_params = any([
+                select, expand, filter, orderby, search, top is not None, skip is not None
+            ])
+            config = None
+            if has_query_params or headers:
+                # Only construct config if needed
+                query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = PlansRequestBuilder.PlansRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+                config = PlansRequestBuilder.PlansRequestBuilderGetRequestConfiguration()
+                config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
+                if headers:
+                    config.headers = headers.copy()  # avoid mutating original dict
 
-            # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Add consistency level for search operations in Planner
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).get(request_configuration=config)
+            # Compose the full request call chain outside await for clarity
+            request_builder = (
+                self.client
+                .groups.by_group_id(group_id)
+                .planner.plans.by_planner_plan_id(plannerPlan_id)
+                .buckets.by_planner_bucket_id(plannerBucket_id)
+                .tasks.by_planner_task_id(plannerTask_id)
+            )
+
+            # Await the get call - passing config only if it is needed
+            if config:
+                response = await request_builder.get(request_configuration=config)
+            else:
+                response = await request_builder.get()
+
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
