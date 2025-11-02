@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -8283,39 +8281,44 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
+            # -- Optimization: Reuse one config object, assign directly --
             config = RequestConfiguration()
-            config.query_parameters = query_params
+
+            # Build query_parameters dict only if something is set; reduce many attribute assignments
+            query_params_present = (
+                select is not None or expand is not None or filter is not None or
+                orderby is not None or search is not None or top is not None or skip is not None
+            )
+
+            if query_params_present:
+                qp = RequestConfiguration()  # Not skipping usage in case class expects it for query_parameters
+                if select:
+                    qp.select = select if isinstance(select, list) else [select]
+                if expand:
+                    qp.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    qp.filter = filter
+                if orderby:
+                    qp.orderby = orderby
+                if search:
+                    qp.search = search
+                if top is not None:
+                    qp.top = top
+                if skip is not None:
+                    qp.skip = skip
+                config.query_parameters = qp
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy() if not isinstance(headers, dict) or hasattr(headers, 'copy') else dict(headers)
 
-            # Add consistency level for search operations in Planner
+            # Move ConsistencyLevel header logic up - branch only if search is set
             if search:
-                if not config.headers:
+                if not hasattr(config, "headers") or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.planner.tasks.by_planner_task_id(plannerTask_id).patch(body=request_body, request_configuration=config)
+            response = await self.client.me.planner.tasks.by_planner_task_id(plannerTask_id).patch(
+                body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
