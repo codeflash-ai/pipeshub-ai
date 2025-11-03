@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -15551,28 +15549,30 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Build single RequestConfiguration for query params and headers
+            config = RequestConfiguration()
+            query_params = config  # use the same object for query_parameters property
+
+            # Set query parameters using direct assignment
+            # Avoid superfluous if-else chains for single assignment
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                config.select = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                config.expand = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                config.filter = filter
             if orderby:
-                query_params.orderby = orderby
+                config.orderby = orderby
             if search:
-                query_params.search = search
+                config.search = search
             if top is not None:
-                query_params.top = top
+                config.top = top
             if skip is not None:
-                query_params.skip = skip
+                config.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Set headers directly if present
 
             if headers:
                 config.headers = headers
@@ -15582,6 +15582,10 @@ class PlannerDataSource:
                 if not config.headers:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
+
+
+            # Explicitly set the query_parameters property for compatibility
+            config.query_parameters = config
 
             response = await self.client.planner.tasks.by_planner_task_id(plannerTask_id).details.delete(request_configuration=config)
             return self._handle_planner_response(response)
