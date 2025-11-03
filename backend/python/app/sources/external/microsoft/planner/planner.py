@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -14187,39 +14185,48 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Prepare query parameters using only a single RequestConfiguration instance
+            config = RequestConfiguration()
+
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                config.query_parameters.select = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                config.query_parameters.filter = filter
             if orderby:
-                query_params.orderby = orderby
+                config.query_parameters.orderby = orderby
             if search:
-                query_params.search = search
+                config.query_parameters.search = search
             if top is not None:
-                query_params.top = top
+                config.query_parameters.top = top
             if skip is not None:
-                query_params.skip = skip
+                config.query_parameters.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = dict(headers)  # ensure mutable copy if underlying SDK mutates
+
+            # Add consistency level for search
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format.patch(body=request_body, request_configuration=config)
+            # Add If-Match ETag header
+            if config.headers is None:
+                config.headers = {}
+            config.headers['If-Match'] = If_Match
+
+            # PATCH call remains unchanged; runs on the event loop
+            response = await self.client.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format.patch(
+                body=request_body,
+                request_configuration=config
+            )
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
