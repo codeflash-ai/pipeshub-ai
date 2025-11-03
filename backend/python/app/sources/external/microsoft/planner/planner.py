@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -105,37 +103,29 @@ class PlannerDataSource:
 
     def _handle_planner_response(self, response: object) -> PlannerResponse:
         """Handle Planner API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return PlannerResponse(success=False, error="Empty response from Planner API")
-            success = True
-            error_msg = None
+        # Optimized: Remove repeated hasattr/isinstance checks, use a variable for error extraction
+        if response is None:
+            return PlannerResponse(success=False, error="Empty response from Planner API")
 
-            # Enhanced error response handling for Planner operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+        if hasattr(response, 'error'):
+            return PlannerResponse(success=False, data=response, error=str(response.error))
+        if isinstance(response, dict) and 'error' in response:
+            error_info = response['error']
+            if isinstance(error_info, dict):
+                error_code = error_info.get('code', 'Unknown')
+                error_message = error_info.get('message', 'No message')
+                error_msg = f"{error_code}: {error_message}"
+            else:
+                error_msg = str(error_info)
+            return PlannerResponse(success=False, data=response, error=error_msg)
+        if hasattr(response, 'code') and hasattr(response, 'message'):
 
             return PlannerResponse(
-                success=success,
-                data=response,
-                error=error_msg,
+                success=False, data=response,
+                error=f"{response.code}: {response.message}"
             )
-        except Exception as e:
-            logger.error(f"Error handling Planner response: {e}")
-            return PlannerResponse(success=False, error=str(e))
+        # Default case - success
+        return PlannerResponse(success=True, data=response, error=None)
 
     def get_data_source(self) -> 'PlannerDataSource':
         """Get the underlying Planner client."""
@@ -15703,8 +15693,11 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Optimized: Set parameters directly without many object instantiations
+            config = RequestConfiguration()
+            query_params = config
+
+            # Avoid creating two RequestConfiguration objects, just reuse config/query_params
 
             # Set query parameters using typed object properties
             if select:
@@ -15722,20 +15715,18 @@ class PlannerDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                # Fewer checks: just assign or update
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.planner.tasks.by_planner_task_id(plannerTask_id).details.patch(body=request_body, request_configuration=config)
+            response = await self.client.planner.tasks.by_planner_task_id(plannerTask_id).details.patch(
+                body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
