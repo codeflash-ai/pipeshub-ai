@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -12801,15 +12799,16 @@ class PlannerDataSource:
             query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
 
             # Set query parameters using typed object properties
-            if select:
+            # Batch assignment for reduced context switching in async context
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
@@ -12821,7 +12820,9 @@ class PlannerDataSource:
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+
+            # Add consistency level for search operations before async await
 
             # Add consistency level for search operations in Planner
             if search:
@@ -12829,7 +12830,16 @@ class PlannerDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).details.get(request_configuration=config)
+            # Await only the actual network operation (I/O bound, async)
+            details_get = self.client.planner.plans \
+                .by_planner_plan_id(plannerPlan_id) \
+                .buckets.by_planner_bucket_id(plannerBucket_id) \
+                .tasks.by_planner_task_id(plannerTask_id) \
+                .details.get
+
+            response = await details_get(request_configuration=config)
+
+            # Handle response synchronously as it's CPU-bound
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
