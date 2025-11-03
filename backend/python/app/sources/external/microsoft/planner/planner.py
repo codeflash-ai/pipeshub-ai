@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -18143,39 +18141,54 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Only create RequestConfiguration and set attributes if needed
+            # Avoid unnecessary object instantiation and attribute setting for performance
+            need_query_params = select or expand or filter or orderby or search or top is not None or skip is not None
+            if need_query_params:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            config_needed = headers or query_params or search  # Must attach config if any set
+            if config_needed:
+                config = RequestConfiguration()
+                if query_params:
+                    config.query_parameters = query_params
+                if headers:
+                    config.headers = headers
+                if search:
+                    # Add consistency level for search operations in Planner
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Compose and perform the async delete
+            rq = self.client.users.by_user_id(user_id)\
+                                 .planner.plans.by_planner_plan_id(plannerPlan_id)\
+                                 .buckets.by_planner_bucket_id(plannerBucket_id)\
+                                 .tasks.by_planner_task_id(plannerTask_id)\
+                                 .progress_task_board_format
+            if config is not None:
+                response = await rq.delete(request_configuration=config)
+            else:
+                response = await rq.delete()
 
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
-
-            response = await self.client.users.by_user_id(user_id).planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).progress_task_board_format.delete(request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
