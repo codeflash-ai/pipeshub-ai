@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -17331,28 +17329,26 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            config = RequestConfiguration()
+            # Set query params on config directly
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                config.query_parameters.select = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                config.query_parameters.filter = filter
             if orderby:
-                query_params.orderby = orderby
+                config.query_parameters.orderby = orderby
             if search:
-                query_params.search = search
+                config.query_parameters.search = search
             if top is not None:
-                query_params.top = top
+                config.query_parameters.top = top
             if skip is not None:
-                query_params.skip = skip
+                config.query_parameters.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Add additional headers if provided
 
             if headers:
                 config.headers = headers
@@ -17363,7 +17359,13 @@ class PlannerDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).planner.plans.by_planner_plan_id(plannerPlan_id).buckets.by_planner_bucket_id(plannerBucket_id).tasks.by_planner_task_id(plannerTask_id).patch(body=request_body, request_configuration=config)
+            # PATCH request is awaited, rest of the chain is not async
+            response = await self.client.users.by_user_id(user_id)\
+                .planner.plans.by_planner_plan_id(plannerPlan_id)\
+                .buckets.by_planner_bucket_id(plannerBucket_id)\
+                .tasks.by_planner_task_id(plannerTask_id)\
+                .patch(body=request_body, request_configuration=config)
+
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
