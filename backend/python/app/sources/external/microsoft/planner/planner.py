@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -16537,31 +16535,40 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Only build query_params if any query param is present
+            has_query_params = any([
+                select, expand, filter, orderby, search, top is not None, skip is not None
+            ])
+            query_params = None
+            if has_query_params:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                config.query_parameters = query_params
+
+            # Defensive copy of headers input to avoid mutating caller dicts
 
             if headers:
-                config.headers = headers
+                config.headers = dict(headers)
+
+            # Add consistency level for search operations in Planner
 
             # Add consistency level for search operations in Planner
             if search:
@@ -16569,7 +16576,8 @@ class PlannerDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).planner.plans.by_planner_plan_id(plannerPlan_id).patch(body=request_body, request_configuration=config)
+            plan_request_obj = self.client.users.by_user_id(user_id).planner.plans.by_planner_plan_id(plannerPlan_id)
+            response = await plan_request_obj.patch(body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
@@ -24686,4 +24694,36 @@ class PlannerDataSource:
                 success=False,
                 error=f"Planner API call failed: {str(e)}",
             )
+
+    async def users_planner_update_plans_batch(
+        self,
+        targets: List[Dict[str, Any]],
+        request_body: Optional[Mapping[str, Any]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> List[PlannerResponse]:
+        """
+        Batch update multiple plans concurrently for different users/plans.
+        targets: list of dicts with keys 'user_id', 'plannerPlan_id', and optionally any query param.
+        Returns:
+            List[PlannerResponse]: Responses (same order as targets).
+        """
+        tasks = []
+        for target in targets:
+            tasks.append(
+                self.users_planner_update_plans(
+                    user_id=target['user_id'],
+                    plannerPlan_id=target['plannerPlan_id'],
+                    select=target.get('select'),
+                    expand=target.get('expand'),
+                    filter=target.get('filter'),
+                    orderby=target.get('orderby'),
+                    search=target.get('search'),
+                    top=target.get('top'),
+                    skip=target.get('skip'),
+                    request_body=request_body,
+                    headers=headers,
+                )
+            )
+        # Run all PATCH requests concurrently, preserving async I/O throughput
+        return await asyncio.gather(*tasks)
 
