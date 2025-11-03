@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -14109,39 +14107,53 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
+            # Optimize: Avoid redundant instantiations, and only create objects if needed.
+            query_params = None
+            any_query_param = any([
+                select, expand, filter, orderby, search, top is not None, skip is not None, dollar_select, dollar_expand
+            ])
+            if any_query_param:
+                query_params = PlansRequestBuilder.PlansRequestBuilderGetQueryParameters()
+                # OData parameters
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                # Support dollar_select for explicit $select
+                if dollar_select:
+                    query_params.select = dollar_select if isinstance(dollar_select, list) else [dollar_select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if dollar_expand:
+                    query_params.expand = dollar_expand if isinstance(dollar_expand, list) else [dollar_expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            config = None
+            if query_params or headers or search:
+                config = PlansRequestBuilder.PlansRequestBuilderGetRequestConfiguration()
+                if query_params:
+                    config.query_parameters = query_params
+                if headers:
+                    config.headers = headers.copy()
+                # Add consistency level for search if requested
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
-            # Create proper typed request configuration
-            config = PlansRequestBuilder.PlansRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            # Build resource access chain once for clarity (slightly faster property chaining)
+            task_req = self.client.planner.plans.by_planner_plan_id(plannerPlan_id) \
+                        .tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format
 
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
-
-            response = await self.client.planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).bucket_task_board_format.get(request_configuration=config)
+            # Await planner task get (this is the only awaited IO here)
+            response = await task_req.get(request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
