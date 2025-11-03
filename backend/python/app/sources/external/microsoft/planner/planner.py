@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -11089,37 +11087,30 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
-
-            # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in Planner
+            # Set query params if any
+            if select or expand or filter or orderby or search or top is not None or skip is not None:
+                q = config.query_parameters = RequestConfiguration()
+                if select:
+                    q.select = select if isinstance(select, list) else [select]
+                if expand:
+                    q.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    q.filter = filter
+                if orderby:
+                    q.orderby = orderby
+                if search:
+                    q.search = search
+                if top is not None:
+                    q.top = top
+                if skip is not None:
+                    q.skip = skip
+            # Headers (merge + ConsistencyLevel if appropriate)
+            merged_headers = dict(headers) if headers else {}
             if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                merged_headers['ConsistencyLevel'] = 'eventual'
+            if merged_headers:
+                config.headers = merged_headers
 
             response = await self.client.planner.plans.post(body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
