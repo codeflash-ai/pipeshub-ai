@@ -16,8 +16,7 @@ class KeyValueFactory:
 
     @staticmethod
     async def create_redis_service(
-        logger: logging.Logger,
-        config_service: ConfigurationService
+        logger: logging.Logger, config_service: ConfigurationService
     ) -> RedisService:
         """
         Create a RedisService instance using the factory method.
@@ -31,9 +30,7 @@ class KeyValueFactory:
 
     @staticmethod
     async def create_service(
-        service_type: str,
-        logger: logging.Logger,
-        config_service: ConfigurationService
+        service_type: str, logger: logging.Logger, config_service: ConfigurationService
     ) -> Optional[IKeyValueService]:
         """
         Create a key-value service based on the service type.
