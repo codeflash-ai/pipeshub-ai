@@ -64,10 +64,18 @@ class GoogleAdminService:
                     org_id, app_name
                 )
 
-                self.logger.info(f"🔍 Retrieved credentials for org {org_id}, app {app_name}")
-                self.logger.info(f"🔍 Credentials keys: {list(credentials_json.keys())}")
-                self.logger.info(f"🔍 Admin email: {credentials_json.get('adminEmail')}")
-                self.logger.info(f"🔍 Client email: {credentials_json.get('client_email')}")
+                self.logger.info(
+                    f"🔍 Retrieved credentials for org {org_id}, app {app_name}"
+                )
+                self.logger.info(
+                    f"🔍 Credentials keys: {list(credentials_json.keys())}"
+                )
+                self.logger.info(
+                    f"🔍 Admin email: {credentials_json.get('adminEmail')}"
+                )
+                self.logger.info(
+                    f"🔍 Client email: {credentials_json.get('client_email')}"
+                )
 
                 admin_email = credentials_json.get("adminEmail")
                 if not credentials_json:
@@ -198,14 +206,10 @@ class GoogleAdminService:
                                     "businessPhones": user.get("phones", []),
                                     "isActive": user.get("isActive", False),
                                     "createdAtTimestamp": int(
-                                        parse_timestamp(
-                                            user.get("creationTime")
-                                        )
+                                        parse_timestamp(user.get("creationTime"))
                                     ),
                                     "updatedAtTimestamp": int(
-                                        parse_timestamp(
-                                            user.get("creationTime")
-                                        )
+                                        parse_timestamp(user.get("creationTime"))
                                     ),
                                 }
                             )
@@ -721,7 +725,9 @@ class GoogleAdminService:
                 )
                 webhook_endpoint = endpoints.get("connectors", {}).get("publicEndpoint")
                 if not webhook_endpoint:
-                    webhook_endpoint = endpoints.get("connectors", {}).get("endpoint", DefaultEndpoints.CONNECTOR_ENDPOINT.value)
+                    webhook_endpoint = endpoints.get("connectors", {}).get(
+                        "endpoint", DefaultEndpoints.CONNECTOR_ENDPOINT.value
+                    )
                     if not webhook_endpoint:
                         raise AdminServiceError(
                             "Missing webhook endpoint configuration",
@@ -792,7 +798,10 @@ class GoogleAdminService:
             # Create delegated credentials for the user
             try:
                 user_key = await self.arango_service.get_entity_id_by_email(user_email)
-                user = await self.arango_service.get_document(user_key, CollectionNames.USERS.value,)
+                user = await self.arango_service.get_document(
+                    user_key,
+                    CollectionNames.USERS.value,
+                )
                 if self.credentials is None:
                     await self.connect_admin(user.get("orgId"), app_name="DRIVE")
                 user_credentials = self.credentials.with_subject(user_email)
@@ -847,7 +856,9 @@ class GoogleAdminService:
             # Create delegated credentials for the user
             try:
                 user_key = await self.arango_service.get_entity_id_by_email(user_email)
-                user = await self.arango_service.get_document(user_key, CollectionNames.USERS.value)
+                user = await self.arango_service.get_document(
+                    user_key, CollectionNames.USERS.value
+                )
                 if self.credentials is None:
                     await self.connect_admin(user.get("orgId"), app_name="GMAIL")
                 user_credentials = self.credentials.with_subject(user_email)
@@ -900,7 +911,9 @@ class GoogleAdminService:
             self.logger.info("🚀 Creating parser user service for %s", user_email)
             try:
                 user_key = await self.arango_service.get_entity_id_by_email(user_email)
-                user = await self.arango_service.get_document(user_key, CollectionNames.USERS.value)
+                user = await self.arango_service.get_document(
+                    user_key, CollectionNames.USERS.value
+                )
                 if self.credentials is None:
                     await self.connect_admin(user.get("orgId"))
                 user_credentials = self.credentials.with_subject(user_email)
