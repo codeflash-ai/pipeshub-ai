@@ -881,17 +881,21 @@ class GmailSyncEnterpriseService(BaseGmailSyncService):
     async def connect_services(self, org_id: str) -> bool:
         """Connect to services for enterprise setup"""
         try:
-            self.logger.info("🚀 Connecting to enterprise services")
+            if hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(20):
+                self.logger.info("🚀 Connecting to enterprise services")
 
             # Connect to Google Admin
-            if not await self.gmail_admin_service.connect_admin(org_id, "gmail"):
+            success = await self.gmail_admin_service.connect_admin(org_id, "gmail")
+            if not success:
                 raise Exception("Failed to connect to Gmail Admin API")
 
-            self.logger.info("✅ Enterprise services connected successfully")
+            if hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(20):
+                self.logger.info("✅ Enterprise services connected successfully")
             return True
 
         except Exception as e:
-            self.logger.error("❌ Enterprise service connection failed: %s", str(e))
+            if hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(40):
+                self.logger.error("❌ Enterprise service connection failed: %s", str(e))
             return False
 
     async def setup_changes_watch(self, org_id: str, user_email: str) -> Optional[Dict]:
@@ -2471,41 +2475,39 @@ class GmailSyncIndividualService(BaseGmailSyncService):
 
     async def resync_gmail(self, org_id, user) -> bool | None:
         try:
+            user_email = user["email"]
             user_service = self.gmail_user_service
-            self.logger.info(f"Resyncing Gmail for user {user['email']}")
+            self.logger.info(f"Resyncing Gmail for user {user_email}")
 
-            channel_history = await self.arango_service.get_channel_history_id(
-                user["email"]
-            )
+            channel_history = await self.arango_service.get_channel_history_id(user_email)
             if not channel_history:
-                self.logger.warning(f"⚠️ No historyId found for {user['email']}")
+                self.logger.warning(f"⚠️ No historyId found for {user_email}")
                 return
 
-            changes = await user_service.fetch_gmail_changes(
-                user["email"], channel_history["historyId"]
-            )
+            history_id = channel_history["historyId"]
+            expiration = channel_history["expiration"]
+
+            changes = await user_service.fetch_gmail_changes(user_email, history_id)
 
             # Check if changes is valid and has history items
-            if changes and isinstance(changes, dict) and changes.get("history"):
-                self.logger.info(f"📝 Changes found for user {user['email']}")
+            history = changes.get("history") if changes and isinstance(changes, dict) else None
+            if history:
+                self.logger.info(f"📝 Changes found for user {user_email}")
                 try:
                     await self.change_handler.process_changes(
                         user_service, changes, org_id, user
                     )
-
                     # Update history ID after successful processing
                     await self.arango_service.store_channel_history_id(
-                        changes["historyId"],
-                        channel_history["expiration"],
-                        user["email"]
+                        changes["historyId"], expiration, user_email
                     )
-                    self.logger.info(f"🚀 Updated historyId for user {user['email']}")
+                    self.logger.info(f"🚀 Updated historyId for user {user_email}")
 
                 except Exception as e:
                     self.logger.error(f"Error processing changes: {str(e)}")
                     return False
             else:
-                self.logger.info("ℹ️ No changes found for user %s", user["email"])
+                self.logger.info("ℹ️ No changes found for user %s", user_email)
 
             return True
 
