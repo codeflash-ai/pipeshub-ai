@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -108,15 +106,16 @@ class PlannerDataSource:
         try:
             if response is None:
                 return PlannerResponse(success=False, error="Empty response from Planner API")
-            success = True
-            error_msg = None
 
             # Enhanced error response handling for Planner operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return PlannerResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+            
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -124,14 +123,26 @@ class PlannerDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return PlannerResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
 
+                return PlannerResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+
+            # If no error detected
             return PlannerResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Planner response: {e}")
@@ -23903,8 +23914,12 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Avoid unnecessary object instantiations by using only one config object 
+            # and setting attributes directly.
+            config = RequestConfiguration()
+            query_params = config
+
+            # Set query parameter attributes directly; avoids separately creating two objects
 
             # Set query parameters using typed object properties
             if select:
@@ -23921,9 +23936,6 @@ class PlannerDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
@@ -23935,7 +23947,8 @@ class PlannerDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.role_management.entitlement_management.role_assignments.post(body=request_body, request_configuration=config)
+            response = await self.client.role_management.entitlement_management.role_assignments.post(
+                body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
