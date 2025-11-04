@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -20265,37 +20263,48 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Only create RequestConfiguration objects if needed
+            has_query_params = (
+                select or expand or filter or orderby or search or
+                top is not None or skip is not None
+            )
+            
+            # Fast path for common case with no parameters
+            if not has_query_params and not headers and not search:
+                config = None
+            else:
+                config = RequestConfiguration()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+                # Use typed query parameters
+                if has_query_params:
+                    query_params = RequestConfiguration()
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+                    # Set query parameters using typed object properties
+                    if select:
+                        query_params.select = select if isinstance(select, list) else [select]
+                    if expand:
+                        query_params.expand = expand if isinstance(expand, list) else [expand]
+                    if filter:
+                        query_params.filter = filter
+                    if orderby:
+                        query_params.orderby = orderby
+                    if search:
+                        query_params.search = search
+                    if top is not None:
+                        query_params.top = top
+                    if skip is not None:
+                        query_params.skip = skip
 
-            if headers:
-                config.headers = headers
+                    config.query_parameters = query_params
 
-            # Add consistency level for search operations in Planner
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                if headers:
+                    config.headers = headers
+
+                # Add consistency level for search operations in Planner
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.users.by_user_id(user_id).planner.tasks.by_planner_task_id(plannerTask_id).patch(body=request_body, request_configuration=config)
             return self._handle_planner_response(response)
