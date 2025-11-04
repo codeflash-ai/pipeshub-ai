@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -112,10 +110,7 @@ class PlannerDataSource:
             error_msg = None
 
             # Enhanced error response handling for Planner operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+            if isinstance(response, dict) and 'error' in response:
                 success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
@@ -124,6 +119,9 @@ class PlannerDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
+            elif hasattr(response, 'error'):
+                success = False
+                error_msg = str(response.error)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
                 success = False
                 error_msg = f"{response.code}: {response.message}"
@@ -24647,37 +24645,48 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Only construct query_params object if needed
+            dirty_query = (
+                select is not None or expand is not None or filter is not None or 
+                orderby is not None or search is not None or top is not None or skip is not None
+            )
+            query_params = None
+            if dirty_query:
+                query_params = RequestConfiguration()
 
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+                # Use assignment only when a real value is provided, avoid redundant attribute set
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter is not None:
+                    query_params.filter = filter
+                if orderby is not None:
+                    query_params.orderby = orderby
+                if search is not None:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # This avoids two lookups if config.headers is set already
+                hdrs = config.headers if config.headers is not None else {}
+                hdrs['ConsistencyLevel'] = 'eventual'
+                config.headers = hdrs # Ensure headers are attached in all cases
+
 
             response = await self.client.users.by_user_id(user_id).reprocess_license_assignment.post(request_configuration=config)
             return self._handle_planner_response(response)
