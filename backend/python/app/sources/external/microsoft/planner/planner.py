@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -21197,6 +21195,9 @@ class PlannerDataSource:
             query_params = RequestConfiguration()
 
             # Set query parameters using typed object properties
+            config = RequestConfiguration()
+
+            # Set all query parameter fields in one go
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
@@ -21211,21 +21212,29 @@ class PlannerDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if not getattr(config, 'headers', None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).planner.tasks.by_planner_task_id(plannerTask_id).progress_task_board_format.patch(body=request_body, request_configuration=config)
+            # Patch call requires If-Match header, ensure it's present
+            if not hasattr(config, 'headers') or config.headers is None:
+                config.headers = {}
+            config.headers['If-Match'] = If_Match
+
+            # Perform async PATCH request
+            response = await self.client.users.by_user_id(user_id)\
+                .planner.tasks.by_planner_task_id(plannerTask_id)\
+                .progress_task_board_format.patch(
+                    body=request_body,
+                    request_configuration=config
+                )
             return self._handle_planner_response(response)
         except Exception as e:
             return PlannerResponse(
