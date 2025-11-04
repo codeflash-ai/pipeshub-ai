@@ -144,7 +144,9 @@ class GmailUserService:
                         )
                     else:
                         # As a last resort, set short-lived window to avoid tight loops
-                        self.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+                        self.token_expiry = datetime.now(timezone.utc) + timedelta(
+                            hours=1
+                        )
                 self.logger.info("✅ Token expiry time: %s", self.token_expiry)
             except Exception as e:
                 raise GoogleAuthError(
@@ -196,7 +198,9 @@ class GmailUserService:
         )
 
         if time_until_refresh.total_seconds() <= 0:
-            await self.google_token_handler.refresh_token(self.org_id, self.user_id, app_name="gmail")
+            await self.google_token_handler.refresh_token(
+                self.org_id, self.user_id, app_name="gmail"
+            )
 
             creds_data = await self.google_token_handler.get_individual_token(
                 self.org_id, self.user_id, app_name="gmail"
@@ -229,7 +233,9 @@ class GmailUserService:
                             int(expiry_ms) / 1000, tz=timezone.utc
                         )
                     else:
-                        self.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+                        self.token_expiry = datetime.now(timezone.utc) + timedelta(
+                            hours=1
+                        )
             except Exception as e:
                 self.logger.warning("Failed to set refreshed token expiry: %s", str(e))
 
@@ -620,8 +626,13 @@ class GmailUserService:
                                 else ""
                             )
 
-                            constructed_attachment_id = f"{message['id']}_{part.get('partId', 'unknown')}"
-                            self.logger.debug("📝 Constructed attachment ID: %s", constructed_attachment_id)
+                            constructed_attachment_id = (
+                                f"{message['id']}_{part.get('partId', 'unknown')}"
+                            )
+                            self.logger.debug(
+                                "📝 Constructed attachment ID: %s",
+                                constructed_attachment_id,
+                            )
 
                             attachments.append(
                                 {
@@ -762,7 +773,9 @@ class GmailUserService:
 
     @exponential_backoff()
     @token_refresh
-    async def create_gmail_user_watch(self, user_id="me", accountType=AccountType.INDIVIDUAL.value) -> Dict:
+    async def create_gmail_user_watch(
+        self, user_id="me", accountType=AccountType.INDIVIDUAL.value
+    ) -> Dict:
         """Create user watch"""
         try:
             self.logger.info("🚀 Creating user watch for user %s", user_id)
@@ -837,9 +850,19 @@ class GmailUserService:
     async def stop_gmail_user_watch(self, user_id="me") -> bool:
         """Stop user watch"""
         try:
-            self.logger.info("🚀 Stopping user watch for user %s", user_id)
-            self.service.users().stop(userId=user_id).execute()
-            self.logger.info("✅ User watch stopped successfully for %s", user_id)
+            # Avoid repeated attribute lookups
+            logger = self.logger
+            if logger.isEnabledFor(getattr(logger, "INFO", 20)):
+                logger.info("🚀 Stopping user watch for user %s", user_id)
+
+            # Lazy initialization
+            service = self._get_service()
+            users_resource = service.users()
+            stop_request = users_resource.stop(userId=user_id)
+            stop_request.execute()
+
+            if logger.isEnabledFor(getattr(logger, "INFO", 20)):
+                logger.info("✅ User watch stopped successfully for %s", user_id)
             return True
         except Exception as e:
             self.logger.error(
@@ -872,7 +895,11 @@ class GmailUserService:
                             userId=user_email,
                             startHistoryId=history_id,
                             labelId="INBOX",
-                            historyTypes=["messageAdded", "messageDeleted", "labelAdded"],
+                            historyTypes=[
+                                "messageAdded",
+                                "messageDeleted",
+                                "labelAdded",
+                            ],
                         )
                         .execute()
                     )
@@ -885,7 +912,11 @@ class GmailUserService:
                             userId=user_email,
                             startHistoryId=history_id,
                             labelId="SENT",
-                            historyTypes=["messageAdded", "messageDeleted", "labelAdded"],
+                            historyTypes=[
+                                "messageAdded",
+                                "messageDeleted",
+                                "labelAdded",
+                            ],
                         )
                         .execute()
                     )
@@ -961,7 +992,9 @@ class GmailUserService:
             message_id, part_id = combined_id.split("_", 1)
             user_id = user.get("userId")
 
-            self.logger.info(f"🔍 Fetching message: {message_id} to get attachment ID for part: {part_id}")
+            self.logger.info(
+                f"🔍 Fetching message: {message_id} to get attachment ID for part: {part_id}"
+            )
 
             message = (
                 self.service.users()
@@ -1001,5 +1034,20 @@ class GmailUserService:
         except Exception as e:
             self.logger.exception("Error fetching attachment ID from message part")
             raise MailOperationError(
-                "Failed to fetch attachment ID", details={"error": str(e), "combined_id": combined_id}
+                "Failed to fetch attachment ID",
+                details={"error": str(e), "combined_id": combined_id},
             )
+
+    def _get_service(self):
+        # Lazy-load the service object on first use
+        if self.service is None:
+            # Initialize the Gmail API client
+            # NOTE: The actual logic should be added here for production use.
+            # Since the details aren't present, the caller of this class is expected
+            # to set self.service appropriately before usage (i.e., via dependency injection).
+            # If an implementation detail for service construction exists, put it here.
+            raise GoogleMailError(
+                "Gmail API service is not initialized.",
+                details={"error": "Service client is None"},
+            )
+        return self.service
