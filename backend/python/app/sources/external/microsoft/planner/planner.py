@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -108,15 +106,9 @@ class PlannerDataSource:
         try:
             if response is None:
                 return PlannerResponse(success=False, error="Empty response from Planner API")
-            success = True
             error_msg = None
-
-            # Enhanced error response handling for Planner operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+            # Fast-path check: dict type is faster checked first for all error-reporting APIs
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -124,14 +116,24 @@ class PlannerDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return PlannerResponse(success=False, data=response, error=error_msg)
+            # Most Planner/Graph SDK responses are objects, minimize hasattr calls
+            error_attr = getattr(response, 'error', None)
+            if error_attr is not None:
+                error_msg = str(error_attr)
+                return PlannerResponse(success=False, data=response, error=error_msg)
+            # Rare case: errors exposed via code/message
+            code_attr = getattr(response, 'code', None)
+            msg_attr = getattr(response, 'message', None)
+            if code_attr is not None and msg_attr is not None:
+                error_msg = f"{code_attr}: {msg_attr}"
+                return PlannerResponse(success=False, data=response, error=error_msg)
+            # Success case
 
             return PlannerResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Planner response: {e}")
@@ -20827,13 +20829,14 @@ class PlannerDataSource:
             # Create proper typed request configuration
             config = RequestConfiguration()
             config.query_parameters = query_params
+            # Only set headers once if present
+            config.headers = headers if headers else None
 
-            if headers:
-                config.headers = headers
+            # Add consistency level for search, minimizing dict instantiation
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
+                if config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
