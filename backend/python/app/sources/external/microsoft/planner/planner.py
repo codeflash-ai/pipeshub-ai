@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -19485,8 +19483,11 @@ class PlannerDataSource:
         """
         # Build query parameters including OData for Planner
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Build config and query_params once
+            config = RequestConfiguration()
+            query_params = config.query_parameters if hasattr(config, 'query_parameters') else RequestConfiguration()
+
+            # Set query parameters using typed object properties
 
             # Set query parameters using typed object properties
             if select:
@@ -19503,18 +19504,13 @@ class PlannerDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
             config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
+            # Setup headers efficiently
+            config.headers = headers.copy() if headers else {}
 
             # Add consistency level for search operations in Planner
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.users.by_user_id(user_id).planner.plans.by_planner_plan_id(plannerPlan_id).tasks.by_planner_task_id(plannerTask_id).details.delete(request_configuration=config)
