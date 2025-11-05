@@ -98,7 +98,7 @@ def _parse_comma_separated_str(value: Optional[str]) -> Optional[List[str]]:
     """Parses a comma-separated string into a list of strings, filtering out empty items."""
     if not value:
         return None
-    return [item.strip() for item in value.split(',') if item.strip()]
+    return [stripped for item in value.split(',') if (stripped := item.strip())]
 
 def _sanitize_app_name(app_name: str) -> str:
     return app_name.replace(" ", "").lower()
