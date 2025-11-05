@@ -2602,54 +2602,68 @@ def _parse_filter_response(data: Dict[str, Any], filter_type: str, app_name: str
     """
     options = []
 
+    app_upper = app_name.upper()
+
     try:
-        if app_name.upper() == 'GMAIL' and filter_type == 'labels':
+        if app_upper == 'GMAIL' and filter_type == 'labels':
             # Gmail labels API response
-            labels = data.get('labels', [])
-            for label in labels:
-                if label.get('type') == 'user':  # Only user-created labels, not system labels
-                    options.append({
-                        "value": label['id'],
-                        "label": label['name']
-                    })
+            labels = data.get('labels')
+            if labels:
+                # Avoiding .get in loop for known structure, access fields directly.
+                options = [
+                    {"value": label["id"], "label": label["name"]}
+                    for label in labels
+                    if label.get("type") == "user"
+                ]
+            else:
+                options = []
 
-        elif app_name.upper() == 'DRIVE' and filter_type == 'folders':
+        elif app_upper == 'DRIVE' and filter_type == 'folders':
             # Google Drive folders API response
-            files = data.get('files', [])
-            for file in files:
-                options.append({
-                    "value": file['id'],
-                    "label": file['name']
-                })
+            files = data.get('files')
+            if files:
+                options = [
+                    {"value": file["id"], "label": file["name"]}
+                    for file in files
+                ]
+            else:
+                options = []
 
-        elif app_name.upper() == 'ONEDRIVE' and filter_type == 'folders':
+        elif app_upper == 'ONEDRIVE' and filter_type == 'folders':
             # OneDrive folders API response
-            items = data.get('value', [])
-            for item in items:
-                if item.get('folder'):
-                    options.append({
-                        "value": item['id'],
-                        "label": item['name']
-                    })
+            items = data.get('value')
+            if items:
+                options = [
+                    {"value": item["id"], "label": item["name"]}
+                    for item in items
+                    if item.get("folder")
+                ]
+            else:
+                options = []
 
-        elif app_name.upper() == 'SLACK' and filter_type == 'channels':
+        elif app_upper == 'SLACK' and filter_type == 'channels':
             # Slack channels API response
-            channels = data.get('channels', [])
-            for channel in channels:
-                if not channel.get('is_archived'):
-                    options.append({
-                        "value": channel['id'],
-                        "label": f"#{channel['name']}"
-                    })
+            channels = data.get('channels')
+            if channels:
+                options = [
+                    {"value": channel["id"], "label": f"#{channel['name']}"}
+                    for channel in channels
+                    if not channel.get("is_archived")
+                ]
+            else:
+                options = []
 
-        elif app_name.upper() == 'CONFLUENCE' and filter_type == 'spaces':
+        elif app_upper == 'CONFLUENCE' and filter_type == 'spaces':
             # Confluence spaces API response
-            spaces = data.get('results', [])
-            for space in spaces:
-                options.append({
-                    "value": space['key'],
-                    "label": space['name']
-                })
+            spaces = data.get('results')
+            if spaces:
+                options = [
+                    {"value": space["key"], "label": space["name"]}
+                    for space in spaces
+                ]
+            else:
+                options = []
+
 
     except Exception as e:
         print(f"Error parsing {filter_type} response for {app_name}: {str(e)}")
