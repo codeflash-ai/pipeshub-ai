@@ -70,6 +70,50 @@ from app.utils.llm import get_llm
 from app.utils.logger import create_logger
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
+_FALLBACK_OPTIONS_CACHE = {
+    'GMAIL': {
+        "labels": [
+            {"value": "INBOX", "label": "Inbox"},
+            {"value": "SENT", "label": "Sent"},
+            {"value": "DRAFT", "label": "Draft"},
+            {"value": "SPAM", "label": "Spam"},
+            {"value": "TRASH", "label": "Trash"}
+        ]
+    },
+    'DRIVE': {
+        "fileTypes": [
+            {"value": "document", "label": "Documents"},
+            {"value": "spreadsheet", "label": "Spreadsheets"},
+            {"value": "presentation", "label": "Presentations"},
+            {"value": "pdf", "label": "PDFs"},
+            {"value": "image", "label": "Images"},
+            {"value": "video", "label": "Videos"}
+        ]
+    },
+    'ONEDRIVE': {
+        "fileTypes": [
+            {"value": "document", "label": "Documents"},
+            {"value": "spreadsheet", "label": "Spreadsheets"},
+            {"value": "presentation", "label": "Presentations"},
+            {"value": "pdf", "label": "PDFs"},
+            {"value": "image", "label": "Images"},
+            {"value": "video", "label": "Videos"}
+        ]
+    },
+    'SLACK': {
+        "channels": [
+            {"value": "general", "label": "#general"},
+            {"value": "random", "label": "#random"}
+        ]
+    },
+    'CONFLUENCE': {
+        "spaces": [
+            {"value": "DEMO", "label": "Demo Space"},
+            {"value": "DOCS", "label": "Documentation"}
+        ]
+    }
+}
+
 logger = create_logger("connector_service")
 
 router = APIRouter()
@@ -2698,51 +2742,7 @@ async def _get_fallback_filter_options(app_name: str) -> Dict[str, List[Dict[str
     Returns:
         Dict containing fallback filter options
     """
-    fallback_options = {
-        'GMAIL': {
-            "labels": [
-                {"value": "INBOX", "label": "Inbox"},
-                {"value": "SENT", "label": "Sent"},
-                {"value": "DRAFT", "label": "Draft"},
-                {"value": "SPAM", "label": "Spam"},
-                {"value": "TRASH", "label": "Trash"}
-            ]
-        },
-        'DRIVE': {
-            "fileTypes": [
-                {"value": "document", "label": "Documents"},
-                {"value": "spreadsheet", "label": "Spreadsheets"},
-                {"value": "presentation", "label": "Presentations"},
-                {"value": "pdf", "label": "PDFs"},
-                {"value": "image", "label": "Images"},
-                {"value": "video", "label": "Videos"}
-            ]
-        },
-        'ONEDRIVE': {
-            "fileTypes": [
-                {"value": "document", "label": "Documents"},
-                {"value": "spreadsheet", "label": "Spreadsheets"},
-                {"value": "presentation", "label": "Presentations"},
-                {"value": "pdf", "label": "PDFs"},
-                {"value": "image", "label": "Images"},
-                {"value": "video", "label": "Videos"}
-            ]
-        },
-        'SLACK': {
-            "channels": [
-                {"value": "general", "label": "#general"},
-                {"value": "random", "label": "#random"}
-            ]
-        },
-        'CONFLUENCE': {
-            "spaces": [
-                {"value": "DEMO", "label": "Demo Space"},
-                {"value": "DOCS", "label": "Documentation"}
-            ]
-        }
-    }
-
-    return fallback_options.get(app_name.upper(), {})
+    return _FALLBACK_OPTIONS_CACHE.get(app_name.upper(), {})
 
 
 @router.get("/api/v1/connectors/{app_name}/filters")
