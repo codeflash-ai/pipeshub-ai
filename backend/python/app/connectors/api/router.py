@@ -2069,9 +2069,13 @@ async def get_connector_config(
 
         if not config:
             config = {"auth": {}, "sync": {}, "filters": {}}
-        config = config.copy() if config else {"auth": {}, "sync": {}, "filters": {}}
-        config.pop("credentials", None)
-        config.pop("oauth", None)
+        else:
+            # Only copy if we need to remove sensitive keys
+            if "credentials" in config or "oauth" in config:
+                config = config.copy()
+                config.pop("credentials", None)
+                config.pop("oauth", None)
+
         response_dict: Dict[str, Any] = {
             "name": registry_entry["name"],
             "appGroupId": registry_entry.get("appGroupId"),
