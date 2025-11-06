@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -345,8 +345,11 @@ class GitLabDataSource:
 
     def delete_branch(self, project_id: Union[int, str], branch: str) -> GitLabResponse:
         """Delete a branch.  [branches]"""
-        p = self._project(project_id)
-        p.branches.delete(branch)
+        # Only one lookup for projects manager and only one for branches manager
+        projects = self._sdk.projects
+        p = projects.get(project_id)
+        branches = p.branches
+        branches.delete(branch)
         return GitLabResponse(success=True, data=True)
 
     def list_tags(
