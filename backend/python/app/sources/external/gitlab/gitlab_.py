@@ -16,11 +16,12 @@ class GitLabDataSource:
 
     def __init__(self, client_or_sdk: Union[Gitlab, object]) -> None:
         # Support a raw SDK or a wrapper that exposes `.get_sdk()`
-        if hasattr(client_or_sdk, "get_sdk"):
-            sdk_obj = getattr(client_or_sdk, "get_sdk")()
-            self._sdk: Gitlab = cast(Gitlab, sdk_obj)
-        else:
-            self._sdk = cast(Gitlab, client_or_sdk)
+        get_sdk = getattr(client_or_sdk, "get_sdk", None)
+        self._sdk: Gitlab = (
+            cast(Gitlab, get_sdk())
+            if callable(get_sdk)
+            else cast(Gitlab, client_or_sdk)
+        )
 
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
