@@ -13,8 +13,11 @@ class SyncDataPointType(Enum):
     RECORD_GROUPS = "recordGroups"
 
 
-def generate_record_sync_point_key(record_type: str, entity_name: str, entity_id: str) -> str:
+def generate_record_sync_point_key(
+    record_type: str, entity_name: str, entity_id: str
+) -> str:
     return f"{record_type}/{entity_name}/{entity_id}"
+
 
 class SyncPoint(ISyncPoint):
     connector_name: str
@@ -22,25 +25,38 @@ class SyncPoint(ISyncPoint):
     data_store_provider: DataStoreProvider
     sync_data_point_type: SyncDataPointType
 
-
-
     def _get_full_sync_point_key(self, sync_point_key: str) -> str:
-        return f"{self.org_id}/{self.connector_name}/{self.sync_data_point_type.value}/{sync_point_key}"
+        # Precompute static prefix once for performance in repeated calls
+        # Uses the instance attributes which are not changed after creation
+        prefix = self._full_prefix
+        return f"{prefix}{sync_point_key}"
 
-    def __init__(self, connector_name: Connectors, org_id: str, sync_data_point_type: SyncDataPointType, data_store_provider: DataStoreProvider) -> None:
+    def __init__(
+        self,
+        connector_name: Connectors,
+        org_id: str,
+        sync_data_point_type: SyncDataPointType,
+        data_store_provider: DataStoreProvider,
+    ) -> None:
         self.connector_name = connector_name.value
         self.org_id = org_id
         self.data_store_provider = data_store_provider
         self.sync_data_point_type = sync_data_point_type
+        # Precompute the constant key prefix to optimize _get_full_sync_point_key
+        self._full_prefix = (
+            f"{self.org_id}/{self.connector_name}/{self.sync_data_point_type.value}/"
+        )
 
-    async def create_sync_point(self, sync_point_key: str, sync_point_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def create_sync_point(
+        self, sync_point_key: str, sync_point_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         full_sync_point_key = self._get_full_sync_point_key(sync_point_key)
         document_data = {
             "orgId": self.org_id,
             "connectorName": self.connector_name,
             "syncPointKey": full_sync_point_key,
             "syncPointData": sync_point_data,
-            "syncDataPointType": self.sync_data_point_type.value
+            "syncDataPointType": self.sync_data_point_type.value,
         }
 
         async with self.data_store_provider.transaction() as tx_store:
@@ -53,9 +69,11 @@ class SyncPoint(ISyncPoint):
             full_sync_point_key = self._get_full_sync_point_key(sync_point_key)
             sync_point = await tx_store.get_sync_point(full_sync_point_key)
 
-            return sync_point.get('syncPointData', {}) if sync_point else {}
+            return sync_point.get("syncPointData", {}) if sync_point else {}
 
-    async def update_sync_point(self, sync_point_key: str, sync_point_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_sync_point(
+        self, sync_point_key: str, sync_point_data: Dict[str, Any]
+    ) -> Dict[str, Any]:
         return await self.create_sync_point(sync_point_key, sync_point_data)
 
     async def delete_sync_point(self, sync_point_key: str) -> Dict[str, Any]:
