@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -147,8 +147,9 @@ class GitLabDataSource:
 
     def get_issue(self, project_id: Union[int, str], issue_iid: int) -> GitLabResponse:
         """Get a single issue by IID.  [issues]"""
-        p = self._project(project_id)
-        issue = p.issues.get(issue_iid)
+        # Inline _project call to avoid attribute lookup and reduce stack frame
+        project = self._sdk.projects.get(project_id)
+        issue = project.issues.get(issue_iid)
         return GitLabResponse(success=True, data=issue)
 
     def create_issue(
