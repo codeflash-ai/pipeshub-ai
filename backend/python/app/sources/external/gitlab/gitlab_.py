@@ -16,9 +16,10 @@ class GitLabDataSource:
 
     def __init__(self, client_or_sdk: Union[Gitlab, object]) -> None:
         # Support a raw SDK or a wrapper that exposes `.get_sdk()`
-        if hasattr(client_or_sdk, "get_sdk"):
-            sdk_obj = getattr(client_or_sdk, "get_sdk")()
-            self._sdk: Gitlab = cast(Gitlab, sdk_obj)
+        # Avoid repeated attribute lookups by creating a local variable.
+        get_sdk = getattr(client_or_sdk, "get_sdk", None)
+        if get_sdk is not None:
+            self._sdk: Gitlab = cast(Gitlab, get_sdk())
         else:
             self._sdk = cast(Gitlab, client_or_sdk)
 
@@ -705,8 +706,8 @@ class GitLabDataSource:
 
     def get_group(self, group_id: Union[int, str]) -> GitLabResponse:
         """Get a group by ID or full path."""
-        g = self._sdk.groups.get(group_id)
-        return GitLabResponse(success=True, data=g)
+        # Inline variable to reduce namespace lookups
+        return GitLabResponse(success=True, data=self._sdk.groups.get(group_id))
 
     def create_group(
         self,
