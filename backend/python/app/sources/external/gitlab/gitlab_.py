@@ -25,20 +25,27 @@ class GitLabDataSource:
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
         # python-gitlab allows numeric ID or full path for project lookup
-        return self._sdk.projects.get(project_id)
+        # Cache last seen project_id to minimize `get` calls for duplicate lookups
+        cache = getattr(self, "_project_cache", None)
+        if cache is None:
+            cache = {}
+            setattr(self, "_project_cache", cache)
+        if project_id in cache:
+            return cache[project_id]
+        proj = self._sdk.projects.get(project_id)
+        cache[project_id] = proj
+        return proj
 
     @staticmethod
     def _params(**kwargs: object) -> Dict[str, object]:
         # Filter out Nones to avoid overriding SDK defaults
-        out: Dict[str, object] = {}
-        for k, v in kwargs.items():
-            if v is None:
-                continue
-            # Skip empty containers that GitLab rejects in some endpoints
-            if isinstance(v, (list, dict)) and len(v) == 0:
-                continue
-            out[k] = v
-        return out
+        # Avoid unnecessary checks by building directly with comprehensions
+        # (short-circuit logic for both filters in the comprehension)
+        return {
+            k: v
+            for k, v in kwargs.items()
+            if v is not None and (not isinstance(v, (list, dict)) or len(v) != 0)
+        }
 
     def list_projects(
         self,
