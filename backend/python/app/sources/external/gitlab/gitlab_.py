@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -359,8 +359,8 @@ class GitLabDataSource:
 
     def get_tag(self, project_id: Union[int, str], tag_name: str) -> GitLabResponse:
         """Get a tag."""
-        p = self._project(project_id)
-        t = p.tags.get(tag_name)
+        # Inline _project lookup for marginal call reduction, preserves logic and side-effects
+        t = self._sdk.projects.get(project_id).tags.get(tag_name)
         return GitLabResponse(success=True, data=t)
 
     def create_tag(
