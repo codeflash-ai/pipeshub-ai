@@ -669,13 +669,18 @@ class KnowledgeBaseMigrationService:
         try:
             self.logger.info("🔄 Updating graph structure")
 
+            db = self.db
+            # Optimize has_graph calls by only calling once for each graph name
+            old_graph_exists = db.has_graph(self.OLD_GRAPH_NAME)
+            new_graph_exists = db.has_graph(self.NEW_GRAPH_NAME)
+
             # Step 1: Handle graph renaming
-            if self.db.has_graph(self.OLD_GRAPH_NAME):
-                self.db.delete_graph(self.OLD_GRAPH_NAME)
+            if old_graph_exists:
+                db.delete_graph(self.OLD_GRAPH_NAME)
                 self.logger.info(f"🗑️ Deleted old graph: {self.OLD_GRAPH_NAME}")
 
             # Step 2: Create the new graph with the correct definitions if it's not already there.
-            if not self.db.has_graph(self.NEW_GRAPH_NAME):
+            if not new_graph_exists:
                 await self._create_complete_new_graph()
             else:
                 self.logger.info(f"✅ Graph '{self.NEW_GRAPH_NAME}' already exists, ensuring vertices are updated.")
@@ -699,9 +704,22 @@ class KnowledgeBaseMigrationService:
                 self.OLD_KB_COLLECTION,
             ]
 
-            existing_collections = [
-                name for name in target_collections if self.db.has_collection(name)
-            ]
+            # Optimize: batch-check with a single call to .collections() (if available)
+            try:
+                # Use direct lookup if available, this is much faster than repeated .has_collection()
+                # Only compatible if the db object has a .collections() method returning names
+                arango_collections = set(
+                    col['name'] for col in self.db.collections()
+                )
+                existing_collections = [
+                    name for name in target_collections if name in arango_collections
+                ]
+            except Exception:
+                # Fallback if .collections() is not available
+                existing_collections = [
+                    name for name in target_collections if self.db.has_collection(name)
+                ]
+
 
             if not existing_collections:
                 self.logger.info("⏭️ No old collections found - skipping cleanup")
@@ -713,6 +731,13 @@ class KnowledgeBaseMigrationService:
             try:
                 # Delete old data
 
+                # Delete all documents in all collections in one AQL query for efficiency
+                queries = [
+                    f"FOR doc IN {collection_name} REMOVE doc IN {collection_name}"
+                    for collection_name in existing_collections
+                ]
+                # It is safe to run one multi-statement AQL if the driver supports it, otherwise send individual.
+                # We'll send individually to be safe and preserve side effects (logger matched to collections).
                 for collection_name in existing_collections:
                     delete_query = f"FOR doc IN {collection_name} REMOVE doc IN {collection_name}"
                     cleanup_transaction.aql.execute(delete_query)
@@ -728,11 +753,14 @@ class KnowledgeBaseMigrationService:
 
             # Step 2: Drop the now-empty collections (non-transactional)
             self.logger.info("🗑️ Dropping empty old collections")
-            collections_to_drop = existing_collections
-
-            for collection_name in collections_to_drop:
+            # Minor efficiency: use the arango_collections set if possible
+            for collection_name in existing_collections:
                 try:
-                    if self.db.has_collection(collection_name):
+                    # If still available, drop. Use set lookup if previously loaded, fall back to has_collection otherwise.
+                    if (
+                        'arango_collections' in locals()
+                        and collection_name in arango_collections
+                    ) or self.db.has_collection(collection_name):
                         self.db.delete_collection(collection_name)
                         self.logger.info(f"🗑️ Successfully dropped collection: '{collection_name}'")
                     else:
@@ -805,7 +833,7 @@ async def run_kb_migration(container) -> Dict:
         logger = container.logger()
         kb_arango_service = await container.kb_arango_service()
 
-        migration_service = KnowledgeBaseMigrationService(kb_arango_service,logger)
+        migration_service = KnowledgeBaseMigrationService(kb_arango_service, logger)
         result = await migration_service.run_migration()
 
         # Step 2: Update graph structure (remove old edges, rename graph)
