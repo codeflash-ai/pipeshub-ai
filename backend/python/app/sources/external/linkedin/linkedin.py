@@ -53,7 +53,11 @@ class LinkedInDataSource:
             client: LinkedInClient instance (wraps official SDK)
         """
         self.client = client
-        self._restli_client = client.get_client()
+        # Directly cache attributes that will be used in every call for quicker access
+        restli_client = client.get_client()
+        self._restli_client = restli_client
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -1188,8 +1192,8 @@ class LinkedInDataSource:
         return self._restli_client.create(
             resource_path="/adCampaignGroups",
             entity=group_data,
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     def batch_get_campaign_groups(
