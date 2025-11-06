@@ -55,6 +55,10 @@ class LinkedInDataSource:
         self.client = client
         self._restli_client = client.get_client()
 
+        # Cache mutable fields used in DELETE calls for perf
+        self._access_token = client.access_token
+        self._version_string = client.version_string
+
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
     # ========================================================================
@@ -582,11 +586,14 @@ class LinkedInDataSource:
             ...     like_id="like123"
             ... )
         """
+        # Use cached access_token and version_string to avoid attribute lookup overhead
+        # Fastest dict creation for literals, tuple assignment is the fastest way for 2 keys
+        path_keys = {"postUrn": post_urn, "likeId": like_id}
         return self._restli_client.delete(
             resource_path="/socialActions/{postUrn}/likes/{likeId}",
-            path_keys={"postUrn": post_urn, "likeId": like_id},
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            path_keys=path_keys,
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     # ========================================================================
