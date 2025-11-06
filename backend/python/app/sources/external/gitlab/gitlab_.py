@@ -34,8 +34,9 @@ class GitLabDataSource:
         for k, v in kwargs.items():
             if v is None:
                 continue
-            # Skip empty containers that GitLab rejects in some endpoints
-            if isinstance(v, (list, dict)) and len(v) == 0:
+            t = type(v)
+            # Only check len if it is list or dict
+            if (t is list or t is dict) and not v:
                 continue
             out[k] = v
         return out
