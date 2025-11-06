@@ -1445,11 +1445,22 @@ class LinkedInDataSource:
             ...     }]
             ... )
         """
-        final_params = {"q": "organizationalEntity", "organizationalEntity": org_urn}
-        if time_ranges:
-            final_params["timeIntervals"] = time_ranges
-        if query_params:
-            final_params.update(query_params)
+        # Fast-path: avoid unnecessary dict updates if both optional params are None
+        if not time_ranges and not query_params:
+            final_params = {"q": "organizationalEntity", "organizationalEntity": org_urn}
+        else:
+            # Preallocate dictionary to avoid multiple mutation steps
+            # This reduces dict update time, especially if query_params contains many keys
+            if query_params:
+                # merge query_params and static params up front for efficiency
+                final_params = dict(query_params)
+                final_params["q"] = "organizationalEntity"
+                final_params["organizationalEntity"] = org_urn
+            else:
+                final_params = {"q": "organizationalEntity", "organizationalEntity": org_urn}
+            if time_ranges:
+                final_params["timeIntervals"] = time_ranges
+
 
         return self._restli_client.finder(
             resource_path="/organizationalEntityFollowerStatistics",
