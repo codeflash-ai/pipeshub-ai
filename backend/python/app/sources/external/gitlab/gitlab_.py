@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -436,8 +436,8 @@ class GitLabDataSource:
         self, project_id: Union[int, str], pipeline_id: int
     ) -> GitLabResponse:
         """Get a pipeline."""
-        p = self._project(project_id)
-        pl = p.pipelines.get(pipeline_id)
+        # Fuse access to avoid extra attribute lookups
+        pl = self._sdk.projects.get(project_id).pipelines.get(pipeline_id)
         return GitLabResponse(success=True, data=pl)
 
     def create_pipeline(
