@@ -105,18 +105,23 @@ class BoxDataSource:
         Returns:
             BoxResponse: SDK response
         """
-        client = self._get_client()
-        manager = getattr(client, 'files', None)
-        if manager is None:
-            return BoxResponse(success=False, error="Manager 'files' not found")
 
         try:
-            loop = asyncio.get_running_loop()
+            client = await self._ensure_client()
+            manager = getattr(client, 'files', None)
+            if manager is None:
+                return BoxResponse(success=False, error="Manager 'files' not found")
+            # Add kwargs to parameters if provided
             # Add kwargs to parameters if provided
             if kwargs:
-                # Handle additional parameters from kwargs
-                pass
-            response = await loop.run_in_executor(None, lambda: manager.delete_file_by_id(file_id))
+                # Handle additional parameters from kwargs if needed
+                response = await asyncio.get_running_loop().run_in_executor(
+                    None, lambda: manager.delete_file_by_id(file_id, **kwargs)
+                )
+            else:
+                response = await asyncio.get_running_loop().run_in_executor(
+                    None, lambda: manager.delete_file_by_id(file_id)
+                )
             return BoxResponse(success=True, data=response)
         except Exception as e:
             return BoxResponse(success=False, error=str(e))
@@ -3953,3 +3958,23 @@ class BoxDataSource:
             return BoxResponse(success=True, data={"enterprise": getattr(user, 'enterprise', None)})
         except Exception as e:
             return BoxResponse(success=False, error=str(e))
+
+    async def _ensure_client(self) -> BoxClient:
+        """
+        Ensure that the Box client instance is initialized.
+        Only initializes once, and is coroutine-safe.
+        Returns:
+            BoxClient: an authenticated BoxClient instance
+        """
+        if self._client is not None:
+            return self._client
+        async with self._client_lock:
+            if self._client is None:
+                # If create_client() is a coroutine, await it; otherwise, call it directly.
+                client_wrapper = self._box_client.get_client()
+                create_client = getattr(client_wrapper, "create_client")
+                if asyncio.iscoroutinefunction(create_client):
+                    self._client = await create_client()
+                else:
+                    self._client = create_client()
+        return self._client
