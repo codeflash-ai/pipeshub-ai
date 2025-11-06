@@ -21,11 +21,12 @@ class GitLabDataSource:
             self._sdk: Gitlab = cast(Gitlab, sdk_obj)
         else:
             self._sdk = cast(Gitlab, client_or_sdk)
+        self._projects = self._sdk.projects
 
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
         # python-gitlab allows numeric ID or full path for project lookup
-        return self._sdk.projects.get(project_id)
+        return self._projects.get(project_id)
 
     @staticmethod
     def _params(**kwargs: object) -> Dict[str, object]:
