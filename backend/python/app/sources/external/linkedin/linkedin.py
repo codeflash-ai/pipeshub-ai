@@ -55,6 +55,9 @@ class LinkedInDataSource:
         self.client = client
         self._restli_client = client.get_client()
 
+        self._access_token = client.access_token
+        self._version_string = client.version_string
+
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
     # ========================================================================
@@ -796,12 +799,16 @@ class LinkedInDataSource:
             >>> for brand in response.elements:
             ...     print(brand['id'], brand['localizedName'])
         """
-        return self._restli_client.get_all(
+        # Avoid attribute lookups inside hot path
+        restli_client = self._restli_client
+        access_token = self._access_token
+        version_string = self._version_string
+        return restli_client.get_all(
             resource_path="/organizations/{id}/brands",
             path_keys={"id": org_id},
-            access_token=self.client.access_token,
+            access_token=access_token,
             query_params=query_params,
-            version_string=self.client.version_string
+            version_string=version_string
         )
 
     # ========================================================================
