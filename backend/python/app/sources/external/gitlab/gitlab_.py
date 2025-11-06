@@ -25,7 +25,13 @@ class GitLabDataSource:
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
         # python-gitlab allows numeric ID or full path for project lookup
-        return self._sdk.projects.get(project_id)
+        if not hasattr(self, "_project_cache"):
+            self._project_cache = {}
+        if project_id in self._project_cache:
+            return self._project_cache[project_id]
+        proj = self._sdk.projects.get(project_id)
+        self._project_cache[project_id] = proj
+        return proj
 
     @staticmethod
     def _params(**kwargs: object) -> Dict[str, object]:
