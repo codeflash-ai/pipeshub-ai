@@ -1297,21 +1297,29 @@ class LinkedInDataSource:
             >>> upload_url = response.value['uploadMechanism']['...']['uploadUrl']
             >>> asset_urn = response.value['asset']
         """
-        action_params = {
-            "registerUploadRequest": {
-                "owner": owner,
-                "recipes": recipes
-            }
+        # Use a single dictionary construction to avoid mutating and multiple lookups
+        register_upload_request = {
+            "owner": owner,
+            "recipes": recipes
         }
-        if service_relationships:
-            action_params["registerUploadRequest"]["serviceRelationships"] = service_relationships
+        if service_relationships is not None:
+            register_upload_request["serviceRelationships"] = service_relationships
+
+        action_params = {
+            "registerUploadRequest": register_upload_request
+        }
+
+        # Local variables for fields to avoid repeated attribute lookup
+        access_token = self.client.access_token
+        version_string = self.client.version_string
+
 
         return self._restli_client.action(
             resource_path="/assets",
             action_name="registerUpload",
             action_params=action_params,
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            access_token=access_token,
+            version_string=version_string
         )
 
     def register_video_upload(
