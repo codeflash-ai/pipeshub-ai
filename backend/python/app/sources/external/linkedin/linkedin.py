@@ -55,6 +55,9 @@ class LinkedInDataSource:
         self.client = client
         self._restli_client = client.get_client()
 
+        self._access_token = client.access_token
+        self._version_string = client.version_string
+
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
     # ========================================================================
@@ -159,9 +162,9 @@ class LinkedInDataSource:
         return self._restli_client.get(
             resource_path="/people/{id}",
             path_keys={"id": person_id},
-            access_token=self.client.access_token,
+            access_token=self._access_token,
             query_params=query_params,
-            version_string=self.client.version_string
+            version_string=self._version_string
         )
 
     def get_connections(
