@@ -55,6 +55,10 @@ class LinkedInDataSource:
         self.client = client
         self._restli_client = client.get_client()
 
+        # Cache these values for speed, avoids attribute lookups in hot paths
+        self._access_token = client.access_token
+        self._version_string = client.version_string
+
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
     # ========================================================================
@@ -532,12 +536,15 @@ class LinkedInDataSource:
             >>> for comment in response.elements:
             ...     print(comment['message']['text'])
         """
+        access_token = self._access_token
+        version_string = self._version_string
+        # Use local access_token/version_string references for micro-optimization
         return self._restli_client.get_all(
             resource_path="/socialActions/{postUrn}/comments",
             path_keys={"postUrn": post_urn},
-            access_token=self.client.access_token,
+            access_token=access_token,
             query_params=query_params,
-            version_string=self.client.version_string
+            version_string=version_string
         )
 
     def like_post(self, post_urn: str) -> object:
