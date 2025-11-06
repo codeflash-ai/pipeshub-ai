@@ -54,6 +54,8 @@ class LinkedInDataSource:
         """
         self.client = client
         self._restli_client = client.get_client()
+        self._access_token = client.access_token
+        self._version_string = client.version_string
 
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
@@ -1405,8 +1407,8 @@ class LinkedInDataSource:
         return self._restli_client.delete(
             resource_path="/assets/{id}",
             path_keys={"id": asset_id},
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            access_token=self._access_token,
+            version_string=self._version_string
         )
 
     # Note: For actual file upload to S3/Azure, use standard HTTP libraries
