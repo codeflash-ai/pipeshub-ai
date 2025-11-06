@@ -382,18 +382,24 @@ class KnowledgeBaseMigrationService:
         self.logger.info(f"🔄 Migrating KB: {old_kb_name} (ID: {old_kb_id})")
 
         # Create new KB in recordGroups collection
+
+        # Precompute frequently accessed constants
+        connectors_kb_value = Connectors.KNOWLEDGE_BASE.value
+        created_at_ts = old_kb.get('createdAtTimestamp', timestamp)
+
+        # Create new KB in recordGroups collection
         new_kb_id = str(uuid.uuid4())
         new_kb_data = {
             "_key": new_kb_id,
             "createdBy": user_key,
             "orgId": org_id,
             "groupName": old_kb_name,
-            "groupType": Connectors.KNOWLEDGE_BASE.value,
-            "connectorName": Connectors.KNOWLEDGE_BASE.value,
-            "createdAtTimestamp": old_kb.get('createdAtTimestamp', timestamp),
+            "groupType": connectors_kb_value,
+            "connectorName": connectors_kb_value,
+            "createdAtTimestamp": created_at_ts,
             "updatedAtTimestamp": timestamp,
             "lastSyncTimestamp": timestamp,
-            "sourceCreatedAtTimestamp": old_kb.get('createdAtTimestamp', timestamp),
+            "sourceCreatedAtTimestamp": created_at_ts,
             "sourceLastModifiedTimestamp": timestamp,
         }
 
@@ -403,9 +409,15 @@ class KnowledgeBaseMigrationService:
         )
 
         # Create user permission edge (user → recordGroup)
+
+        # Precompute permission edge constant data
+        user_prefix = f"{CollectionNames.USERS.value}/{user_key}"
+        kb_prefix = f"{self.NEW_KB_COLLECTION}/{new_kb_id}"
+
+        # Create user permission edge (user → recordGroup)
         permission_edge = {
-            "_from": f"{CollectionNames.USERS.value}/{user_key}",
-            "_to": f"{self.NEW_KB_COLLECTION}/{new_kb_id}",
+            "_from": user_prefix,
+            "_to": kb_prefix,
             "externalPermissionId": "",
             "type": "USER",
             "role": "OWNER",
@@ -439,36 +451,58 @@ class KnowledgeBaseMigrationService:
                                  user_data: Dict, timestamp: int, transaction) -> int:
         """Migrate record relationships from old KB to new KB"""
 
+        kb_records = user_data['kb_records']
+        # Cache the key checking first for speed
+        kb_id = old_kb_id
+
         # Find all records that belonged to the old KB
-        old_records_for_kb = [
-            rel_data['record'] for rel_data in user_data['kb_records']
-            if rel_data['kb']['_key'] == old_kb_id
-        ]
+        old_records_for_kb = []
+        append_record = old_records_for_kb.append
+        for rel_data in kb_records:
+            if rel_data['kb']['_key'] == kb_id:
+                append_record(rel_data['record'])
+
 
         if not old_records_for_kb:
             self.logger.info(f"📝 No records found for old KB {old_kb_id}")
             return 0
 
         # Create new edges: record → recordGroup
+
+        # Precompute values for edge creation outside the loop
+        connectors_kb_value = Connectors.KNOWLEDGE_BASE.value
+        record_collection = CollectionNames.RECORDS.value
+        new_kb_collection = self.NEW_KB_COLLECTION
+
+        record_prefix = f"{record_collection}/"
+        kb_prefix = f"{new_kb_collection}/{new_kb_id}"
+
         record_edges = []
         parent_child_edges = []
+        record_edges_append = record_edges.append
+        parent_child_edges_append = parent_child_edges.append
+
         for record in old_records_for_kb:
+            record_key = record['_key']
+            record_id = f"{record_prefix}{record_key}"
+
             edge = {
-                "_from": f"{CollectionNames.RECORDS.value}/{record['_key']}",
-                "_to": f"{self.NEW_KB_COLLECTION}/{new_kb_id}",
-                "entityType": Connectors.KNOWLEDGE_BASE.value,
+                "_from": record_id,
+                "_to": kb_prefix,
+                "entityType": connectors_kb_value,
                 "createdAtTimestamp": timestamp,
                 "updatedAtTimestamp": timestamp,
             }
             parent_child_edge = {
-                    "_from": f"{self.NEW_KB_COLLECTION}/{new_kb_id}",
-                    "_to": f"{CollectionNames.RECORDS.value}/{record['_key']}",
-                    "relationshipType": "PARENT_CHILD",
-                    "createdAtTimestamp": timestamp,
-                    "updatedAtTimestamp": timestamp,
-                }
-            record_edges.append(edge)
-            parent_child_edges.append(parent_child_edge)
+                "_from": kb_prefix,
+                "_to": record_id,
+                "relationshipType": "PARENT_CHILD",
+                "createdAtTimestamp": timestamp,
+                "updatedAtTimestamp": timestamp,
+            }
+            record_edges_append(edge)
+            parent_child_edges_append(parent_child_edge)
+
 
         if record_edges:
             await self.arango_service.batch_create_edges(
@@ -477,7 +511,7 @@ class KnowledgeBaseMigrationService:
 
         if parent_child_edges:
             await self.arango_service.batch_create_edges(
-                parent_child_edges,self.NEW_RECORD_RELATION_EDGES,transaction
+                parent_child_edges, self.NEW_RECORD_RELATION_EDGES, transaction
             )
 
         self.logger.info(f"📝 Migrated {len(record_edges)} record relationships for KB {old_kb_id}")
