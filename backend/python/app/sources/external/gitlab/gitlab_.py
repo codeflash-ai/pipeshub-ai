@@ -16,16 +16,19 @@ class GitLabDataSource:
 
     def __init__(self, client_or_sdk: Union[Gitlab, object]) -> None:
         # Support a raw SDK or a wrapper that exposes `.get_sdk()`
-        if hasattr(client_or_sdk, "get_sdk"):
-            sdk_obj = getattr(client_or_sdk, "get_sdk")()
-            self._sdk: Gitlab = cast(Gitlab, sdk_obj)
+        # Optimize getattr call by storing the method directly if available
+        get_sdk = getattr(client_or_sdk, "get_sdk", None)
+        if get_sdk is not None and callable(get_sdk):
+            self._sdk: Gitlab = cast(Gitlab, get_sdk())
         else:
             self._sdk = cast(Gitlab, client_or_sdk)
 
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
         # python-gitlab allows numeric ID or full path for project lookup
-        return self._sdk.projects.get(project_id)
+        # Use local variable to avoid repeated attribute lookups
+        sdk_projects = self._sdk.projects
+        return sdk_projects.get(project_id)
 
     @staticmethod
     def _params(**kwargs: object) -> Dict[str, object]:
@@ -540,9 +543,10 @@ class GitLabDataSource:
         self, project_id: Union[int, str], milestone_id: int
     ) -> GitLabResponse:
         """Get a milestone."""
-        p = self._project(project_id)
-        m = p.milestones.get(milestone_id)
-        return GitLabResponse(success=True, data=m)
+        # Reduce attribute lookup frequency within the method
+        project = self._project(project_id)
+        milestone = project.milestones.get(milestone_id)
+        return GitLabResponse(success=True, data=milestone)
 
     def create_milestone(
         self,
