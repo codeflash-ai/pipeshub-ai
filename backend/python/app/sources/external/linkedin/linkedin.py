@@ -55,6 +55,9 @@ class LinkedInDataSource:
         self.client = client
         self._restli_client = client.get_client()
 
+        self._access_token = client.access_token
+        self._version_string = client.version_string
+
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
     # ========================================================================
@@ -1564,20 +1567,30 @@ class LinkedInDataSource:
             ...     query_params={"metrics": ["VISITOR_DEMOGRAPHICS"]}
             ... )
         """
-        final_params = {
-            "q": "organization",
-            "organization": org_urn,
-            "timeIntervals": time_ranges
-        }
-        if query_params:
-            final_params.update(query_params)
+        # Pre-allocate final_params and avoid dict copying if query_params is None
+        if query_params is None:
+            final_params = {
+                "q": "organization",
+                "organization": org_urn,
+                "timeIntervals": time_ranges
+            }
+        else:
+            # Use direct mutation for optimization instead of dict.update for smaller dicts
+            final_params = {
+                "q": "organization",
+                "organization": org_urn,
+                "timeIntervals": time_ranges,
+                **query_params
+            }
+
+        # Use cached values instead of accessing properties on self.client every time
 
         return self._restli_client.finder(
             resource_path="/organizationPageStatistics",
             finder_name="organization",
-            access_token=self.client.access_token,
+            access_token=self._access_token,
             query_params=final_params,
-            version_string=self.client.version_string
+            version_string=self._version_string
         )
 
     def get_engagement_metrics(
