@@ -17,8 +17,7 @@ class GitLabDataSource:
     def __init__(self, client_or_sdk: Union[Gitlab, object]) -> None:
         # Support a raw SDK or a wrapper that exposes `.get_sdk()`
         if hasattr(client_or_sdk, "get_sdk"):
-            sdk_obj = getattr(client_or_sdk, "get_sdk")()
-            self._sdk: Gitlab = cast(Gitlab, sdk_obj)
+            self._sdk: Gitlab = cast(Gitlab, client_or_sdk.get_sdk())
         else:
             self._sdk = cast(Gitlab, client_or_sdk)
 
@@ -577,16 +576,21 @@ class GitLabDataSource:
         p = self._project(project_id)
         m = p.milestones.get(milestone_id)
         changed = False
-        for field, val in [
-            ("title", title),
-            ("description", description),
-            ("state_event", state_event),
-            ("due_date", due_date),
-            ("start_date", start_date),
-        ]:
-            if val is not None:
-                setattr(m, field, val)
-                changed = True
+        if title is not None:
+            m.title = title
+            changed = True
+        if description is not None:
+            m.description = description
+            changed = True
+        if state_event is not None:
+            m.state_event = state_event
+            changed = True
+        if due_date is not None:
+            m.due_date = due_date
+            changed = True
+        if start_date is not None:
+            m.start_date = start_date
+            changed = True
         if changed:
             m.save()
         return GitLabResponse(success=True, data=m)
