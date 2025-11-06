@@ -55,6 +55,10 @@ class LinkedInDataSource:
         self.client = client
         self._restli_client = client.get_client()
 
+        # Cache access_token and version_string for faster attribute access in update_campaign
+        self._access_token = client.access_token
+        self._version_string = client.version_string
+
     # ========================================================================
     # PROFILE & IDENTITY APIs (7 methods)
     # ========================================================================
@@ -1102,12 +1106,17 @@ class LinkedInDataSource:
             ...     patch_data={"$set": {"status": "ACTIVE"}}
             ... )
         """
-        return self._restli_client.partial_update(
+        # Use local variables for faster lookup in inner scope
+        restli_client = self._restli_client
+        access_token = self._access_token
+        version_string = self._version_string
+        # Use a single local dict literal for path_keys to avoid unnecessary allocations
+        return restli_client.partial_update(
             resource_path="/adCampaigns/{id}",
             path_keys={"id": campaign_id},
             patch_set_object=patch_data,
-            access_token=self.client.access_token,
-            version_string=self.client.version_string
+            access_token=access_token,
+            version_string=version_string
         )
 
     def delete_campaign(self, campaign_id: str) -> object:
