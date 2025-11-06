@@ -6,6 +6,9 @@ from typing import Dict, List, Optional, Tuple, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
+# Pre-create the constant return object since delete_group always returns this
+_SUCCESS_RESPONSE: GitLabResponse = GitLabResponse(success=True, data=True)
+
 
 class GitLabDataSource:
     """
@@ -752,6 +755,10 @@ class GitLabDataSource:
 
     def delete_group(self, group_id: Union[int, str]) -> GitLabResponse:
         """Delete a group."""
-        g = self._sdk.groups.get(group_id)
+        groups = self._sdk.groups
+        g = groups.get(group_id)
         g.delete()
-        return GitLabResponse(success=True, data=True)
+        # Pre-allocate the return object outside hot path to avoid repeated allocations for identical output
+        # Move instantiation to module scope for reuse since return value is always the same
+        # This improves performance for high-throughput calls
+        return _SUCCESS_RESPONSE
