@@ -301,8 +301,7 @@ class GitLabDataSource:
         self, project_id: Union[int, str], mr_iid: int
     ) -> GitLabResponse:
         """Delete a merge request.  [mrs]"""
-        p = self._project(project_id)
-        p.mergerequests.delete(mr_iid)
+        self._sdk.projects.get(project_id).mergerequests.delete(mr_iid)
         return GitLabResponse(success=True, data=True)
 
     def merge_merge_request(
