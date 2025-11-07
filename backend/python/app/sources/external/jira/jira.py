@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -278,21 +280,29 @@ class JiraDataSource:
         keyFilter: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get application property\n\nHTTP GET /rest/api/3/application-properties\nQuery params:\n  - key (str, optional)\n  - permissionLevel (str, optional)\n  - keyFilter (str, optional)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Get application property
+
+HTTP GET /rest/api/3/application-properties
+Query params:
+  - key (str, optional)
+  - permissionLevel (str, optional)
+  - keyFilter (str, optional)"""
+        # Fast local variable lookups
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if key is not None:
-            _query['key'] = key
-        if permissionLevel is not None:
-            _query['permissionLevel'] = permissionLevel
-        if keyFilter is not None:
-            _query['keyFilter'] = keyFilter
+        _headers = headers if headers is not None else {}
+        # Direct construction of query dict using tuple pairing
+        _query = {}
+        for param_name, param_value in (('key', key), ('permissionLevel', permissionLevel), ('keyFilter', keyFilter)):
+            if param_value is not None:
+                _query[param_name] = param_value
+        _path = {}
         _body = None
         rel_path = '/rest/api/3/application-properties'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        base_url = self.base_url
+        url = base_url + _safe_format_url(rel_path, _path)
+        # Use optimized _as_str_dict for empty dicts
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -301,7 +311,7 @@ class JiraDataSource:
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def get_advanced_settings(
@@ -6463,6 +6473,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9979,19 +9990,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20098,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Fast path: do not format if no params
+    if not params:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20119,11 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    # Fast path for empty dict
+    if not d:
+        return {}
+    # If all keys and values are already str, avoid dict comprehension
+    if all(isinstance(k, str) and isinstance(v, str) for k, v in d.items()):
+        return d  # safely return the same mapping
+    return {str(k): _serialize_value(v) for k, v in d.items()}
