@@ -21,6 +21,9 @@ class GoogleMeetDataSource:
         """
         self.client = client
 
+        # Cache the conferenceRecords_recordings().get method for reuse
+        self._get_recording = self.client.conferenceRecords_recordings().get
+
     async def spaces_create(self, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Google Meet API: Creates a space.
 
@@ -286,11 +289,10 @@ class GoogleMeetDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if name is not None:
-            kwargs['name'] = name
-
-        request = self.client.conferenceRecords_recordings().get(**kwargs) # type: ignore
+            request = self._get_recording(name=name) # type: ignore
+        else:
+            request = self._get_recording() # type: ignore
         return request.execute()
 
     async def conference_records_recordings_list(
