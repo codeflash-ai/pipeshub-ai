@@ -562,13 +562,14 @@ def build_group_text(block_groups: List[Dict[str, Any]], blocks: List[Dict[str, 
 
     parent_block = block_groups[parent_index]
     label = parent_block.get("type")
-    valid_group_labels = [
+    valid_group_labels = (
         GroupType.LIST.value,
         GroupType.ORDERED_LIST.value,
         GroupType.FORM_AREA.value,
         GroupType.INLINE.value,
         GroupType.KEY_VALUE_AREA.value,
-    ]
+    )
+
 
     if label not in valid_group_labels:
         return None
@@ -577,20 +578,36 @@ def build_group_text(block_groups: List[Dict[str, Any]], blocks: List[Dict[str, 
     if not children:
         return None
 
-    first_child_block_index = children[0].get("block_index")
+    first_child = children[0]
+    first_child_block_index = first_child.get("block_index")
     if first_child_block_index is None:
         return None
 
-    content = ""
-    for child in children:
-        block_index = child.get("block_index")
-        if virtual_record_id is not None and seen_chunks is not None:
+    # Pre-allocate list for performance, avoid repeated string concatenation
+    text_chunks: List[str] = []
+    append_chunk = text_chunks.append
+
+    bounds_blocks = len(blocks)
+    text_type = BlockType.TEXT.value
+    if virtual_record_id is not None and seen_chunks is not None:
+        for child in children:
+            block_index = child.get("block_index")
             child_id = f"{virtual_record_id}-{block_index}"
             seen_chunks.add(child_id)
-        if 0 <= block_index < len(blocks):
-            child_block = blocks[block_index]
-            if child_block.get("type") == BlockType.TEXT.value:
-                content += child_block.get("data", "") + "\n"
+            if 0 <= block_index < bounds_blocks:
+                child_block = blocks[block_index]
+                if child_block.get("type") == text_type:
+                    append_chunk(child_block.get("data", ""))
+    else:
+        for child in children:
+            block_index = child.get("block_index")
+            if 0 <= block_index < bounds_blocks:
+                child_block = blocks[block_index]
+                if child_block.get("type") == text_type:
+                    append_chunk(child_block.get("data", ""))
+
+    # Join only once at the end for faster string assembly
+    content = "\n".join(text_chunks) + ("\n" if text_chunks else "")
 
     return label, first_child_block_index, content
 
