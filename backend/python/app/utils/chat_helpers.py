@@ -377,24 +377,19 @@ def get_enhanced_metadata(record:Dict[str, Any],block:Dict[str, Any],meta:Dict[s
             raise e
 
 def extract_bounding_boxes(citation_metadata) -> List[Dict[str, float]]:
-        """Safely extract bounding box data from citation metadata"""
-        if not citation_metadata or not citation_metadata.get("bounding_boxes"):
+    """Safely extract bounding box data from citation metadata"""
+    if not citation_metadata or not citation_metadata.get("bounding_boxes"):
+        return None
+
+    bounding_boxes = citation_metadata.get("bounding_boxes")
+    if not isinstance(bounding_boxes, list):
+        return None
+
+    for point in bounding_boxes:
+        if "x" not in point or "y" not in point:
             return None
 
-        bounding_boxes = citation_metadata.get("bounding_boxes")
-        if not isinstance(bounding_boxes, list):
-            return None
-
-        try:
-            result = []
-            for point in bounding_boxes:
-                if "x" in point and "y" in point:
-                    result.append({"x": point.get("x"), "y": point.get("y")})
-                else:
-                    return None
-            return result
-        except Exception as e:
-            raise e
+    return [{"x": point["x"], "y": point["y"]} for point in bounding_boxes]
 
 async def get_record(meta: Dict[str, Any],virtual_record_id: str,virtual_record_id_to_result: Dict[str, Dict[str, Any]],blob_store: BlobStorage,org_id: str) -> None:
     try:
