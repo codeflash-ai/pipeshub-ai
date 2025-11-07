@@ -3,6 +3,14 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
+_serialize_value_cache = {
+    None: '',
+    True: 'True',
+    False: 'False'
+}
 
 
 class JiraDataSource:
@@ -538,26 +546,33 @@ class JiraDataSource:
         id: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get attachment metadata\n\nHTTP GET /rest/api/3/attachment/{id}\nPath params:\n  - id (str)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Get attachment metadata
+
+HTTP GET /rest/api/3/attachment/{id}
+Path params:
+  - id (str)"""
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        _body = None
+
+        # Avoid redundant dict/unpacking, fewer lookups, localize function
+        _headers = headers if headers is not None else {}
+        _path = {'id': id}
         rel_path = '/rest/api/3/attachment/{id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Use optimized serializer
+        as_str_dict = _as_str_dict_optimized
+
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=as_str_dict(_headers),
+            path_params=as_str_dict(_path),
+            query_params={},  # previously: as_str_dict({}), but always empty
+            body=None,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def expand_attachment_for_humans(
@@ -6463,6 +6478,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9979,19 +9995,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20103,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20121,26 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    return {str(k): _serialize_value(v) for k, v in d.items()}
+def _optimized_serialize_value(v: Any) -> str:
+    # Fast path for common primitives, else fall back to imported _serialize_value
+    if v is None or v is True or v is False:
+        return _serialize_value_cache[v]
+    if isinstance(v, str):
+        return v
+    # Original imported serializer handles all types and collection flattening
+    from app.sources.external.jira.jira import \
+        _serialize_value as _orig_serialize_value
+    return _orig_serialize_value(v)
+
+def _as_str_dict_optimized(d: Dict[str, Any]) -> Dict[str, str]:
+    # Only convert or serialize if necessary; most keys/values are str/primitive
+    # Use faster cached serializer for common primitive types
+    result = {}
+    sv = _optimized_serialize_value
+    for k, v in d.items():
+        key_str = k if isinstance(k, str) else str(k)
+        value_str = v if isinstance(v, str) else sv(v)
+        result[key_str] = value_str
+    return result
