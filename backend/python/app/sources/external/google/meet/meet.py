@@ -51,11 +51,10 @@ class GoogleMeetDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if name is not None:
-            kwargs['name'] = name
-
-        request = self.client.spaces().get(**kwargs) # type: ignore
+            request = self.client.spaces().get(name=name)  # type: ignore
+        else:
+            request = self.client.spaces().get()  # type: ignore
         return request.execute()
 
     async def spaces_patch(
