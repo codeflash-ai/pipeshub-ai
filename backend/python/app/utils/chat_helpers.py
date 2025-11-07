@@ -17,6 +17,12 @@ from app.modules.transformers.blob_storage import BlobStorage
 from app.services.vector_db.const.const import VECTOR_DB_COLLECTION_NAME
 from app.utils.mimetype_to_extension import get_extension_from_mimetype
 
+_QNA_PROMPT_CONTEXT_TEMPLATE = Template(qna_prompt_context)
+
+_QNA_PROMPT_INSTRUCTIONS_1_TEMPLATE = Template(qna_prompt_instructions_1)
+
+_TABLE_PROMPT_TEMPLATE = Template(table_prompt)
+
 group_types = [GroupType.LIST.value,GroupType.ORDERED_LIST.value,GroupType.FORM_AREA.value,GroupType.INLINE.value,GroupType.KEY_VALUE_AREA.value]
 
 async def get_flattened_results(result_set: List[Dict[str, Any]], blob_store: BlobStorage, org_id: str, is_multimodal_llm: bool, virtual_record_id_to_result: Dict[str, Dict[str, Any]],from_tool: bool = False,from_retrieval_service: bool = False) -> List[Dict[str, Any]]:
@@ -746,23 +752,32 @@ def record_to_message_content(record: Dict[str, Any], final_results: List[Dict[s
 
 def get_message_content(flattened_results: List[Dict[str, Any]], virtual_record_id_to_result: Dict[str, Any], user_data: str, query: str, logger) -> str:
     content = []
-
-    template = Template(qna_prompt_instructions_1)
-    rendered_form = template.render(
-                user_data=user_data,
-                query=query,
-                rephrased_queries=[],
-                )
+    # pre-render qna_prompt_instructions_1, which does not change in this context
+    rendered_form = _render_template(
+        _QNA_PROMPT_INSTRUCTIONS_1_TEMPLATE,
+        user_data=user_data,
+        query=query,
+        rephrased_queries=[],
+    )
 
     content.append({
-                "type": "text",
-                "text": rendered_form
-            })
+        "type": "text",
+        "text": rendered_form
+    })
+
 
     seen_virtual_record_ids = set()
     seen_blocks = set()
     record_number = 1
-    for i,result in enumerate(flattened_results):
+
+    # Cache lookups for str methods
+    image_prefix = "data:image/"
+    block_type_image_value = BlockType.IMAGE.value
+    block_type_text_value = BlockType.TEXT.value
+    block_type_table_row_value = BlockType.TABLE_ROW.value
+    group_type_table_value = GroupType.TABLE.value
+
+    for i, result in enumerate(flattened_results):
         virtual_record_id = result.get("virtual_record_id")
         if virtual_record_id not in seen_virtual_record_ids:
             if i > 0:
@@ -770,17 +785,18 @@ def get_message_content(flattened_results: List[Dict[str, Any]], virtual_record_
                     "type": "text",
                     "text": "</record>"
                 })
-                record_number = record_number + 1
+                record_number += 1
             seen_virtual_record_ids.add(virtual_record_id)
             record = virtual_record_id_to_result[virtual_record_id]
             if record is None:
                 continue
             semantic_metadata = record.get("semantic_metadata")
 
-            template = Template(qna_prompt_context)
-            rendered_form = template.render(
-                record_id=record.get("id","Not available"),
-                record_name=record.get("record_name","Not available"),
+            # Use precompiled QNA context template
+            rendered_form = _render_template(
+                _QNA_PROMPT_CONTEXT_TEMPLATE,
+                record_id=record.get("id", "Not available"),
+                record_name=record.get("record_name", "Not available"),
                 semantic_metadata=semantic_metadata,
             )
             content.append({
@@ -789,67 +805,76 @@ def get_message_content(flattened_results: List[Dict[str, Any]], virtual_record_
             })
 
         result_id = f"{virtual_record_id}_{result.get('block_index')}"
-        if result_id not in seen_blocks:
-            seen_blocks.add(result_id)
-            block_type = result.get("block_type")
-            block_index = result.get("block_index")
-            block_number = f"R{record_number}-{block_index}"
-            if block_type == BlockType.IMAGE.value:
-                if result.get("content").startswith("data:image/"):
-                    content.append({
-                        "type": "text",
-                        "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content:"
-                    })
-                    content.append({
-                        "type": "image_url",
-                        "image_url": {"url": result.get("content")}
-                    })
-                else:
-                    content.append({
-                        "type": "text",
-                        "text": f"* Block Number: {block_number}\n* Block Type: image description\n* Block Content: {result.get('content')}\n\n"
-                    })
-            elif block_type == GroupType.TABLE.value:
-                table_summary,child_results = result.get("content")
-                if child_results:
-                    template = Template(table_prompt)
-                    rendered_form = template.render(
-                        block_group_index=result.get("block_group_index"),
-                        table_summary=table_summary,
-                        table_rows=child_results,
-                        record_number=record_number,
-                    )
-                    content.append({
-                        "type": "text",
-                        "text": f"{rendered_form}\n\n"
-                    })
-                else:
-                    content.append({
-                        "type": "text",
-                        "text": f"* Block Group Number: R{record_number}-{result.get('block_group_index')}\n* Block Type: table summary \n* Block Content: {table_summary}\n\n"
-                    })
-            elif block_type == BlockType.TEXT.value:
+        if result_id in seen_blocks:
+            continue
+        seen_blocks.add(result_id)
+        block_type = result.get("block_type")
+        block_index = result.get("block_index")
+        block_number = f"R{record_number}-{block_index}"
+
+        if block_type == block_type_image_value:
+            content_val = result.get("content")
+            # Profile highlights image description/inline/image block branches, reduce gets and function calls
+            if isinstance(content_val, str) and content_val.startswith(image_prefix):
                 content.append({
                     "type": "text",
-                    "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content: {result.get('content')}\n\n"
+                    "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content:"
                 })
-            elif block_type == BlockType.TABLE_ROW.value:
                 content.append({
-                    "type": "text",
-                    "text": f"* Block Number: {block_number}\n* Block Type: table row\n* Block Content: {result.get('content')}\n\n"
-                })
-            elif block_type in group_types:
-                content.append({
-                    "type": "text",
-                    "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content: {result.get('content')}\n\n"
+                    "type": "image_url",
+                    "image_url": {"url": content_val}
                 })
             else:
                 content.append({
                     "type": "text",
-                    "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content: {result.get('content')}\n\n"
+                    "text": f"* Block Number: {block_number}\n* Block Type: image description\n* Block Content: {content_val}\n\n"
                 })
+        elif block_type == group_type_table_value:
+            table_content = result.get("content")
+            if isinstance(table_content, (list, tuple)) and len(table_content) == 2:
+                table_summary, child_results = table_content
+            else:
+                table_summary, child_results = None, None
+
+            if child_results:
+                # Use precompiled table template
+                rendered_form = _render_template(
+                    _TABLE_PROMPT_TEMPLATE,
+                    block_group_index=result.get("block_group_index"),
+                    table_summary=table_summary,
+                    table_rows=child_results,
+                    record_number=record_number,
+                )
+                content.append({
+                    "type": "text",
+                    "text": f"{rendered_form}\n\n"
+                })
+            else:
+                content.append({
+                    "type": "text",
+                    "text": f"* Block Group Number: R{record_number}-{result.get('block_group_index')}\n* Block Type: table summary \n* Block Content: {table_summary}\n\n"
+                })
+        elif block_type == block_type_text_value:
+            content.append({
+                "type": "text",
+                "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content: {result.get('content')}\n\n"
+            })
+        elif block_type == block_type_table_row_value:
+            content.append({
+                "type": "text",
+                "text": f"* Block Number: {block_number}\n* Block Type: table row\n* Block Content: {result.get('content')}\n\n"
+            })
+        elif block_type in group_types:
+            content.append({
+                "type": "text",
+                "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content: {result.get('content')}\n\n"
+            })
         else:
-            continue
+            content.append({
+                "type": "text",
+                "text": f"* Block Number: {block_number}\n* Block Type: {block_type}\n* Block Content: {result.get('content')}\n\n"
+            })
+
 
     content.append({
         "type": "text",
@@ -1108,3 +1133,8 @@ def count_tokens_in_records(records: List[Dict[str, Any]]) -> int:
                 total_tokens += count_tokens(text_content)
 
     return total_tokens
+
+
+def _render_template(template_obj: Template, **kwargs) -> str:
+    # Helper for template rendering to ensure Template objects are not recreated repeatedly
+    return template_obj.render(**kwargs)
