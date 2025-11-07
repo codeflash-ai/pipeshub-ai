@@ -16,7 +16,9 @@ class KeyValueStore(ABC, Generic[T]):
     """
 
     @abstractmethod
-    async def create_key(self, key: str, value: T, overwrite: bool = True, ttl: Optional[int] = None) -> None:
+    async def create_key(
+        self, key: str, value: T, overwrite: bool = True, ttl: Optional[int] = None
+    ) -> None:
         """
         Create a new key-value pair in the store.
 
