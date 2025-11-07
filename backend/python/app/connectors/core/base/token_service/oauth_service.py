@@ -95,8 +95,11 @@ class OAuthToken:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'OAuthToken':
         """Create token from dictionary"""
-        if 'created_at' in data and isinstance(data['created_at'], str):
-            data['created_at'] = datetime.fromisoformat(data['created_at'])
+        created_at = data.get('created_at')
+        # Avoid unnecessary dict copying unless needed
+        if isinstance(created_at, str):
+            data = dict(data)  # Only copy if mutation occurs
+            data['created_at'] = datetime.fromisoformat(created_at)
         return cls(**data)
 
 
@@ -157,9 +160,8 @@ class OAuthProvider:
             "redirect_uri": self.config.redirect_uri,
             "client_id": self.config.client_id,
             "client_secret": self.config.client_secret,
+            **({"code_verifier": code_verifier} if code_verifier else {})
         }
-        if code_verifier:
-            data["code_verifier"] = code_verifier
 
         session = await self.session
         async with session.post(self.config.token_url, data=data) as response:
@@ -274,7 +276,7 @@ class OAuthProvider:
         if not isinstance(config, dict):
             config = {}
 
-        oauth_data = config.get('oauth', {}) or {}
+        oauth_data = config.get('oauth') or {}
         stored_state = oauth_data.get("state")
 
         # Validate state
@@ -292,7 +294,11 @@ class OAuthProvider:
             # No existing credentials -> genuine invalid/expired state
             raise ValueError("Invalid or expired state")
 
-        token = await self.exchange_code_for_token(code=code, state=state, code_verifier=oauth_data.get("code_verifier"))
+        token = await self.exchange_code_for_token(
+            code=code, 
+            state=state, 
+            code_verifier=oauth_data.get("code_verifier")
+        )
         self.token = token
 
         # Clean up OAuth state and store credentials
