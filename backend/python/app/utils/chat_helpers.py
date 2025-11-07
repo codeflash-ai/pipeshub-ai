@@ -17,6 +17,8 @@ from app.modules.transformers.blob_storage import BlobStorage
 from app.services.vector_db.const.const import VECTOR_DB_COLLECTION_NAME
 from app.utils.mimetype_to_extension import get_extension_from_mimetype
 
+_table_template = Template(table_prompt)
+
 group_types = [GroupType.LIST.value,GroupType.ORDERED_LIST.value,GroupType.FORM_AREA.value,GroupType.INLINE.value,GroupType.KEY_VALUE_AREA.value]
 
 async def get_flattened_results(result_set: List[Dict[str, Any]], blob_store: BlobStorage, org_id: str, is_multimodal_llm: bool, virtual_record_id_to_result: Dict[str, Dict[str, Any]],from_tool: bool = False,from_retrieval_service: bool = False) -> List[Dict[str, Any]]:
@@ -983,32 +985,30 @@ def block_group_to_message_content(tool_result: Dict[str, Any], final_results: L
     record_id = tool_result.get("record_id", "")
     record_name = tool_result.get("record_name", "")
     content.append({
-            "type": "text",
-            "text": f"""<record>
+        "type": "text",
+        "text": f"""<record>
             * Record Id: {record_id}
             * Record Name: {record_name}
             * Block Group:
             """
-        })
+    })
 
-    child_results = []
-    blocks = block_group.get("blocks",[])
-    table_summary = block_group.get("data",{}).get("table_summary","")
-    for block in blocks:
-        block_data = block.get("data", {})
-        if isinstance(block_data, dict):
-            row_text = block_data.get("row_natural_language_text", "")
-        else:
-            row_text = str(block_data)
-
-        child_results.append({
-            "content": row_text,
+    blocks = block_group.get("blocks", [])
+    # Prepare child_results list efficiently with list comprehension
+    child_results = [
+        {
+            "content": block["data"].get("row_natural_language_text", "") if isinstance(block.get("data", {}), dict) else str(block.get("data", "")),
             "block_index": block.get("index", 0),
-        })
+        }
+        for block in blocks
+    ]
+
+    table_summary = block_group.get("data", {}).get("table_summary", "")
+
 
     if child_results:
-        template = Template(table_prompt)
-        rendered_form = template.render(
+        # Use pre-compiled template for efficiency
+        rendered_form = _table_template.render(
             block_group_index=block_group_index,
             table_summary=table_summary,
             table_rows=child_results,
