@@ -21,6 +21,9 @@ class GoogleMeetDataSource:
         """
         self.client = client
 
+        # Cache the spaces callable for efficiency
+        self._spaces = client.spaces()
+
     async def spaces_create(self, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Google Meet API: Creates a space.
 
@@ -83,9 +86,9 @@ class GoogleMeetDataSource:
 
         # Handle request body if provided
         if body is not None:
-            request = self.client.spaces().patch(**kwargs, body=body) # type: ignore
+            request = self._spaces.patch(**kwargs, body=body) # type: ignore
         else:
-            request = self.client.spaces().patch(**kwargs) # type: ignore
+            request = self._spaces.patch(**kwargs) # type: ignore
         return request.execute()
 
     async def spaces_end_active_conference(
