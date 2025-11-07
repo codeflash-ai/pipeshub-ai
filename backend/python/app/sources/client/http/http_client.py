@@ -1,7 +1,6 @@
 from typing import Optional
 
 import httpx  # type: ignore
-
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.iclient import IClient
@@ -13,7 +12,7 @@ class HTTPClient(IClient):
         token: str,
         token_type: str = "Bearer",
         timeout: float = 30.0,
-        follow_redirects: bool = True
+        follow_redirects: bool = True,
     ) -> None:
         self.headers = {
             "Authorization": f"{token_type} {token}",
@@ -30,8 +29,7 @@ class HTTPClient(IClient):
         """Ensure client is created and available"""
         if self.client is None:
             self.client = httpx.AsyncClient(
-                timeout=self.timeout,
-                follow_redirects=self.follow_redirects
+                timeout=self.timeout, follow_redirects=self.follow_redirects
             )
         return self.client
 
@@ -46,25 +44,30 @@ class HTTPClient(IClient):
         url = f"{request.url.format(**request.path_params)}"
         client = await self._ensure_client()
 
-        # Merge client headers with request headers (request headers take precedence)
-        merged_headers = {**self.headers, **request.headers}
+        # Optimize: avoid constructing new dict if no extra request headers
+        if request.headers:
+            merged_headers = {**self.headers, **request.headers}
+        else:
+            merged_headers = self.headers
+
         request_kwargs = {
             "params": request.query_params,
             "headers": merged_headers,
-            **kwargs
+            **kwargs,
         }
 
-        if isinstance(request.body, dict):
+        body = request.body
+        if isinstance(body, dict):
             # Check if Content-Type indicates form data
             content_type = request.headers.get("Content-Type", "").lower()
             if "application/x-www-form-urlencoded" in content_type:
                 # Send as form data
-                request_kwargs["data"] = request.body
+                request_kwargs["data"] = body
             else:
                 # Send as JSON (default behavior)
-                request_kwargs["json"] = request.body
-        elif isinstance(request.body, bytes):
-            request_kwargs["content"] = request.body
+                request_kwargs["json"] = body
+        elif isinstance(body, bytes):
+            request_kwargs["content"] = body
 
         response = await client.request(request.method, url, **request_kwargs)
         return HTTPResponse(response)
