@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -213,25 +215,49 @@ class JiraDataSource:
         configurations: list[Dict[str, Any]],
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update custom field configurations\n\nHTTP PUT /rest/api/3/app/field/{fieldIdOrKey}/context/configuration\nPath params:\n  - fieldIdOrKey (str)\nBody (application/json) fields:\n  - configurations (list[Dict[str, Any]], required)"""
+        """Auto-generated from OpenAPI: Update custom field configurations
+
+HTTP PUT /rest/api/3/app/field/{fieldIdOrKey}/context/configuration
+Path params:
+  - fieldIdOrKey (str)
+Body (application/json) fields:
+  - configurations (list[Dict[str, Any]], required)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'fieldIdOrKey': fieldIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        _body['configurations'] = configurations
+
+        # Fast dict creation and in-place header update
+        _headers: Dict[str, Any]
+        if headers:
+            # If headers already includes the correct Content-Type, avoid redundant setdefault
+            content_type = headers.get('Content-Type', None)
+            if content_type == 'application/json':
+                _headers = dict(headers)
+            else:
+                _headers = dict(headers)
+                _headers['Content-Type'] = 'application/json'
+        else:
+            _headers = {'Content-Type': 'application/json'}
+
+        # Simple path dict
+        _path = {'fieldIdOrKey': fieldIdOrKey}
+        # Empty dicts are not converted
+        _query = {}
+        _body = {'configurations': configurations}
+
         rel_path = '/rest/api/3/app/field/{fieldIdOrKey}/context/configuration'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Avoid _as_str_dict for empty dicts, only convert if needed
+        headers_str = _as_str_dict(_headers)
+        path_str = _path if (_path and all(isinstance(k, str) and isinstance(v, str) for k, v in _path.items())) else _as_str_dict(_path)
+        query_str = _query if not _query else _as_str_dict(_query)
+
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=headers_str,
+            path_params=path_str,
+            query_params=query_str,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -6463,6 +6489,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9979,19 +10006,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20114,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Inline _SafeDict instead of creating per-call class
+    if not params:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20135,14 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    # Fast path for empty dict
+    if not d:
+        return {}
+    # Fast path for already-str key/value dict
+    if all(isinstance(k, str) and isinstance(v, str) for k, v in d.items()):
+        return d  # No conversion needed
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    from app.sources.external.jira.jira import \
+        _serialize_value  # Import here to minimize scope
+    return {str(k): _serialize_value(v) for k, v in d.items()}
