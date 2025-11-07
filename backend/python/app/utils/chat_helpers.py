@@ -875,6 +875,13 @@ def get_message_content_for_tool(flattened_results: List[Dict[str, Any]], virtua
     seen_virtual_record_ids.clear()
     record_ids =[]
 
+    # Cache Template instances for performance
+    template_cache = {}
+    def get_template(template_str):
+        if template_str not in template_cache:
+            template_cache[template_str] = Template(template_str)
+        return template_cache[template_str]
+
     for i,result in enumerate(flattened_results):
         virtual_record_id = result.get("virtual_record_id")
         if virtual_record_id not in seen_virtual_record_ids:
@@ -890,7 +897,7 @@ def get_message_content_for_tool(flattened_results: List[Dict[str, Any]], virtua
             if record is None:
                 continue
 
-            template = Template(qna_prompt_context_for_tool)
+            template = get_template(qna_prompt_context_for_tool)
             rendered_form = template.render(
                 record_id=record.get("id","Not available"),
                 record_name=record.get("record_name","Not available"),
@@ -928,7 +935,7 @@ def get_message_content_for_tool(flattened_results: List[Dict[str, Any]], virtua
             if block_type == GroupType.TABLE.value:
                 table_summary,child_results = result.get("content")
                 if child_results:
-                    template = Template(table_prompt)
+                    template = get_template(table_prompt)
                     rendered_form = template.render(
                         block_group_index=result.get("block_group_index"),
                         table_summary=table_summary,
