@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8554,24 +8557,23 @@ class JiraDataSource:
         id: str,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get alternative issue types\n\nHTTP GET /rest/api/3/issuetype/{id}/alternatives\nPath params:\n  - id (str)"""
+        """Auto-generated from OpenAPI: Get alternative issue types
+
+HTTP GET /rest/api/3/issuetype/{id}/alternatives
+Path params:
+  - id (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        _body = None
         rel_path = '/rest/api/3/issuetype/{id}/alternatives'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, {'id': id})
+        # Fast dict building
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_fast_as_str_dict(headers),
+            path_params={'id': str(id)},
+            query_params={},  # always empty, avoid extra function call
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -9979,19 +9981,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20089,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Only create mapping if there are params
+    if not params:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20110,15 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    return {str(k): _serialize_value(v) for k, v in d.items()}
+
+def _fast_as_str_dict(d: Optional[Dict[str, Any]]) -> Dict[str, str]:
+    # Fast path for empty input
+    if not d:
+        return {}
+    if len(d) == 1:
+        k, v = next(iter(d.items()))
+        return {str(k): _serialize_value(v)}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    return {str(k): _serialize_value(v) for k, v in d.items()}
