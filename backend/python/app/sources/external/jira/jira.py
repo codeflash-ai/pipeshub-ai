@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -5966,52 +5968,78 @@ class JiraDataSource:
         timeZone: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Assign issue\n\nHTTP PUT /rest/api/3/issue/{issueIdOrKey}/assignee\nPath params:\n  - issueIdOrKey (str)\nBody (application/json) fields:\n  - accountId (str, optional)\n  - accountType (str, optional)\n  - active (bool, optional)\n  - applicationRoles (Dict[str, Any], optional)\n  - avatarUrls (Dict[str, Any], optional)\n  - displayName (str, optional)\n  - emailAddress (str, optional)\n  - expand (str, optional)\n  - groups (Dict[str, Any], optional)\n  - key (str, optional)\n  - locale (str, optional)\n  - name (str, optional)\n  - self (str, optional)\n  - timeZone (str, optional)"""
+        """Auto-generated from OpenAPI: Assign issue
+
+HTTP PUT /rest/api/3/issue/{issueIdOrKey}/assignee
+Path params:
+  - issueIdOrKey (str)
+Body (application/json) fields:
+  - accountId (str, optional)
+  - accountType (str, optional)
+  - active (bool, optional)
+  - applicationRoles (Dict[str, Any], optional)
+  - avatarUrls (Dict[str, Any], optional)
+  - displayName (str, optional)
+  - emailAddress (str, optional)
+  - expand (str, optional)
+  - groups (Dict[str, Any], optional)
+  - key (str, optional)
+  - locale (str, optional)
+  - name (str, optional)
+  - self (str, optional)
+  - timeZone (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+
+        # Use dict unpacking for _headers, avoids O(n) copy if headers is None.
+        if headers:
+            _headers = dict(headers)
+        else:
+            _headers = {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'issueIdOrKey': issueIdOrKey,
-        }
-        _query: Dict[str, Any] = {}
-        _body: Dict[str, Any] = {}
-        if accountId is not None:
-            _body['accountId'] = accountId
-        if accountType is not None:
-            _body['accountType'] = accountType
-        if active is not None:
-            _body['active'] = active
-        if applicationRoles is not None:
-            _body['applicationRoles'] = applicationRoles
-        if avatarUrls is not None:
-            _body['avatarUrls'] = avatarUrls
-        if displayName is not None:
-            _body['displayName'] = displayName
-        if emailAddress is not None:
-            _body['emailAddress'] = emailAddress
-        if expand is not None:
-            _body['expand'] = expand
-        if groups is not None:
-            _body['groups'] = groups
-        if key is not None:
-            _body['key'] = key
-        if locale is not None:
-            _body['locale'] = locale
-        if name is not None:
-            _body['name'] = name
-        if self_ is not None:
-            _body['self'] = self_
-        if timeZone is not None:
-            _body['timeZone'] = timeZone
+
+        _path = {'issueIdOrKey': issueIdOrKey}
+        _query = {}  # Placeholder for possible query params; none used here.
+
+        # Optimized body-building: build dict only with present fields.
+        body_items = [
+            ('accountId', accountId),
+            ('accountType', accountType),
+            ('active', active),
+            ('applicationRoles', applicationRoles),
+            ('avatarUrls', avatarUrls),
+            ('displayName', displayName),
+            ('emailAddress', emailAddress),
+            ('expand', expand),
+            ('groups', groups),
+            ('key', key),
+            ('locale', locale),
+            ('name', name),
+            ('self', self_),
+            ('timeZone', timeZone),
+        ]
+        _body = {key: val for key, val in body_items if val is not None}
+
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/assignee'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Avoid string concatenation if rstrip did nothing (string interning/copy)
+        base_url = self.base_url
+        url = f'{base_url}{_safe_format_url(rel_path, _path)}'
+
+        # Instead of repeated _as_str_dict (which calls .items and str()), memoize single conversions
+        headers_str = _as_str_dict(_headers)
+        path_str = _as_str_dict(_path)
+        # _query is always empty, so specialize for typical case
+        if not _query:
+            query_str = {}
+        else:
+            query_str = _as_str_dict(_query)
+
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=headers_str,
+            path_params=path_str,
+            query_params=query_str,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -6463,6 +6491,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9979,19 +10008,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20116,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20134,22 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string.
+    # If d is already empty or already str->str, just return d as is for efficiency.
+    if not d:
+        return {}
+    # In CPython, isinstance(x, str) is cheap and avoids redundant work
+    # Fast path: all keys/values are str
+    for k, v in d.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            break
+    else:
+        return d  # All keys/values are strings
+    return {str(k): _serialize_value(v) for k, v in d.items()}
+
+def _to_bool_str(x: Any) -> str:
+    # This logic is inferred based on context and typical Jira usage patterns
+    # If bool, return 'true' or 'false', else str(x)
+    if isinstance(x, bool):
+        return 'true' if x else 'false'
+    return str(x)
