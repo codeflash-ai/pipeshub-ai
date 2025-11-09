@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8238,29 +8241,41 @@ class JiraDataSource:
         replaceWith: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Remove issue security level\n\nHTTP DELETE /rest/api/3/issuesecurityschemes/{schemeId}/level/{levelId}\nPath params:\n  - schemeId (str)\n  - levelId (str)\nQuery params:\n  - replaceWith (str, optional)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Remove issue security level
+
+HTTP DELETE /rest/api/3/issuesecurityschemes/{schemeId}/level/{levelId}
+Path params:
+  - schemeId (str)
+  - levelId (str)
+Query params:
+  - replaceWith (str, optional)"""
+        client = self._client  # local var lookup is faster than attribute access
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
+        _headers = dict(headers) if headers else {}
+        _path = {
             'schemeId': schemeId,
             'levelId': levelId,
         }
-        _query: Dict[str, Any] = {}
+        _query = {}
         if replaceWith is not None:
             _query['replaceWith'] = replaceWith
         _body = None
         rel_path = '/rest/api/3/issuesecurityschemes/{schemeId}/level/{levelId}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+        # Convert all dicts just once before passing to HTTPRequest
+        str_headers = _as_str_dict(_headers)
+        str_path = _as_str_dict(_path)
+        str_query = _as_str_dict(_query)
         req = HTTPRequest(
             method='DELETE',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=str_headers,
+            path_params=str_path,
+            query_params=str_query,
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def update_security_level(
@@ -9979,19 +9994,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20102,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Fast path: If there are no placeholders, return as-is.
+    if '{' not in template:
+        return template
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20123,14 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoids unnecessary dict allocation/copy; only convert if key/value not already string
+    # Fast path for empty dicts
+    if not d:
+        return {}
+    # If all keys and values are already strings, avoid conversion (most likely for headers).
+    # This check is much faster than doing conversion for large dicts.
+    if all(isinstance(k, str) and (isinstance(v, str) or v is None) for k, v in d.items()):
+        # Return with None converted to ''
+        return {k: (v if v is not None else '') for k, v in d.items()}
+    # Otherwise, do full conversion
+    return {str(k): _serialize_value(v) for k, v in d.items()}
