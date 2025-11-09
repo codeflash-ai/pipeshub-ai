@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6463,6 +6465,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9173,29 +9176,48 @@ class JiraDataSource:
         maxResults: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get issue type screen schemes for projects\n\nHTTP GET /rest/api/3/issuetypescreenscheme/project\nQuery params:\n  - startAt (int, optional)\n  - maxResults (int, optional)\n  - projectId (list[int], required)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Get issue type screen schemes for projects
+
+HTTP GET /rest/api/3/issuetypescreenscheme/project
+Query params:
+  - startAt (int, optional)
+  - maxResults (int, optional)
+  - projectId (list[int], required)"""
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if startAt is not None:
-            _query['startAt'] = startAt
-        if maxResults is not None:
-            _query['maxResults'] = maxResults
-        _query['projectId'] = projectId
+
+        # Fast-path header handling: if headers is None or empty, skip conversion
+        if headers:
+            _headers = _as_str_dict(headers)
+        else:
+            _headers = {}
+
+        # Inline _query creation, optimizing for typical cases (startAt, maxResults are None)
+        if startAt is None and maxResults is None:
+            _query = {'projectId': projectId}
+        else:
+            _query = {'projectId': projectId}
+            if startAt is not None:
+                _query['startAt'] = startAt
+            if maxResults is not None:
+                _query['maxResults'] = maxResults
+
         _body = None
         rel_path = '/rest/api/3/issuetypescreenscheme/project'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Optimize URL formatting since _path is always empty here
+        url = self.base_url + rel_path
+
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
+            headers=_headers,
+            path_params={},  # _path is always empty
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def assign_issue_type_screen_scheme_to_project(
@@ -9979,19 +10001,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20109,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20127,28 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Key micro-optimization: avoid extra work for empty dicts and
+    # avoid extra calls when possible for frequent fields like projectId
+    if not d:
+        return {}
+    out = {}
+    for k, v in d.items():
+        ks = str(k)
+        # Fastpath for 'projectId' specifically, as it's always a list[int] in this endpoint
+        if ks == 'projectId' and isinstance(v, list):
+            # Avoid function call, join int values directly, safest in this context
+            out[ks] = ','.join(str(x) for x in v)
+        # Fast-path for common primitive types
+        elif v is None:
+            out[ks] = ''
+        elif isinstance(v, (int, float, str)):
+            out[ks] = str(v)
+        elif isinstance(v, (list, tuple, set)):
+            out[ks] = ','.join('true' if x is True else 'false' if x is False else str(x) for x in v)
+        elif v is True:
+            out[ks] = 'true'
+        elif v is False:
+            out[ks] = 'false'
+        else:
+            out[ks] = str(v)
+    return out
