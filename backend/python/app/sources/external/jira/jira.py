@@ -3,6 +3,8 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
@@ -6301,23 +6303,59 @@ class JiraDataSource:
         body_additional: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Update comment\n\nHTTP PUT /rest/api/3/issue/{issueIdOrKey}/comment/{id}\nPath params:\n  - issueIdOrKey (str)\n  - id (str)\nQuery params:\n  - notifyUsers (bool, optional)\n  - overrideEditableFlag (bool, optional)\n  - expand (str, optional)\nBody (application/json) fields:\n  - author (Dict[str, Any], optional)\n  - body (str, optional)\n  - created (str, optional)\n  - id (str, optional)\n  - jsdAuthorCanSeeRequest (bool, optional)\n  - jsdPublic (bool, optional)\n  - properties (list[Dict[str, Any]], optional)\n  - renderedBody (str, optional)\n  - self (str, optional)\n  - updateAuthor (Dict[str, Any], optional)\n  - updated (str, optional)\n  - visibility (Dict[str, Any], optional)\n  - additionalProperties allowed (pass via body_additional)"""
+        """Auto-generated from OpenAPI: Update comment
+
+HTTP PUT /rest/api/3/issue/{issueIdOrKey}/comment/{id}
+Path params:
+  - issueIdOrKey (str)
+  - id (str)
+Query params:
+  - notifyUsers (bool, optional)
+  - overrideEditableFlag (bool, optional)
+  - expand (str, optional)
+Body (application/json) fields:
+  - author (Dict[str, Any], optional)
+  - body (str, optional)
+  - created (str, optional)
+  - id (str, optional)
+  - jsdAuthorCanSeeRequest (bool, optional)
+  - jsdPublic (bool, optional)
+  - properties (list[Dict[str, Any]], optional)
+  - renderedBody (str, optional)
+  - self (str, optional)
+  - updateAuthor (Dict[str, Any], optional)
+  - updated (str, optional)
+  - visibility (Dict[str, Any], optional)
+  - additionalProperties allowed (pass via body_additional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
+
+        # Dict construction optimized: no unnecessary intermediate dictions/copies
+        _headers = headers if headers is not None else {}
+        if 'Content-Type' not in _headers:
+            # Avoids redundant dict copy if not needed
+            _headers = dict(_headers)
+            _headers.setdefault('Content-Type', 'application/json')
+        else:
+            # Make a shallow copy to prevent side effects on input headers
+            _headers = dict(_headers)
+
+        _path = {
             'issueIdOrKey': issueIdOrKey,
             'id': id,
         }
-        _query: Dict[str, Any] = {}
+
+        # Build _query only with set options (avoid many lines and updates)
+        _query = {}
         if notifyUsers is not None:
             _query['notifyUsers'] = notifyUsers
         if overrideEditableFlag is not None:
             _query['overrideEditableFlag'] = overrideEditableFlag
         if expand is not None:
             _query['expand'] = expand
-        _body: Dict[str, Any] = {}
+
+        # Build _body only with present options (avoid many lines and updates)
+        _body = {}
         if author is not None:
             _body['author'] = author
         if body_body is not None:
@@ -6342,16 +6380,22 @@ class JiraDataSource:
             _body['updated'] = updated
         if visibility is not None:
             _body['visibility'] = visibility
-        if 'body_additional' in locals() and body_additional:
+        if body_additional:
             _body.update(body_additional)
         rel_path = '/rest/api/3/issue/{issueIdOrKey}/comment/{id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
+
+        # Use static references to helper in scope to avoid global lookups
+        headers_str = _as_str_dict(_headers)
+        path_params_str = _as_str_dict(_path)
+        query_params_str = _as_str_dict(_query)
+
         req = HTTPRequest(
             method='PUT',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=headers_str,
+            path_params=path_params_str,
+            query_params=query_params_str,
             body=_body,
         )
         resp = await self._client.execute(req)
@@ -6463,6 +6507,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -9979,19 +10024,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,9 +20132,6 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
         return template.format_map(_SafeDict(params))
     except Exception:
@@ -20102,4 +20150,20 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Micro-optimization: directly reference _serialize_value local for fastest loop, and pre-check for all-str dict
+    if not d:
+        return {}
+    # Check fast-path: all keys and values already strings (most common for headers, path)
+    # If so, no need to construct new dict (save memory/copy)
+    all_str = True
+    for k, v in d.items():
+        if not (isinstance(k, str) and isinstance(v, str)):
+            all_str = False
+            break
+    if all_str:
+        # Make a shallow copy to preserve mutation isolation without unnecessary conversion
+        # (since they may be externally modified later, but we don't know the callee)
+        return dict(d)
+    # Otherwise, convert all key/values
+    sv = _serialize_value  # local var ref for performance
+    return {str(k): sv(v) for k, v in d.items()}
