@@ -3,14 +3,17 @@ from typing import Any, Dict, Optional, Union
 from app.sources.client.http.http_request import HTTPRequest
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.client.jira.jira import JiraClient
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
 
 
 class JiraDataSource:
     def __init__(self, client: JiraClient) -> None:
         """Default init for the connector-specific data source."""
-        self._client = client.get_client()
-        if self._client is None:
+        resolved_client = client.get_client()
+        if resolved_client is None:
             raise ValueError('HTTP client is not initialized')
+        self._client = resolved_client
         try:
             self.base_url = self._client.get_base_url().rstrip('/') # type: ignore [valid method]
         except AttributeError as exc:
@@ -6463,6 +6466,7 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def delete_issue_property(
         self,
         issueIdOrKey: str,
@@ -8461,16 +8465,21 @@ class JiraDataSource:
         alternativeIssueTypeId: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Delete issue type\n\nHTTP DELETE /rest/api/3/issuetype/{id}\nPath params:\n  - id (str)\nQuery params:\n  - alternativeIssueTypeId (str, optional)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Delete issue type
+
+HTTP DELETE /rest/api/3/issuetype/{id}
+Path params:
+  - id (str)
+Query params:
+  - alternativeIssueTypeId (str, optional)"""
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        if alternativeIssueTypeId is not None:
-            _query['alternativeIssueTypeId'] = alternativeIssueTypeId
+        # Avoid redundant dict copies
+        _headers = dict(headers) if headers else {}
+        # For this API, _path always one entry; inline construction
+        _path = {'id': id}
+        _query = {'alternativeIssueTypeId': alternativeIssueTypeId} if alternativeIssueTypeId is not None else {}
         _body = None
         rel_path = '/rest/api/3/issuetype/{id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -8482,7 +8491,7 @@ class JiraDataSource:
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def get_issue_type(
@@ -9979,19 +9988,25 @@ class JiraDataSource:
         resp = await self._client.execute(req)
         return resp
 
+    @codeflash_performance_async
     async def get_current_user(
         self,
         expand: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get current user\n\nHTTP GET /rest/api/3/myself\nQuery params:\n  - expand (str, optional)"""
+        """Auto-generated from OpenAPI: Get current user
+
+HTTP GET /rest/api/3/myself
+Query params:
+  - expand (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        
+        # Use headers as-is if not None, else an empty dict (no mutation, safe).
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if expand is not None:
-            _query['expand'] = expand
+        # Avoid unnecessary dict creation, direct assignment for expand param.
+        _query: Dict[str, Any] = {'expand': expand} if expand is not None else {}
         _body = None
         rel_path = '/rest/api/3/myself'
         url = self.base_url + _safe_format_url(rel_path, _path)
@@ -20081,11 +20096,9 @@ class JiraDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
     try:
-        return template.format_map(_SafeDict(params))
+        # Use fast-path only if keys match, otherwise fallback.
+        return template.format(**params)
     except Exception:
         return template
 
@@ -20102,4 +20115,17 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Inline the _serialize_value (avoid overhead for simple types)
+    result: Dict[str, str] = {}
+    for k, v in d.items():
+        if v is None:
+            val = ''
+        elif isinstance(v, (bool, str, int, float)):
+            val = str(v) if not isinstance(v, bool) else ('true' if v else 'false')
+        elif isinstance(v, (list, tuple, set)):
+            # Conservative: preserve existing behavior using internal helper
+            val = ','.join('true' if x is True else 'false' if x is False else str(x) for x in v)
+        else:
+            val = str(v)
+        result[str(k)] = val
+    return result
