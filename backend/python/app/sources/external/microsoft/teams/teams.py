@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -176,7 +174,9 @@ class TeamsDataSource:
             if skip:
                 query_params.skip = skip
             config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(query_parameters=query_params)
-            response = await self.client.teams.by_team_id(team_id).get(request_configuration=config)
+            # Localize attribute lookups
+            teams_proxy = self.client.teams
+            response = await teams_proxy.by_team_id(team_id).get(request_configuration=config)
             return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_team_get_team: {e}")
