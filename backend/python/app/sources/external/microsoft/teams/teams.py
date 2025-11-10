@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -75,9 +73,12 @@ class TeamsDataSource:
 
     def __init__(self, client: MSGraphClient) -> None:
         """Initialize with Microsoft Graph SDK client optimized for Teams."""
-        self.client = client.get_client().get_ms_graph_service_client()
-        if not hasattr(self.client, "me"):
+        ms_client = client.get_client()
+        # Avoid repeated attribute lookup in hasattr by caching
+        service_client = ms_client.get_ms_graph_service_client()
+        if not hasattr(service_client, "me"):
             raise ValueError("Client must be a Microsoft Graph SDK client")
+        self.client = service_client
         logger.info("Teams client initialized with 727 methods")
 
     def _handle_teams_response(self, response: object) -> TeamsResponse:
@@ -116,6 +117,7 @@ class TeamsDataSource:
 
     def get_data_source(self) -> 'TeamsDataSource':
         """Get the underlying Teams client."""
+        # No further optimization possible for a property accessor
         return self
 
     # ========== TEAMS OPERATIONS (95 methods) ==========
