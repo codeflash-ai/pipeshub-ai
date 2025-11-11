@@ -125,14 +125,14 @@ class GmailSyncTasks(BaseSyncTasks):
                     # Resync all users in the organization
                     self.logger.info("Resyncing all users in organization")
                     users = await self.arango_service.get_users(org_id, active=True)
-                    resync_success = True
-                    for user in users:
-                        if not await self.gmail_sync_service.resync_gmail(org_id, user):
+                    # Parallelize user resync to improve throughput
+                    async def resync_user(user):
+                        result = await self.gmail_sync_service.resync_gmail(org_id, user)
+                        if not result:
                             self.logger.error(f"Error resyncing Gmail user {user['email']}")
-                            resync_success = False
-                            continue
-
-                    if not resync_success:
+                        return result
+                    results = await asyncio.gather(*(resync_user(user) for user in users))
+                    if not all(results):
                         self.logger.error("Failed to resync some users")
                         return {"status": "error", "message": "Failed to resync some users"}
 
