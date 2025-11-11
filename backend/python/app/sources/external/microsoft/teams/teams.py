@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -1055,23 +1053,29 @@ class TeamsDataSource:
             TeamsResponse: Teams API response with success status and data
         """
         try:
-            # Build query parameters
-            query_params = TeamsRequestBuilder.TeamsRequestBuilderGetQueryParameters()
-            if select:
-                query_params.select = select
-            if expand:
-                query_params.expand = expand
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top:
-                query_params.top = top
-            if skip:
-                query_params.skip = skip
-            config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(query_parameters=query_params)
+            # Inline-dictionary approach for parameters, avoiding repeated attribute set.
+            param_dict = {}
+            if select is not None:
+                param_dict["select"] = select
+            if expand is not None:
+                param_dict["expand"] = expand
+            if filter is not None:
+                param_dict["filter"] = filter
+            if orderby is not None:
+                param_dict["orderby"] = orderby
+            if search is not None:
+                param_dict["search"] = search
+            if top is not None:
+                param_dict["top"] = top
+            if skip is not None:
+                param_dict["skip"] = skip
+
+            if param_dict:
+                query_params = TeamsRequestBuilder.TeamsRequestBuilderGetQueryParameters(**param_dict)
+                config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(query_parameters=query_params)
+            else:
+                config = None
+
             response = await self.client.teams.by_team_id(team_id).schedule.get(request_configuration=config)
             return self._handle_teams_response(response)
         except Exception as e:
