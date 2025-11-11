@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -86,30 +84,32 @@ class TeamsDataSource:
             if response is None:
                 return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
+            # Early branching for dict (hot path from profiling): micro-optimizes error handling for dicts
+            if isinstance(response, dict):
+                err = response.get('error')
+                if err is not None:
+                    if isinstance(err, dict):
+                        error_code = err.get('code', 'Unknown')
+                        error_message = err.get('message', 'No message')
+                        error_msg = f"{error_code}: {error_message}"
+                    else:
+                        error_msg = str(err)
+                    return TeamsResponse(success=False, data=response, error=error_msg)
+                # dict, but no 'error', proceed as normal
+                return TeamsResponse(success=True, data=response, error=None)
+            
+            # Object with error attribute
 
             # Enhanced error response handling for Teams operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+                return TeamsResponse(success=False, data=response, error=str(response.error))
+            
+            # Object with code/message attributes
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return TeamsResponse(success=False, data=response, error=f"{response.code}: {response.message}")
+
+            # Default: Success, return data as is
+            return TeamsResponse(success=True, data=response, error=None)
         except Exception as e:
             logger.error(f"Error handling Teams response: {e}")
             return TeamsResponse(success=False, error=str(e))
@@ -453,7 +453,14 @@ class TeamsDataSource:
             TeamsResponse: Teams API response with success status and data
         """
         try:
-            response = await self.client.teams.by_team_id(team_id).installed_apps.by_installed_app_id(teamsAppInstallation_id).upgrade.post(body=body)
+            # Avoid deep attribute access in a chain for a slight speed-up by storing intermediate object references locally
+            teams = self.client.teams
+            team = teams.by_team_id(team_id)
+            installed_apps = team.installed_apps
+            app = installed_apps.by_installed_app_id(teamsAppInstallation_id)
+            upgrade = app.upgrade
+            # Upgrade API call
+            response = await upgrade.post(body=body)
             return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_team_installed_apps_teams_app_installation_upgrade: {e}")
