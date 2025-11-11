@@ -23,12 +23,14 @@ class ConfluenceDataSource:
         self,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get Admin Key\n\nHTTP GET /admin-key"""
+        """Auto-generated from OpenAPI: Get Admin Key
+
+HTTP GET /admin-key"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
+        _headers = headers or {}
+        _path = {}
+        _query = {}
         _body = None
         rel_path = '/admin-key'
         url = self.base_url + _safe_format_url(rel_path, _path)
