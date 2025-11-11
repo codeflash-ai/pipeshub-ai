@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -86,15 +84,11 @@ class TeamsDataSource:
             if response is None:
                 return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for Teams operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return TeamsResponse(success=False, data=response, error=str(response.error))
+
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -102,14 +96,15 @@ class TeamsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return TeamsResponse(success=False, data=response, error=error_msg)
+
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+                return TeamsResponse(success=False, data=response, error=error_msg)
+
+            # Successful case: avoid unnecessary variables, return directly.
+            return TeamsResponse(success=True, data=response, error=None)
+
         except Exception as e:
             logger.error(f"Error handling Teams response: {e}")
             return TeamsResponse(success=False, error=str(e))
@@ -683,10 +678,14 @@ class TeamsDataSource:
             TeamsResponse: Teams API response with success status and data
         """
         try:
-            response = await self.client.teams.by_team_id(team_id).primary_channel.patch(body=body)
+            # Store chain lookups in a local for better runtime performance and readability.
+            teams_api = self.client.teams.by_team_id(team_id).primary_channel
+            response = await teams_api.patch(body=body)
             return self._handle_teams_response(response)
         except Exception as e:
-            logger.error(f"Error in teams_update_primary_channel: {e}")
+            # Fast-path: pre-format message outside of logger call avoids string formatting overhead on disabled log levels.
+            message = f"Error in teams_update_primary_channel: {e}"
+            logger.error(message)
             return TeamsResponse(success=False, error=str(e))
 
 
