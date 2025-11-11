@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -868,10 +866,11 @@ class TeamsDataSource:
         """
         try:
             response = await self.client.teams.by_team_id(team_id).primary_channel.members.add.post(body=body)
-            return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_team_primary_channel_members_add: {e}")
             return TeamsResponse(success=False, error=str(e))
+        # Handle response outside try to reduce exception handler scope for better performance.
+        return self._handle_teams_response(response)
 
 
     async def teams_team_primary_channel_members_remove(self, team_id: str, body: Optional[Dict[str, Any]] = None) -> TeamsResponse:
