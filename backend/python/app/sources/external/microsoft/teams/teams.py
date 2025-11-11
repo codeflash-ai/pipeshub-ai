@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -86,15 +84,14 @@ class TeamsDataSource:
             if response is None:
                 return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
+            # Fast-path all the common paths by reorganizing conditions
+            # 1. dict with 'error'
+            # 2. hasattr 'error'
+            # 3. hasattr 'code' and 'message'
+            # Only check attributes once as needed.
 
-            # Enhanced error response handling for Teams operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+            # Avoid redundant isinstance/hasattr checks where feasible
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -102,14 +99,17 @@ class TeamsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return TeamsResponse(success=False, data=response, error=error_msg)
+
+            if hasattr(response, 'error'):
+                return TeamsResponse(success=False, data=response, error=str(response.error))
+
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+                return TeamsResponse(success=False, data=response, error=error_msg)
+
+            # Normal success response, fast path
+            return TeamsResponse(success=True, data=response, error=None)
         except Exception as e:
             logger.error(f"Error handling Teams response: {e}")
             return TeamsResponse(success=False, error=str(e))
@@ -224,22 +224,26 @@ class TeamsDataSource:
         try:
             # Build query parameters
             query_params = TeamsRequestBuilder.TeamsRequestBuilderGetQueryParameters()
-            if select:
-                query_params.select = select
-            if expand:
-                query_params.expand = expand
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top:
-                query_params.top = top
-            if skip:
-                query_params.skip = skip
-            config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(query_parameters=query_params)
-            response = await self.client.teams.by_team_id(team_id).group.get(request_configuration=config)
+            params = (
+                ('select', select),
+                ('expand', expand),
+                ('filter', filter),
+                ('orderby', orderby),
+                ('search', search),
+                ('top', top),
+                ('skip', skip),
+            )
+            # Avoid many if statements: set only the not-None fields
+            for attr, value in params:
+                if value is not None:
+                    setattr(query_params, attr, value)
+            config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(
+                query_parameters=query_params
+            )
+            # Reuse local for chained attribute: slightly reduces method-call time
+            teams = self.client.teams
+            group_req = teams.by_team_id(team_id).group
+            response = await group_req.get(request_configuration=config)
             return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_get_group: {e}")
