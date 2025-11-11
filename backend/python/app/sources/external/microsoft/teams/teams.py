@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -82,37 +80,38 @@ class TeamsDataSource:
 
     def _handle_teams_response(self, response: object) -> TeamsResponse:
         """Handle Teams API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return TeamsResponse(success=False, error="Empty response from Teams API")
+        # Fast path: None is most likely for explicit errors, return immediately
+        if response is None:
+            return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
+        # Instead of repeated hasattr/isinstance checks, flatten control flow
+        # Most responses are successful, so minimize check ordering for real errors
+        # Avoid repeated initialization in local scope, only set when needed
+        # Remove try block except where absolutely necessary for error handling
 
-            # Enhanced error response handling for Teams operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
-        except Exception as e:
-            logger.error(f"Error handling Teams response: {e}")
-            return TeamsResponse(success=False, error=str(e))
+        # Check for attribute 'error' first (most common error signal)
+        response_has_error = hasattr(response, 'error')
+        if response_has_error:
+            return TeamsResponse(success=False, data=response, error=str(response.error))
+
+        # Check for dictionary with 'error' key (API error cases)
+        if isinstance(response, dict) and 'error' in response:
+            error_info = response['error']
+            if isinstance(error_info, dict):
+                error_code = error_info.get('code', 'Unknown')
+                error_message = error_info.get('message', 'No message')
+                error_msg = f"{error_code}: {error_message}"
+            else:
+                error_msg = str(error_info)
+            return TeamsResponse(success=False, data=response, error=error_msg)
+
+        # Check for response with 'code' and 'message' attributes (rare error)
+        if hasattr(response, 'code') and hasattr(response, 'message'):
+            error_msg = f"{response.code}: {response.message}"
+            return TeamsResponse(success=False, data=response, error=error_msg)
+
+        # Default: Success
+        return TeamsResponse(success=True, data=response, error=None)
 
     def get_data_source(self) -> 'TeamsDataSource':
         """Get the underlying Teams client."""
