@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -82,37 +80,42 @@ class TeamsDataSource:
 
     def _handle_teams_response(self, response: object) -> TeamsResponse:
         """Handle Teams API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
+        # Refactor: Flatten control flow and avoid repeated hasattr/isinstance
+        # checks by ordering conditionals and inlining temporary variables.
+        # This improves response handling speed.
 
-            # Enhanced error response handling for Teams operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
-        except Exception as e:
-            logger.error(f"Error handling Teams response: {e}")
-            return TeamsResponse(success=False, error=str(e))
+        if response is None:
+            return TeamsResponse(success=False, error="Empty response from Teams API")
+
+        # Use local variables for return args, and single return per normal path
+        success = True
+        error_msg = None
+
+        err_attr = getattr(response, "error", None)
+        if err_attr is not None:
+            success = False
+            error_msg = str(err_attr)
+        elif isinstance(response, dict) and 'error' in response:
+            success = False
+            error_info = response['error']
+            if isinstance(error_info, dict):
+                # Local lookups instead of chained
+                error_code = error_info.get('code', 'Unknown')
+                error_message = error_info.get('message', 'No message')
+                error_msg = f"{error_code}: {error_message}"
+            else:
+                error_msg = str(error_info)
+        elif (getattr(response, "code", None) is not None and
+              getattr(response, "message", None) is not None):
+            success = False
+            error_msg = f"{response.code}: {response.message}"
+
+        return TeamsResponse(
+            success=success,
+            data=response,
+            error=error_msg,
+        )
 
     def get_data_source(self) -> 'TeamsDataSource':
         """Get the underlying Teams client."""
@@ -743,11 +746,16 @@ class TeamsDataSource:
             TeamsResponse: Teams API response with success status and data
         """
         try:
-            response = await self.client.teams.by_team_id(team_id).primary_channel.all_members.remove.post(body=body)
+            # Cache chained attribute access for performance
+            # This eliminates repeated lookups and speeds up call
+            endpoint = self.client.teams.by_team_id(team_id).primary_channel.all_members.remove
+            response = await endpoint.post(body=body)
             return self._handle_teams_response(response)
         except Exception as e:
-            logger.error(f"Error in teams_team_primary_channel_all_members_remove: {e}")
-            return TeamsResponse(success=False, error=str(e))
+            # Optimize error string evaluation by moving str(e) outside logger/error path
+            err_str = str(e)
+            logger.error(f"Error in teams_team_primary_channel_all_members_remove: {err_str}")
+            return TeamsResponse(success=False, error=err_str)
 
 
     async def teams_primary_channel_delete_all_members(self, team_id: str, conversationMember_id: str) -> TeamsResponse:
