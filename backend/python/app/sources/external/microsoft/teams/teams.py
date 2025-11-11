@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -417,22 +415,29 @@ class TeamsDataSource:
         try:
             # Build query parameters
             query_params = TeamsRequestBuilder.TeamsRequestBuilderGetQueryParameters()
-            if select:
-                query_params.select = select
-            if expand:
-                query_params.expand = expand
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top:
-                query_params.top = top
-            if skip:
-                query_params.skip = skip
-            config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(query_parameters=query_params)
-            response = await self.client.teams.by_team_id(team_id).installed_apps.by_installed_app_id(teamsAppInstallation_id).teams_app_definition.get(request_configuration=config)
+            # Only set attributes that are not None to avoid unnecessary assignments
+            if select is not None: query_params.select = select
+            if expand is not None: query_params.expand = expand
+            if filter is not None: query_params.filter = filter
+            if orderby is not None: query_params.orderby = orderby
+            if search is not None: query_params.search = search
+            if top is not None: query_params.top = top
+            if skip is not None: query_params.skip = skip
+
+            config = TeamsRequestBuilder.TeamsRequestBuilderGetRequestConfiguration(
+                query_parameters=query_params
+            )
+
+            # Await the Teams API request directly
+            response = await self.client.teams \
+                .by_team_id(team_id) \
+                .installed_apps \
+                .by_installed_app_id(teamsAppInstallation_id) \
+                .teams_app_definition \
+                .get(request_configuration=config)
+            
+            # Fast synchronous handling of the response
+            # Since _handle_teams_response is fast and not blocking, it's optimal to keep it sync
             return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_installed_apps_get_teams_app_definition: {e}")
