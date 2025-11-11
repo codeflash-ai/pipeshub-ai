@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -86,15 +84,10 @@ class TeamsDataSource:
             if response is None:
                 return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for Teams operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
+                return TeamsResponse(success=False, data=response, error=str(response.error))
             elif isinstance(response, dict) and 'error' in response:
-                success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_code = error_info.get('code', 'Unknown')
@@ -102,14 +95,11 @@ class TeamsDataSource:
                     error_msg = f"{error_code}: {error_message}"
                 else:
                     error_msg = str(error_info)
+                return TeamsResponse(success=False, data=response, error=error_msg)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+                return TeamsResponse(success=False, data=response, error=f"{response.code}: {response.message}")
+            
+            return TeamsResponse(success=True, data=response, error=None)
         except Exception as e:
             logger.error(f"Error handling Teams response: {e}")
             return TeamsResponse(success=False, error=str(e))
