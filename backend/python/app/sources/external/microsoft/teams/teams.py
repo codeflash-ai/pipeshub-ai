@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -86,29 +84,34 @@ class TeamsDataSource:
             if response is None:
                 return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for Teams operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
+                return TeamsResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error)
+                )
+            elif isinstance(response, dict):
+                error_info = response.get('error')
+                if error_info is not None:
+                    if isinstance(error_info, dict):
+                        error_code = error_info.get('code', 'Unknown')
+                        error_message = error_info.get('message', 'No message')
+                        error_msg = f"{error_code}: {error_message}"
+                    else:
+                        error_msg = str(error_info)
+                    return TeamsResponse(success=False, data=response, error=error_msg)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return TeamsResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}"
+                )
+            # Success path - most common case, so make it fastest
             return TeamsResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling Teams response: {e}")
@@ -493,7 +496,9 @@ class TeamsDataSource:
             TeamsResponse: Teams API response with success status and data
         """
         try:
-            response = await self.client.teams.by_team_id(team_id).operations.by_operation_id(teamsAsyncOperation_id).delete()
+            # Local variable for chained lookups to minimize attribute chaining overhead
+            client_teams = self.client.teams
+            response = await client_teams.by_team_id(team_id).operations.by_operation_id(teamsAsyncOperation_id).delete()
             return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_delete_operations: {e}")
