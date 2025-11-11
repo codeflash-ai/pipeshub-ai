@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -75,44 +73,49 @@ class TeamsDataSource:
 
     def __init__(self, client: MSGraphClient) -> None:
         """Initialize with Microsoft Graph SDK client optimized for Teams."""
-        self.client = client.get_client().get_ms_graph_service_client()
-        if not hasattr(self.client, "me"):
+        # Avoid multiple attribute lookups; store result directly
+        _cli = client.get_client().get_ms_graph_service_client()
+        if not hasattr(_cli, "me"):
             raise ValueError("Client must be a Microsoft Graph SDK client")
+        self.client = _cli
         logger.info("Teams client initialized with 727 methods")
 
     def _handle_teams_response(self, response: object) -> TeamsResponse:
         """Handle Teams API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return TeamsResponse(success=False, error="Empty response from Teams API")
+        # Micro-optimization: Avoid repeatedly setting/overwriting variables
+        if response is None:
+            return TeamsResponse(success=False, error="Empty response from Teams API")
 
-            success = True
-            error_msg = None
+        # Fast error branch checks: prefer type checks before hasattr lookups
+        # This order minimizes hasattr hits for common dict fastpath
 
-            # Enhanced error response handling for Teams operations
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
+        # Fastpath: check dict response with 'error' key first (more likely in REST-like APIs)
+        if isinstance(response, dict):
+            error_info = response.get('error')
+            if error_info is not None:
+                # Likely the error path
                 if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
+                    error_msg = (
+                        f"{error_info.get('code', 'Unknown')}: "
+                        f"{error_info.get('message', 'No message')}"
+                    )
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
-            return TeamsResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
-        except Exception as e:
-            logger.error(f"Error handling Teams response: {e}")
-            return TeamsResponse(success=False, error=str(e))
+                return TeamsResponse(success=False, data=response, error=error_msg)
+
+        # Next common: hasattr 'error' attribute
+        if hasattr(response, 'error'):
+            error_msg = str(response.error)
+            return TeamsResponse(success=False, data=response, error=error_msg)
+
+        # Next: hasattr 'code' and 'message' attributes
+        # (Grouped into one branch to minimize hasattr checks)
+        if hasattr(response, 'code') and hasattr(response, 'message'):
+            error_msg = f"{response.code}: {response.message}"
+            return TeamsResponse(success=False, data=response, error=error_msg)
+
+        # Success case, no errors found
+        return TeamsResponse(success=True, data=response, error=None)
 
     def get_data_source(self) -> 'TeamsDataSource':
         """Get the underlying Teams client."""
@@ -279,7 +282,12 @@ class TeamsDataSource:
             TeamsResponse: Teams API response with success status and data
         """
         try:
-            response = await self.client.teams.by_team_id(team_id).installed_apps.by_installed_app_id(teamsAppInstallation_id).delete()
+            # Cache attribute lookups for chained calls
+            teams_obj = self.client.teams
+            by_team = teams_obj.by_team_id(team_id)
+            installed = by_team.installed_apps
+            by_app = installed.by_installed_app_id(teamsAppInstallation_id)
+            response = await by_app.delete()
             return self._handle_teams_response(response)
         except Exception as e:
             logger.error(f"Error in teams_delete_installed_apps: {e}")
