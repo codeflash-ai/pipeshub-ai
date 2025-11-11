@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -23,6 +21,7 @@ from msgraph.generated.teams.teams_request_builder import (  # type: ignore
 )
 
 from app.sources.client.microsoft.microsoft import MSGraphClient
+import asyncio
 
 
 # Teams-specific response wrapper
@@ -111,7 +110,8 @@ class TeamsDataSource:
                 error=error_msg,
             )
         except Exception as e:
-            logger.error(f"Error handling Teams response: {e}")
+            # Offload logging to thread to avoid blocking event loop if logging backend is slow
+            asyncio.create_task(self._async_log_error(f"Error handling Teams response: {e}"))
             return TeamsResponse(success=False, error=str(e))
 
     def get_data_source(self) -> 'TeamsDataSource':
@@ -604,7 +604,8 @@ class TeamsDataSource:
             response = await self.client.teams.by_team_id(team_id).photo.get(request_configuration=config)
             return self._handle_teams_response(response)
         except Exception as e:
-            logger.error(f"Error in teams_get_photo: {e}")
+            # Offload error logging from main event loop
+            asyncio.create_task(self._async_log_error(f"Error in teams_get_photo: {e}"))
             return TeamsResponse(success=False, error=str(e))
 
 
@@ -19600,6 +19601,10 @@ class TeamsDataSource:
         except Exception as e:
             logger.error(f"Error in users_get_transitive_member_of_as_group: {e}")
             return TeamsResponse(success=False, error=str(e))
+
+    async def _async_log_error(self, msg: str) -> None:
+        loop = asyncio.get_running_loop()
+        await loop.run_in_executor(None, logger.error, msg)
 
 
 
