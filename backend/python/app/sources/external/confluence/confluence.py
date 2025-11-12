@@ -2616,7 +2616,12 @@ class ConfluenceDataSource:
         body: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Create whiteboard\n\nHTTP POST /whiteboards\nQuery params:\n  - private (bool, optional)\nBody: application/json (Any)"""
+        """Auto-generated from OpenAPI: Create whiteboard
+
+HTTP POST /whiteboards
+Query params:
+  - private (bool, optional)
+Body: application/json (Any)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -2631,8 +2636,8 @@ class ConfluenceDataSource:
             method='POST',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            path_params={},
+            query_params=_as_str_dict(_query) if _query else {},
             body=_body,
         )
         resp = await self._client.execute(req)
