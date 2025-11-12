@@ -3662,15 +3662,16 @@ class ConfluenceDataSource:
         id: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get permitted operations for a Smart Link in the content tree\n\nHTTP GET /embeds/{id}/operations\nPath params:\n  - id (int)"""
+        """Auto-generated from OpenAPI: Get permitted operations for a Smart Link in the content tree
+
+HTTP GET /embeds/{id}/operations
+Path params:
+  - id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        _body = None
+        # Using local variables for clarity, since concurrency optimization isn't practical here
+        _headers = dict(headers) if headers else {}
+        _path = {'id': id}
         rel_path = '/embeds/{id}/operations'
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
@@ -3678,8 +3679,8 @@ class ConfluenceDataSource:
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            query_params={},
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
