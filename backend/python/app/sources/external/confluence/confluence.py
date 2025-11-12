@@ -7124,4 +7124,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid unnecessary dict allocation if 'd' is already empty
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
