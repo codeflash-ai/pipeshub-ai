@@ -2647,22 +2647,31 @@ class ConfluenceDataSource:
         include_properties: Optional[bool] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get whiteboard by id\n\nHTTP GET /whiteboards/{id}\nPath params:\n  - id (int)\nQuery params:\n  - include-collaborators (bool, optional)\n  - include-direct-children (bool, optional)\n  - include-operations (bool, optional)\n  - include-properties (bool, optional)"""
+        """Auto-generated from OpenAPI: Get whiteboard by id
+
+HTTP GET /whiteboards/{id}
+Path params:
+  - id (int)
+Query params:
+  - include-collaborators (bool, optional)
+  - include-direct-children (bool, optional)
+  - include-operations (bool, optional)
+  - include-properties (bool, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {
             'id': id,
         }
-        _query: Dict[str, Any] = {}
-        if include_collaborators is not None:
-            _query['include-collaborators'] = include_collaborators
-        if include_direct_children is not None:
-            _query['include-direct-children'] = include_direct_children
-        if include_operations is not None:
-            _query['include-operations'] = include_operations
-        if include_properties is not None:
-            _query['include-properties'] = include_properties
+        # More efficient gathering of non-None query parameters; preserves dict logic.
+        _query: Dict[str, Any] = {
+            k: v for k, v in [
+                ('include-collaborators', include_collaborators),
+                ('include-direct-children', include_direct_children),
+                ('include-operations', include_operations),
+                ('include-properties', include_properties),
+            ] if v is not None
+        }
         _body = None
         rel_path = '/whiteboards/{id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
