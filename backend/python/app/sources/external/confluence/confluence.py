@@ -490,10 +490,16 @@ class ConfluenceDataSource:
         version_number: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get version details for attachment version\n\nHTTP GET /attachments/{attachment-id}/versions/{version-number}\nPath params:\n  - attachment-id (str)\n  - version-number (int)"""
+        """Auto-generated from OpenAPI: Get version details for attachment version
+
+HTTP GET /attachments/{attachment-id}/versions/{version-number}
+Path params:
+  - attachment-id (str)
+  - version-number (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        # Avoid redundant dict copy; only convert to dict if headers is not None
+        _headers: Dict[str, Any] = headers if headers is not None else {}
         _path: Dict[str, Any] = {
             'attachment-id': attachment_id,
             'version-number': version_number,
