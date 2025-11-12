@@ -7103,11 +7103,22 @@ class ConfluenceDataSource:
 
 # ---- Helpers used by generated methods ----
 def _safe_format_url(template: str, params: Dict[str, object]) -> str:
-    class _SafeDict(dict):
-        def __missing__(self, key: str) -> str:
-            return '{' + key + '}'
+    # Use a pre-created SafeDict instance with necessary __missing__ support
+    # This avoids repeated class creation, which is costly when called frequently.
+
+    # Define SafeDict only once, outside the function for efficiency.
+    # But to preserve code signature (as per instructions), leave as local class, but cache instance.
+    if not hasattr(_safe_format_url, '_SafeDict'):
+        class _SafeDict(dict):
+            def __missing__(self, key: str) -> str:
+                return '{' + key + '}'
+        _safe_format_url._SafeDict = _SafeDict
+
+    SafeDict = _safe_format_url._SafeDict
+
     try:
-        return template.format_map(_SafeDict(params))
+        # New instance per call to preserve input semantics and __missing__ support
+        return template.format_map(SafeDict(params))
     except Exception:
         return template
 
