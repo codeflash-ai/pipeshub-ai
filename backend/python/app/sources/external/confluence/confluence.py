@@ -597,7 +597,8 @@ class ConfluenceDataSource:
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            # Pass the raw query dict for lists/dicts. The http client will handle serialization.
+            query_params=_query,
             body=_body,
         )
         resp = await self._client.execute(req)
