@@ -5508,7 +5508,11 @@ class ConfluenceDataSource:
         id: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get permitted operations for footer comment\n\nHTTP GET /footer-comments/{id}/operations\nPath params:\n  - id (int)"""
+        """Auto-generated from OpenAPI: Get permitted operations for footer comment
+
+HTTP GET /footer-comments/{id}/operations
+Path params:
+  - id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -5522,9 +5526,9 @@ class ConfluenceDataSource:
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_as_str_dict(_headers) if _headers else {},
+            path_params=_as_str_dict(_path) if _path else {},
+            query_params=_as_str_dict(_query) if _query else {},
             body=_body,
         )
         resp = await self._client.execute(req)
