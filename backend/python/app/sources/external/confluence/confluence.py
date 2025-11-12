@@ -7082,12 +7082,10 @@ class ConfluenceDataSource:
         """Auto-generated from OpenAPI: Deletes a Forge app property.\n\nHTTP DELETE /app/properties/{propertyKey}\nPath params:\n  - propertyKey (str)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
+        _headers = headers if headers is not None else {}
+        _path = {
             'propertyKey': propertyKey,
         }
-        _query: Dict[str, Any] = {}
-        _body = None
         rel_path = '/app/properties/{propertyKey}'
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
@@ -7095,8 +7093,8 @@ class ConfluenceDataSource:
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            query_params={},   # Query dict always empty for this endpoint
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
@@ -7124,4 +7122,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Use direct dict comprehension for reduction in object creation overhead
+    return {str(k): _serialize_value(v) for k, v in d.items()}
