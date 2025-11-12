@@ -3533,14 +3533,19 @@ class ConfluenceDataSource:
         value: Optional[str] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Create content property for Smart Link in the content tree\n\nHTTP POST /embeds/{id}/properties\nPath params:\n  - id (int)\nBody (application/json) fields:\n  - key (str, optional)\n  - value (str, optional)"""
+        """Auto-generated from OpenAPI: Create content property for Smart Link in the content tree
+
+HTTP POST /embeds/{id}/properties
+Path params:
+  - id (int)
+Body (application/json) fields:
+  - key (str, optional)
+  - value (str, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _headers.setdefault('Content-Type', 'application/json')
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
+        _path: Dict[str, Any] = {'id': id}
         _query: Dict[str, Any] = {}
         _body: Dict[str, Any] = {}
         if key is not None:
@@ -7124,4 +7129,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Slightly more efficient: use generator expression directly
+    return {str(k): _serialize_value(v) for k, v in d.items()} if d else {}
