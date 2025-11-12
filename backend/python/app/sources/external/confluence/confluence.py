@@ -1465,14 +1465,21 @@ class ConfluenceDataSource:
         sort: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get custom content comments\n\nHTTP GET /custom-content/{id}/footer-comments\nPath params:\n  - id (int)\nQuery params:\n  - body-format (Dict[str, Any], optional)\n  - cursor (str, optional)\n  - limit (int, optional)\n  - sort (Dict[str, Any], optional)"""
+        """Auto-generated from OpenAPI: Get custom content comments
+
+HTTP GET /custom-content/{id}/footer-comments
+Path params:
+  - id (int)
+Query params:
+  - body-format (Dict[str, Any], optional)
+  - cursor (str, optional)
+  - limit (int, optional)
+  - sort (Dict[str, Any], optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
+        _headers = headers if headers else {}
+        _path = {'id': id}
+        _query = {}
         if body_format is not None:
             _query['body-format'] = body_format
         if cursor is not None:
@@ -1492,8 +1499,7 @@ class ConfluenceDataSource:
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
-        return resp
+        return await self._client.execute(req)
 
     async def get_custom_content_labels(
         self,
