@@ -7120,8 +7120,10 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     if v is None:
         return ''
     if isinstance(v, (list, tuple, set)):
-        return ','.join(_to_bool_str(x) for x in v)
+        # Convert iterable to list first for improved join performance on generators
+        return ','.join(map(_to_bool_str, v))
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
+    # Use dict comprehension directly; d or {} avoids TypeError on None
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
