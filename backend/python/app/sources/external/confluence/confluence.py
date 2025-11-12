@@ -4338,22 +4338,21 @@ class ConfluenceDataSource:
         body: Optional[Dict[str, Any]] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Create space\n\nHTTP POST /spaces\nBody: application/json (Any)"""
+        """Auto-generated from OpenAPI: Create space
+
+HTTP POST /spaces
+Body: application/json (Any)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        _body = body
         rel_path = '/spaces'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, {})
         req = HTTPRequest(
             method='POST',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_as_str_dict(headers) if headers else {},
+            path_params={},
+            query_params={},
+            body=body,
         )
         resp = await self._client.execute(req)
         return resp
