@@ -6172,56 +6172,63 @@ class ConfluenceDataSource:
         limit: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get tasks\n\nHTTP GET /tasks\nQuery params:\n  - body-format (Dict[str, Any], optional)\n  - include-blank-tasks (bool, optional)\n  - status (str, optional)\n  - task-id (list[int], optional)\n  - space-id (list[int], optional)\n  - page-id (list[int], optional)\n  - blogpost-id (list[int], optional)\n  - created-by (list[str], optional)\n  - assigned-to (list[str], optional)\n  - completed-by (list[str], optional)\n  - created-at-from (int, optional)\n  - created-at-to (int, optional)\n  - due-at-from (int, optional)\n  - due-at-to (int, optional)\n  - completed-at-from (int, optional)\n  - completed-at-to (int, optional)\n  - cursor (str, optional)\n  - limit (int, optional)"""
+        """Auto-generated from OpenAPI: Get tasks
+
+HTTP GET /tasks
+Query params:
+  - body-format (Dict[str, Any], optional)
+  - include-blank-tasks (bool, optional)
+  - status (str, optional)
+  - task-id (list[int], optional)
+  - space-id (list[int], optional)
+  - page-id (list[int], optional)
+  - blogpost-id (list[int], optional)
+  - created-by (list[str], optional)
+  - assigned-to (list[str], optional)
+  - completed-by (list[str], optional)
+  - created-at-from (int, optional)
+  - created-at-to (int, optional)
+  - due-at-from (int, optional)
+  - due-at-to (int, optional)
+  - completed-at-from (int, optional)
+  - completed-at-to (int, optional)
+  - cursor (str, optional)
+  - limit (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
+        # --- OPTIMIZATION: list all (param, key) combos and build _query in a loop ---
+        params = (
+            (body_format, 'body-format'),
+            (include_blank_tasks, 'include-blank-tasks'),
+            (status, 'status'),
+            (task_id, 'task-id'),
+            (space_id, 'space-id'),
+            (page_id, 'page-id'),
+            (blogpost_id, 'blogpost-id'),
+            (created_by, 'created-by'),
+            (assigned_to, 'assigned-to'),
+            (completed_by, 'completed-by'),
+            (created_at_from, 'created-at-from'),
+            (created_at_to, 'created-at-to'),
+            (due_at_from, 'due-at-from'),
+            (due_at_to, 'due-at-to'),
+            (completed_at_from, 'completed-at-from'),
+            (completed_at_to, 'completed-at-to'),
+            (cursor, 'cursor'),
+            (limit, 'limit'),
+        )
         _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {}
-        _query: Dict[str, Any] = {}
-        if body_format is not None:
-            _query['body-format'] = body_format
-        if include_blank_tasks is not None:
-            _query['include-blank-tasks'] = include_blank_tasks
-        if status is not None:
-            _query['status'] = status
-        if task_id is not None:
-            _query['task-id'] = task_id
-        if space_id is not None:
-            _query['space-id'] = space_id
-        if page_id is not None:
-            _query['page-id'] = page_id
-        if blogpost_id is not None:
-            _query['blogpost-id'] = blogpost_id
-        if created_by is not None:
-            _query['created-by'] = created_by
-        if assigned_to is not None:
-            _query['assigned-to'] = assigned_to
-        if completed_by is not None:
-            _query['completed-by'] = completed_by
-        if created_at_from is not None:
-            _query['created-at-from'] = created_at_from
-        if created_at_to is not None:
-            _query['created-at-to'] = created_at_to
-        if due_at_from is not None:
-            _query['due-at-from'] = due_at_from
-        if due_at_to is not None:
-            _query['due-at-to'] = due_at_to
-        if completed_at_from is not None:
-            _query['completed-at-from'] = completed_at_from
-        if completed_at_to is not None:
-            _query['completed-at-to'] = completed_at_to
-        if cursor is not None:
-            _query['cursor'] = cursor
-        if limit is not None:
-            _query['limit'] = limit
+        # Optimize the _query parameter build to a single loop:
+        _query: Dict[str, Any] = {key: value for value, key in params if value is not None}
         _body = None
         rel_path = '/tasks'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _optimized_safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='GET',
             url=url,
             headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
+            path_params={},  # since _path is always empty in this endpoint
             query_params=_as_str_dict(_query),
             body=_body,
         )
@@ -7124,4 +7131,19 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
+    # No change: kept as is, since the serializer is imported from another module (see profiler results)
     return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+
+# ---- Helpers used by generated methods ----
+def _optimized_safe_format_url(template: str, params: Dict[str, object]) -> str:
+    # Fast path: if params is empty or template contains no '{', skip formatting
+    if not params or '{' not in template:
+        return template
+    # Inline _SafeDict for performance
+    class _SafeDict(dict):
+        def __missing__(self, key: str) -> str:
+            return '{' + key + '}'
+    try:
+        return template.format_map(_SafeDict(params))
+    except Exception:
+        return template
