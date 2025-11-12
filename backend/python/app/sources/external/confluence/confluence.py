@@ -5622,7 +5622,7 @@ class ConfluenceDataSource:
             _query['limit'] = limit
         _body = None
         rel_path = '/inline-comments'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + rel_path
         req = HTTPRequest(
             method='GET',
             url=url,
@@ -7124,4 +7124,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Efficiently return empty dict if input dict is empty or None
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
