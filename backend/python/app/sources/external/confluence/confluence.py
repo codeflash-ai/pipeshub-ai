@@ -1740,8 +1740,18 @@ class ConfluenceDataSource:
         limit: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get labels\n\nHTTP GET /labels\nQuery params:\n  - label-id (list[int], optional)\n  - prefix (list[str], optional)\n  - cursor (str, optional)\n  - sort (str, optional)\n  - limit (int, optional)"""
-        if self._client is None:
+        """Auto-generated from OpenAPI: Get labels
+
+HTTP GET /labels
+Query params:
+  - label-id (list[int], optional)
+  - prefix (list[str], optional)
+  - cursor (str, optional)
+  - sort (str, optional)
+  - limit (int, optional)"""
+        # Use local variable for the client to support concurrency
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {}
@@ -1767,7 +1777,7 @@ class ConfluenceDataSource:
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def get_label_attachments(
