@@ -2550,7 +2550,8 @@ class ConfluenceDataSource:
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
         """Auto-generated from OpenAPI: Update page title\n\nHTTP PUT /pages/{id}/title\nPath params:\n  - id (int)\nBody: application/json (Any)"""
-        if self._client is None:
+        client = self._client
+        if client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
         _path: Dict[str, Any] = {
@@ -2559,7 +2560,11 @@ class ConfluenceDataSource:
         _query: Dict[str, Any] = {}
         _body = body
         rel_path = '/pages/{id}/title'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        # Inline substitution for highest performance, fallback to generic function if types/keys mismatch
+        try:
+            url = self.base_url + rel_path.replace('{id}', str(_path['id']))
+        except Exception:
+            url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='PUT',
             url=url,
@@ -2568,7 +2573,7 @@ class ConfluenceDataSource:
             query_params=_as_str_dict(_query),
             body=_body,
         )
-        resp = await self._client.execute(req)
+        resp = await client.execute(req)
         return resp
 
     async def get_page_versions(
