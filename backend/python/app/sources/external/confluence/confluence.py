@@ -5382,24 +5382,25 @@ class ConfluenceDataSource:
         comment_id: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Delete footer comment\n\nHTTP DELETE /footer-comments/{comment-id}\nPath params:\n  - comment-id (int)"""
+        """Auto-generated from OpenAPI: Delete footer comment
+
+HTTP DELETE /footer-comments/{comment-id}
+Path params:
+  - comment-id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'comment-id': comment_id,
-        }
-        _query: Dict[str, Any] = {}
-        _body = None
+        _headers = dict(headers) if headers else {}
+        _path = {'comment-id': comment_id}
+        # _query and _body are always empty for this API, do not construct or pass them if not needed
         rel_path = '/footer-comments/{comment-id}'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = f"{self.base_url}{_safe_format_url(rel_path, _path)}"
         req = HTTPRequest(
             method='DELETE',
             url=url,
             headers=_as_str_dict(_headers),
             path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            query_params={},
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
