@@ -6059,24 +6059,27 @@ class ConfluenceDataSource:
         property_id: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get content property for comment by id\n\nHTTP GET /comments/{comment-id}/properties/{property-id}\nPath params:\n  - comment-id (int)\n  - property-id (int)"""
+        """Auto-generated from OpenAPI: Get content property for comment by id
+
+HTTP GET /comments/{comment-id}/properties/{property-id}
+Path params:
+  - comment-id (int)
+  - property-id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'comment-id': comment_id,
-            'property-id': property_id,
-        }
-        _query: Dict[str, Any] = {}
+        # Batch creation of str dicts for improved locality
+        _headers = _as_str_dict(headers) if headers else {}
+        _path = _as_str_dict({'comment-id': comment_id, 'property-id': property_id})
+        _query = {}
         _body = None
         rel_path = '/comments/{comment-id}/properties/{property-id}'
         url = self.base_url + _safe_format_url(rel_path, _path)
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
+            headers=_headers,
+            path_params=_path,
+            query_params=_query,
             body=_body,
         )
         resp = await self._client.execute(req)
