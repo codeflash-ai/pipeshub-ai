@@ -1778,14 +1778,19 @@ class ConfluenceDataSource:
         limit: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get attachments for label\n\nHTTP GET /labels/{id}/attachments\nPath params:\n  - id (int)\nQuery params:\n  - sort (Dict[str, Any], optional)\n  - cursor (str, optional)\n  - limit (int, optional)"""
+        """Auto-generated from OpenAPI: Get attachments for label
+
+HTTP GET /labels/{id}/attachments
+Path params:
+  - id (int)
+Query params:
+  - sort (Dict[str, Any], optional)
+  - cursor (str, optional)
+  - limit (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
+        _path = {'id': id}
+        _query = {}
         if sort is not None:
             _query['sort'] = sort
         if cursor is not None:
@@ -1798,7 +1803,7 @@ class ConfluenceDataSource:
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
+            headers=_as_str_dict(headers or {}),
             path_params=_as_str_dict(_path),
             query_params=_as_str_dict(_query),
             body=_body,
