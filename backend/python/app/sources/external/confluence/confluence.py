@@ -1640,10 +1640,15 @@ class ConfluenceDataSource:
         property_id: int,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get content property for custom content by id\n\nHTTP GET /custom-content/{custom-content-id}/properties/{property-id}\nPath params:\n  - custom-content-id (int)\n  - property-id (int)"""
+        """Auto-generated from OpenAPI: Get content property for custom content by id
+
+HTTP GET /custom-content/{custom-content-id}/properties/{property-id}
+Path params:
+  - custom-content-id (int)
+  - property-id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
+        _headers: Dict[str, Any] = dict(headers) if headers else {}
         _path: Dict[str, Any] = {
             'custom-content-id': custom_content_id,
             'property-id': property_id,
@@ -7124,4 +7129,5 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid unnecessary copy if d is already a dict
+    return {str(k): _serialize_value(v) for k, v in (d.items() if d else [])}
