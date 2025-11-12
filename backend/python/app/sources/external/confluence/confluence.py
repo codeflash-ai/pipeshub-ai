@@ -3372,7 +3372,13 @@ class ConfluenceDataSource:
         limit: Optional[int] = None,
         headers: Optional[Dict[str, Any]] = None
     ) -> HTTPResponse:
-        """Auto-generated from OpenAPI: Get all ancestors of database\n\nHTTP GET /databases/{id}/ancestors\nPath params:\n  - id (int)\nQuery params:\n  - limit (int, optional)"""
+        """Auto-generated from OpenAPI: Get all ancestors of database
+
+HTTP GET /databases/{id}/ancestors
+Path params:
+  - id (int)
+Query params:
+  - limit (int, optional)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
         _headers: Dict[str, Any] = dict(headers or {})
@@ -7124,4 +7130,7 @@ def _serialize_value(v: Union[bool, str, int, float, list, tuple, set, None]) ->
     return _to_bool_str(v)
 
 def _as_str_dict(d: Dict[str, Any]) -> Dict[str, str]:
-    return {str(k): _serialize_value(v) for k, v in (d or {}).items()}
+    # Avoid extra allocation if d is None or empty
+    if not d:
+        return {}
+    return {str(k): _serialize_value(v) for k, v in d.items()}
