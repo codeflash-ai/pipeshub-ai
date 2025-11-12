@@ -1121,21 +1121,15 @@ class ConfluenceDataSource:
         """Auto-generated from OpenAPI: Get permitted operations for blog post\n\nHTTP GET /blogposts/{id}/operations\nPath params:\n  - id (int)"""
         if self._client is None:
             raise ValueError('HTTP client is not initialized')
-        _headers: Dict[str, Any] = dict(headers or {})
-        _path: Dict[str, Any] = {
-            'id': id,
-        }
-        _query: Dict[str, Any] = {}
-        _body = None
         rel_path = '/blogposts/{id}/operations'
-        url = self.base_url + _safe_format_url(rel_path, _path)
+        url = self.base_url + _safe_format_url(rel_path, {'id': id})
         req = HTTPRequest(
             method='GET',
             url=url,
-            headers=_as_str_dict(_headers),
-            path_params=_as_str_dict(_path),
-            query_params=_as_str_dict(_query),
-            body=_body,
+            headers=_as_str_dict(headers or {}),
+            path_params={'id': str(id)},
+            query_params={},
+            body=None,
         )
         resp = await self._client.execute(req)
         return resp
