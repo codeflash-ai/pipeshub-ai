@@ -6,11 +6,10 @@ import time
 from typing import Union
 
 import dotenv
-from cachetools import LRUCache
-
 from app.config.constants.service import config_node_constants
 from app.config.key_value_store import KeyValueStore
 from app.utils.encryption.encryption_service import EncryptionService
+from cachetools import LRUCache
 
 dotenv.load_dotenv()
 
