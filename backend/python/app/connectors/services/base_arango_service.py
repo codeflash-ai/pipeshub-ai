@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -422,16 +411,15 @@ class BaseArangoService:
         """Get a document by its key"""
         try:
             query = """
-            FOR doc IN @@collection
-                FILTER doc._key == @document_key
-                RETURN doc
+            RETURN DOCUMENT(@@collection, @document_key)
             """
             cursor = self.db.aql.execute(
                 query,
-                bind_vars={"document_key": document_key, "@collection": collection},
+                bind_vars={"document_key": document_key, "@collection": collection}
             )
-            result = list(cursor)
-            return result[0] if result else None
+            result = next(cursor, None)
+            # DOCUMENT returns None if document does not exist, matching previous behavior
+            return result
         except Exception as e:
             self.logger.error("❌ Error getting document: %s", str(e))
             return None
@@ -641,79 +629,79 @@ class BaseArangoService:
             dict: Record details with permissions if accessible, None if not
         """
         try:
-            # First check access and get permission paths
-            access_query = f"""
+            # Compose bind_vars and query only once, avoid string interpolation inside AQL (use bind_vars fully)
+            access_query = """
             LET userDoc = FIRST(
                 FOR user IN @@users
                 FILTER user.userId == @userId
                 RETURN user
             )
-            LET recordDoc = DOCUMENT(CONCAT(@records, '/', @recordId))
+            LET recordDoc = DOCUMENT(@records, @recordId)
             LET kb = FIRST(
                 FOR k IN 1..1 OUTBOUND recordDoc._id @@belongs_to
                 RETURN k
             )
             LET directAccess = (
-                FOR records, edge IN 1..1 ANY userDoc._id {CollectionNames.PERMISSIONS.value}
+                FOR records, edge IN 1..1 ANY userDoc._id @@permissions
                 FILTER records._key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'DIRECT',
                     source: userDoc,
                     role: edge.role
-                }}
+                }
             )
             LET directAccessPermissionEdge = (
-                FOR records, edge IN 1..1 ANY userDoc._id {CollectionNames.PERMISSION.value}
+                FOR records, edge IN 1..1 ANY userDoc._id @@permission
                 FILTER records._key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'DIRECT',
                     source: userDoc,
                     role: edge.role
-                }}
+                }
             )
             LET groupAccess = (
-                FOR group, belongsEdge IN 1..1 ANY userDoc._id {CollectionNames.BELONGS_TO.value}
+                FOR group, belongsEdge IN 1..1 ANY userDoc._id @@belongs_to
                 FILTER belongsEdge.entityType == 'GROUP'
-                FOR records, permEdge IN 1..1 ANY group._id {CollectionNames.PERMISSIONS.value}
+                FOR records, permEdge IN 1..1 ANY group._id @@permissions
                 FILTER records._key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'GROUP',
                     source: group,
                     role: permEdge.role
-                }}
+                }
             )
             LET groupAccessPermissionEdge = (
-                FOR group, belongsEdge IN 1..1 ANY userDoc._id {CollectionNames.PERMISSION.value}
+                FOR group, belongsEdge IN 1..1 ANY userDoc._id @@permission
                 FILTER belongsEdge.type == 'GROUP'
-                FOR records, permEdge IN 1..1 ANY group._id {CollectionNames.PERMISSION.value}
+                FOR records, permEdge IN 1..1 ANY group._id @@permission
                 FILTER records._key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'GROUP',
                     source: group,
                     role: permEdge.role
-                }}
+                }
             )
             LET orgAccess = (
-                FOR org, belongsEdge IN 1..1 ANY userDoc._id {CollectionNames.BELONGS_TO.value}
+                FOR org, belongsEdge IN 1..1 ANY userDoc._id @@belongs_to
                 FILTER belongsEdge.entityType == 'ORGANIZATION'
-                FOR records, permEdge IN 1..1 ANY org._id {CollectionNames.PERMISSIONS.value}
+                FOR records, permEdge IN 1..1 ANY org._id @@permissions
                 FILTER records._key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'ORGANIZATION',
                     source: org,
                     role: permEdge.role
-                }}
+                }
             )
             LET orgAccessPermissionEdge = (
-                FOR org, belongsEdge IN 1..1 ANY userDoc._id {CollectionNames.BELONGS_TO.value}
+                FOR org, belongsEdge IN 1..1 ANY userDoc._id @@belongs_to
                 FILTER belongsEdge.entityType == 'ORGANIZATION'
-                FOR records, permEdge IN 1..1 ANY org._id {CollectionNames.PERMISSION.value}
+                FOR records, permEdge IN 1..1 ANY org._id @@permission
                 FILTER records._key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'ORGANIZATION',
                     source: org,
                     role: permEdge.role
-                }}
+                }
             )
             LET kbAccess = kb ? (
                 FOR permEdge IN @@permissions_to_kb
@@ -725,22 +713,22 @@ class BaseArangoService:
                             FILTER PARSE_IDENTIFIER(parent._id).collection == @files
                             RETURN parent
                     )
-                    RETURN {{
+                    RETURN {
                         type: 'KNOWLEDGE_BASE',
                         source: kb,
                         role: permEdge.role,
                         folder: parentFolder
-                    }}
+                    }
             ) : []
             LET anyoneAccess = (
                 FOR records IN @@anyone
                 FILTER records.organization == @orgId
                     AND records.file_key == @recordId
-                RETURN {{
+                RETURN {
                     type: 'ANYONE',
                     source: null,
                     role: records.role
-                }}
+                }
             )
             LET allAccess = UNION_DISTINCT(
                 directAccess,
@@ -764,6 +752,8 @@ class BaseArangoService:
                 "files": CollectionNames.FILES.value,
                 "@anyone": CollectionNames.ANYONE.value,
                 "@belongs_to": CollectionNames.BELONGS_TO.value,
+                "@permissions": CollectionNames.PERMISSIONS.value,
+                "@permission": CollectionNames.PERMISSION.value,
                 "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
                 "@record_relations": CollectionNames.RECORD_RELATIONS.value,
             }
@@ -779,29 +769,38 @@ class BaseArangoService:
             if not record:
                 return None
 
-            user = await self.get_user_by_user_id(user_id)
+            user_task = self.get_user_by_user_id(user_id)
+            additional_data_task = None
+
+            # If file or mail type, schedule additional document fetch
+            record_type = record.get("recordType")
+            if record_type == RecordTypes.FILE.value:
+                additional_data_task = self.get_document(record_id, CollectionNames.FILES.value)
+            elif record_type == RecordTypes.MAIL.value:
+                additional_data_task = self.get_document(record_id, CollectionNames.MAILS.value)
+
+            # Await user and additional_data only once, but avoid unnecessary await if not needed
+            user = await user_task
 
             # Get file or mail details based on record type
             additional_data = None
-            if record["recordType"] == RecordTypes.FILE.value:
-                additional_data = await self.get_document(
-                    record_id, CollectionNames.FILES.value
-                )
-            elif record["recordType"] == RecordTypes.MAIL.value:
-                additional_data = await self.get_document(
-                    record_id, CollectionNames.MAILS.value
-                )
-                message_id = record["externalRecordId"]
-                # Format the webUrl with the user's email
-                additional_data["webUrl"] = (
-                    f"https://mail.google.com/mail?authuser={user['email']}#all/{message_id}"
-                )
+
+            if additional_data_task:
+                additional_data = await additional_data_task
+                if record_type == RecordTypes.MAIL.value and additional_data is not None:
+                    message_id = record["externalRecordId"]
+                    additional_data["webUrl"] = (
+                        f"https://mail.google.com/mail?authuser={user['email']}#all/{message_id}"
+                    )
+
+            # Compose metadata_query with fewer Python-level string interpolations
 
             metadata_query = f"""
-            LET record = DOCUMENT(CONCAT('{CollectionNames.RECORDS.value}/', @recordId))
+            LET record = DOCUMENT('{CollectionNames.RECORDS.value}', @recordId)
+
 
             LET departments = (
-                FOR dept IN OUTBOUND record._id {CollectionNames.BELONGS_TO_DEPARTMENT.value}
+                FOR dept IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_DEPARTMENT.value}'
                 RETURN {{
                     id: dept._key,
                     name: dept.departmentName
@@ -809,7 +808,7 @@ class BaseArangoService:
             )
 
             LET categories = (
-                FOR cat IN OUTBOUND record._id {CollectionNames.BELONGS_TO_CATEGORY.value}
+                FOR cat IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_CATEGORY.value}'
                 FILTER PARSE_IDENTIFIER(cat._id).collection == '{CollectionNames.CATEGORIES.value}'
                 RETURN {{
                     id: cat._key,
@@ -818,7 +817,7 @@ class BaseArangoService:
             )
 
             LET subcategories1 = (
-                FOR subcat IN OUTBOUND record._id {CollectionNames.BELONGS_TO_CATEGORY.value}
+                FOR subcat IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_CATEGORY.value}'
                 FILTER PARSE_IDENTIFIER(subcat._id).collection == '{CollectionNames.SUBCATEGORIES1.value}'
                 RETURN {{
                     id: subcat._key,
@@ -827,7 +826,7 @@ class BaseArangoService:
             )
 
             LET subcategories2 = (
-                FOR subcat IN OUTBOUND record._id {CollectionNames.BELONGS_TO_CATEGORY.value}
+                FOR subcat IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_CATEGORY.value}'
                 FILTER PARSE_IDENTIFIER(subcat._id).collection == '{CollectionNames.SUBCATEGORIES2.value}'
                 RETURN {{
                     id: subcat._key,
@@ -836,7 +835,7 @@ class BaseArangoService:
             )
 
             LET subcategories3 = (
-                FOR subcat IN OUTBOUND record._id {CollectionNames.BELONGS_TO_CATEGORY.value}
+                FOR subcat IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_CATEGORY.value}'
                 FILTER PARSE_IDENTIFIER(subcat._id).collection == '{CollectionNames.SUBCATEGORIES3.value}'
                 RETURN {{
                     id: subcat._key,
@@ -845,7 +844,7 @@ class BaseArangoService:
             )
 
             LET topics = (
-                FOR topic IN OUTBOUND record._id {CollectionNames.BELONGS_TO_TOPIC.value}
+                FOR topic IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_TOPIC.value}'
                 RETURN {{
                     id: topic._key,
                     name: topic.name
@@ -853,7 +852,7 @@ class BaseArangoService:
             )
 
             LET languages = (
-                FOR lang IN OUTBOUND record._id {CollectionNames.BELONGS_TO_LANGUAGE.value}
+                FOR lang IN OUTBOUND record._id '{CollectionNames.BELONGS_TO_LANGUAGE.value}'
                 RETURN {{
                     id: lang._key,
                     name: lang.name
@@ -886,39 +885,33 @@ class BaseArangoService:
                         "name": kb.get("groupName"),
                         "orgId": kb["orgId"],
                     }
-                    if access.get("folder"):
-                        folder = access["folder"]
+                    folder = access.get("folder")
+                    if folder:
                         folder_info = {
                             "id": folder["_key"],
                             "name": folder["name"]
                         }
                     break
 
-            # Format permissions from access paths
-            permissions = []
-            for access in access_result:
-                permission = {
+            # Build permissions list more efficiently using generator expression
+            permissions = [
+                {
                     "id": record["_key"],
                     "name": record["recordName"],
                     "type": record["recordType"],
                     "relationship": access["role"],
                     "accessType": access["type"],
                 }
-                permissions.append(permission)
+                for access in access_result
+            ]
+
+            # Final result dictionary, using direct assignment for record type
 
             return {
                 "record": {
                     **record,
-                    "fileRecord": (
-                        additional_data
-                        if record["recordType"] == RecordTypes.FILE.value
-                        else None
-                    ),
-                    "mailRecord": (
-                        additional_data
-                        if record["recordType"] == RecordTypes.MAIL.value
-                        else None
-                    ),
+                    "fileRecord": additional_data if record_type == RecordTypes.FILE.value else None,
+                    "mailRecord": additional_data if record_type == RecordTypes.MAIL.value else None,
                 },
                 "knowledgeBase": kb_info,
                 "folder": folder_info,
@@ -1782,6 +1775,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1790,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3574,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3603,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
