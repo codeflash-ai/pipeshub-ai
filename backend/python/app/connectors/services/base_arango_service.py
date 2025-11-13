@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -424,14 +413,15 @@ class BaseArangoService:
             query = """
             FOR doc IN @@collection
                 FILTER doc._key == @document_key
+                LIMIT 1
                 RETURN doc
             """
             cursor = self.db.aql.execute(
                 query,
                 bind_vars={"document_key": document_key, "@collection": collection},
             )
-            result = list(cursor)
-            return result[0] if result else None
+            # Use next() with default None to efficiently get first record
+            return next(cursor, None)
         except Exception as e:
             self.logger.error("❌ Error getting document: %s", str(e))
             return None
@@ -1782,6 +1772,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1787,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -2013,9 +2008,10 @@ class BaseArangoService:
     async def _execute_drive_record_deletion(self, record_id: str, record: Dict, user_role: str) -> Dict:
         """Execute Drive record deletion with transaction"""
         try:
+            # Pre-cache permissions for performance
+            perms = self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]
             transaction = self.db.begin_transaction(
-                write=self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]["document_collections"] +
-                      self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]["edge_collections"]
+                write=perms["document_collections"] + perms["edge_collections"]
             )
 
             try:
@@ -2023,7 +2019,9 @@ class BaseArangoService:
                 file_record = await self.get_document(record_id, CollectionNames.FILES.value)
 
                 # Delete Drive-specific edges
-                await self._delete_drive_specific_edges(transaction, record_id)
+                await self._delete_drive_specific_edges(transaction, record_id, perms["edge_collections"])
+
+                # Delete 'anyone' permissions specific to Drive
 
                 # Delete 'anyone' permissions specific to Drive
                 await self._delete_drive_anyone_permissions(transaction, record_id)
@@ -2035,8 +2033,10 @@ class BaseArangoService:
                 # Delete main record
                 await self._delete_main_record(transaction, record_id)
 
-                # Commit transaction
-                await asyncio.to_thread(lambda: transaction.commit_transaction())
+                # Commit transaction - use sync block for the blocking call
+                await asyncio.to_thread(transaction.commit_transaction)
+
+                # Publish Drive deletion event
 
                 # Publish Drive deletion event
                 try:
@@ -2052,7 +2052,7 @@ class BaseArangoService:
                 }
 
             except Exception as e:
-                await asyncio.to_thread(lambda: transaction.abort_transaction())
+                await asyncio.to_thread(transaction.abort_transaction)
                 raise e
 
         except Exception as e:
@@ -2064,55 +2064,69 @@ class BaseArangoService:
 
     async def _delete_drive_specific_edges(self, transaction, record_id: str) -> None:
         """Delete Google Drive specific edges with optimized queries"""
-        drive_edge_collections = self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]["edge_collections"]
+        # Accepts precomputed drive_edge_collections for hot path (main usage)
+        if drive_edge_collections is None:
+            drive_edge_collections = self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]["edge_collections"]
 
-        # Define edge deletion strategies - maps collection to query config
-        edge_deletion_strategies = {
-            CollectionNames.USER_DRIVE_RELATION.value: {
-                "filter": "edge._to == CONCAT('drives/', @record_id)",
-                "bind_vars": {"record_id": record_id},
-                "description": "Drive user relations"
-            },
-            CollectionNames.IS_OF_TYPE.value: {
-                "filter": "edge._from == @record_from",
-                "bind_vars": {"record_from": f"records/{record_id}"},
-                "description": "IS_OF_TYPE edges"
-            },
-            CollectionNames.PERMISSIONS.value: {
-                "filter": "edge._from == @record_from",
-                "bind_vars": {"record_from": f"records/{record_id}"},
-                "description": "Permission edges"
-            },
-            CollectionNames.BELONGS_TO.value: {
-                "filter": "edge._from == @record_from",
-                "bind_vars": {"record_from": f"records/{record_id}"},
-                "description": "Belongs to edges"
-            },
-            # Default strategy for bidirectional edges
-            "default": {
-                "filter": "edge._from == @record_from OR edge._to == @record_to",
-                "bind_vars": {
-                    "record_from": f"records/{record_id}",
-                    "record_to": f"records/{record_id}"
+        # Move edge_deletion_strategies and deletion_query_template out to class variable for re-use
+        # They are static, so only compute them once per class
+        if not hasattr(self, '_edge_deletion_strategies'):
+            self._edge_deletion_strategies = {
+                CollectionNames.USER_DRIVE_RELATION.value: {
+                    "filter": "edge._to == CONCAT('drives/', @record_id)",
+                    "bind_vars": lambda rid: {"record_id": rid},
+                    "description": "Drive user relations"
                 },
-                "description": "Bidirectional edges"
+                CollectionNames.IS_OF_TYPE.value: {
+                    "filter": "edge._from == @record_from",
+                    "bind_vars": lambda rid: {"record_from": f"records/{rid}"},
+                    "description": "IS_OF_TYPE edges"
+                },
+                CollectionNames.PERMISSIONS.value: {
+                    "filter": "edge._from == @record_from",
+                    "bind_vars": lambda rid: {"record_from": f"records/{rid}"},
+                    "description": "Permission edges"
+                },
+                CollectionNames.BELONGS_TO.value: {
+                    "filter": "edge._from == @record_from",
+                    "bind_vars": lambda rid: {"record_from": f"records/{rid}"},
+                    "description": "Belongs to edges"
+                },
+                # Default strategy for bidirectional edges
+                "default": {
+                    "filter": "edge._from == @record_from OR edge._to == @record_to",
+                    "bind_vars": lambda rid: {
+                        "record_from": f"records/{rid}",
+                        "record_to": f"records/{rid}"
+                    },
+                    "description": "Bidirectional edges"
+                }
             }
-        }
+            self._deletion_query_template = (
+                "FOR edge IN @@edge_collection\n"
+                "    FILTER {filter}\n"
+                "    REMOVE edge IN @@edge_collection\n"
+                "    RETURN OLD"
+            )
 
-        # Single query template for all edge collections
-        deletion_query_template = """
-        FOR edge IN @@edge_collection
-            FILTER {filter}
-            REMOVE edge IN @@edge_collection
-            RETURN OLD
-        """
+        edge_deletion_strategies = self._edge_deletion_strategies
+        deletion_query_template = self._deletion_query_template
+
 
         total_deleted = 0
 
+        # Use local variable for logger and drive_edge_collections to save lookups
+        logger = self.logger
+
+        # No need to build edge deletion strategies for every call: they're static
         for edge_collection in drive_edge_collections:
             try:
                 # Get strategy for this collection or use default
-                strategy = edge_deletion_strategies.get(edge_collection, edge_deletion_strategies["default"])
+                strategy = edge_deletion_strategies.get(
+                    edge_collection, edge_deletion_strategies["default"]
+                )
+
+                # Build query with specific filter
 
                 # Build query with specific filter
                 deletion_query = deletion_query_template.format(filter=strategy["filter"])
@@ -2120,40 +2134,42 @@ class BaseArangoService:
                 # Prepare bind variables
                 bind_vars = {
                     "@edge_collection": edge_collection,
-                    **strategy["bind_vars"]
+                    **strategy["bind_vars"](record_id)
                 }
-
-                self.logger.debug(f"🔍 Deleting {strategy['description']} from {edge_collection}")
-                self.logger.debug(f"🔍 Bind vars: {bind_vars}")
 
                 # Execute deletion
                 result = transaction.aql.execute(deletion_query, bind_vars=bind_vars)
-                deleted_count = len(list(result))
+                # Consumption triggers DB execution, so don't need extra list if not logging deleted_count
+                deleted_records = list(result)
+                deleted_count = len(deleted_records)
                 total_deleted += deleted_count
 
                 if deleted_count > 0:
-                    self.logger.info(f"🗑️ Deleted {deleted_count} {strategy['description']} from {edge_collection}")
+                    logger.info(f"🗑️ Deleted {deleted_count} {strategy['description']} from {edge_collection}")
                 else:
-                    self.logger.debug(f"📝 No {strategy['description']} found in {edge_collection}")
+                    logger.debug(f"📝 No {strategy['description']} found in {edge_collection}")
+
 
             except Exception as e:
-                self.logger.error(f"❌ Failed to delete edges from {edge_collection}: {str(e)}")
-                self.logger.error(f"❌ Strategy: {strategy}")
-                self.logger.error(f"❌ Bind vars: {bind_vars}")
+                logger.error(f"❌ Failed to delete edges from {edge_collection}: {str(e)}")
+                logger.error(f"❌ Strategy: {strategy}")
+                logger.error(f"❌ Bind vars: {bind_vars}")
                 raise
 
-        self.logger.info(f"✅ Drive edge deletion completed: {total_deleted} total edges deleted for record {record_id}")
+        logger.info(f"✅ Drive edge deletion completed: {total_deleted} total edges deleted for record {record_id}")
 
     async def _delete_drive_anyone_permissions(self, transaction, record_id: str) -> None:
         """Delete Drive-specific 'anyone' permissions"""
-        anyone_deletion_query = """
-        FOR anyone_perm IN @@anyone
-            FILTER anyone_perm.file_key == @record_id
-            REMOVE anyone_perm IN @@anyone
-            RETURN OLD
-        """
+        # Use constant string for query, move out of method to avoid parsing cost repeatedly (micro-optimization)
+        if not hasattr(self, '_anyone_deletion_query'):
+            self._anyone_deletion_query = (
+                "FOR anyone_perm IN @@anyone\n"
+                "    FILTER anyone_perm.file_key == @record_id\n"
+                "    REMOVE anyone_perm IN @@anyone\n"
+                "    RETURN OLD"
+            )
 
-        transaction.aql.execute(anyone_deletion_query, bind_vars={
+        transaction.aql.execute(self._anyone_deletion_query, bind_vars={
             "record_id": record_id,
             "@anyone": CollectionNames.ANYONE.value,
         })
@@ -2522,12 +2538,13 @@ class BaseArangoService:
 
     async def _delete_file_record(self, transaction, record_id: str) -> None:
         """Delete file record from files collection"""
-        file_deletion_query = """
-        REMOVE @record_id IN @@files_collection
-        RETURN OLD
-        """
-
-        transaction.aql.execute(file_deletion_query, bind_vars={
+        # Precompile query string for reuse
+        if not hasattr(self, '_file_deletion_query'):
+            self._file_deletion_query = (
+                "REMOVE @record_id IN @@files_collection\n"
+                "RETURN OLD"
+            )
+        transaction.aql.execute(self._file_deletion_query, bind_vars={
             "record_id": record_id,
             "@files_collection": CollectionNames.FILES.value,
         })
@@ -2546,12 +2563,13 @@ class BaseArangoService:
 
     async def _delete_main_record(self, transaction, record_id: str) -> None:
         """Delete main record from records collection"""
-        record_deletion_query = """
-        REMOVE @record_id IN @@records_collection
-        RETURN OLD
-        """
-
-        transaction.aql.execute(record_deletion_query, bind_vars={
+        # Precompile query string for reuse
+        if not hasattr(self, '_record_deletion_query'):
+            self._record_deletion_query = (
+                "REMOVE @record_id IN @@records_collection\n"
+                "RETURN OLD"
+            )
+        transaction.aql.execute(self._record_deletion_query, bind_vars={
             "record_id": record_id,
             "@records_collection": CollectionNames.RECORDS.value,
         })
@@ -3576,6 +3594,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3623,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
