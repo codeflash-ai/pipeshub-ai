@@ -1,13 +1,16 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
+from app.sources.client.s3.s3 import S3Client, S3Response
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+
 try:
     import aioboto3  # type: ignore
     from botocore.exceptions import ClientError  # type: ignore
 except ImportError:
     raise ImportError("aioboto3 is not installed. Please install it with `pip install aioboto3`")
 
-from app.sources.client.s3.s3 import S3Client, S3Response
 
 
 class S3DataSource:
@@ -29,8 +32,8 @@ class S3DataSource:
     async def _get_aioboto3_session(self) -> aioboto3.Session:  # type: ignore[valid-type]
         """Get or create the aioboto3 session."""
         if self._session is None:
-            # Option 1: Get the existing session directly from S3Client (recommended)
-            self._session = self._s3_client.get_session()
+            # Offload to thread for optimal event-loop non-blocking behavior
+            self._session = await asyncio.to_thread(self._s3_client.get_session)
 
             # Option 2: Create new session from credentials (if needed)
             # credentials = self._s3_client.get_credentials()
@@ -48,13 +51,12 @@ class S3DataSource:
                 return S3Response(success=False, error="Empty response from S3 API")
 
             if isinstance(response, dict):
-                if 'Error' in response:
-                    error_info = response['Error']
-                    error_code = error_info.get('Code', 'Unknown')
-                    error_message = error_info.get('Message', 'No message')
+                error = response.get('Error')
+                if error is not None:
+                    error_code = error.get('Code', 'Unknown')
+                    error_message = error.get('Message', 'No message')
                     return S3Response(success=False, error=f"{error_code}: {error_message}")
                 return S3Response(success=True, data=response)
-
             return S3Response(success=True, data=response)
 
         except Exception as e:
@@ -1520,6 +1522,7 @@ class S3DataSource:
         except Exception as e:
             return S3Response(success=False, error=f"Unexpected error: {str(e)}")
 
+    @codeflash_performance_async
     async def get_bucket_metrics_configuration(self,
         Bucket: str,
         Id: str,
