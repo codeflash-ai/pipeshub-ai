@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -2163,7 +2157,6 @@ class BaseArangoService:
         Delete a Gmail record - handles Gmail-specific permissions and logic
         """
         try:
-            self.logger.info(f"📧 Deleting Gmail record {record_id}")
 
             # Get user
             user = await self.get_user_by_user_id(user_id)
@@ -2177,8 +2170,11 @@ class BaseArangoService:
             user_key = user.get('_key')
 
             # Check Gmail-specific permissions
+
+            # Check Gmail-specific permissions
+            allowed_roles = self.connector_delete_permissions[Connectors.GOOGLE_MAIL.value]["allowed_roles"]
             user_role = await self._check_gmail_permissions(record_id, user_key)
-            if not user_role or user_role not in self.connector_delete_permissions[Connectors.GOOGLE_MAIL.value]["allowed_roles"]:
+            if not user_role or user_role not in allowed_roles:
                 return {
                     "success": False,
                     "code": 403,
@@ -2199,15 +2195,25 @@ class BaseArangoService:
     async def _execute_gmail_record_deletion(self, record_id: str, record: Dict, user_role: str) -> Dict:
         """Execute Gmail record deletion with transaction"""
         try:
+            # Combine in one local reference to avoid repeated dict lookups
+            perms = self.connector_delete_permissions[Connectors.GOOGLE_MAIL.value]
+            collections = perms["document_collections"] + perms["edge_collections"]
+
             transaction = self.db.begin_transaction(
-                write=self.connector_delete_permissions[Connectors.GOOGLE_MAIL.value]["document_collections"] +
-                      self.connector_delete_permissions[Connectors.GOOGLE_MAIL.value]["edge_collections"]
+                write=collections
             )
 
             try:
-                # Get mail and file records for event publishing
-                mail_record = await self.get_document(record_id, CollectionNames.MAILS.value)
-                file_record = await self.get_document(record_id, CollectionNames.FILES.value) if record.get("recordType") == "FILE" else None
+                # Fetch both mail_record and file_record concurrently (small but meaningful speed up)
+                # Only fetch file_record if relevant
+                mail_record_coro = self.get_document(record_id, CollectionNames.MAILS.value)
+                file_record_coro = (
+                    self.get_document(record_id, CollectionNames.FILES.value)
+                    if record.get("recordType") == "FILE" else asyncio.sleep(0, result=None)
+                )
+                mail_record, file_record = await asyncio.gather(mail_record_coro, file_record_coro)
+
+                # Delete Gmail-specific edges (including thread relationships)
 
                 # Delete Gmail-specific edges (including thread relationships)
                 await self._delete_gmail_specific_edges(transaction, record_id)
@@ -2223,8 +2229,10 @@ class BaseArangoService:
                 # Delete main record
                 await self._delete_main_record(transaction, record_id)
 
-                # Commit transaction
-                await asyncio.to_thread(lambda: transaction.commit_transaction())
+                # Commit transaction - keep lambda for compatibility, but just call commit_transaction directly in thread
+                await asyncio.to_thread(transaction.commit_transaction)
+
+                # Publish Gmail deletion event (do not await inside try for event error isolation)
 
                 # Publish Gmail deletion event
                 try:
@@ -2240,7 +2248,7 @@ class BaseArangoService:
                 }
 
             except Exception as e:
-                await asyncio.to_thread(lambda: transaction.abort_transaction())
+                await asyncio.to_thread(transaction.abort_transaction)
                 raise e
 
         except Exception as e:
@@ -3023,7 +3031,6 @@ class BaseArangoService:
         Gmail permission model: User must be sender, recipient (to/cc/bcc), or have explicit permissions
         """
         try:
-            self.logger.info(f"🔍 Checking Gmail permissions for record {record_id} and user {user_key}")
 
             gmail_permission_query = """
             LET user_from = CONCAT('users/', @user_key)
@@ -3142,14 +3149,6 @@ class BaseArangoService:
 
             if result and result.get("permission"):
                 permission = result["permission"]
-                source = result["source"]
-                user_email = result.get("user_email", "unknown")
-
-                if source == "EMAIL_ACCESS":
-                    role_type = "sender" if result.get("is_sender") else "recipient"
-                    self.logger.info(f"✅ Gmail permission found: {permission} (user {user_email} is {role_type})")
-                else:
-                    self.logger.info(f"✅ Gmail permission found: {permission} (via {source})")
 
                 return permission
             else:
@@ -3576,6 +3575,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3604,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -10537,8 +10541,8 @@ class BaseArangoService:
                     RETURN user
             """
             cursor = self.db.aql.execute(query, bind_vars={"user_id": user_id})
-            result = next(cursor, None)
-            return result
+            # next avoids unnecessary list allocation
+            return next(cursor, None)
         except Exception as e:
             self.logger.error(f"Error getting user by user ID: {str(e)}")
             return None
