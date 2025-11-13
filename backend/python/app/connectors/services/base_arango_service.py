@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -955,11 +944,25 @@ class BaseArangoService:
         Returns (records, total_count, available_filters)
         """
         try:
+            # Collapse repeated lookup for uppercase sort_order
+            sort_order_upper = sort_order.upper()
             self.logger.info(f"🔍 Listing all records for user {user_id}, source: {source}")
 
             # Determine what data sources to include
-            include_kb_records = source in ['all', 'local']
-            include_connector_records = source in ['all', 'connector']
+            include_kb_records = source in ('all', 'local')
+            include_connector_records = source in ('all', 'connector')
+
+            # Precompute base_kb_roles and permissions set only once
+            base_kb_roles = {"OWNER", "READER", "FILEORGANIZER", "WRITER", "COMMENTER", "ORGANIZER"}
+            permissions_set = set(permissions) if permissions else None
+            if permissions:
+                final_kb_roles = list(base_kb_roles.intersection(permissions_set))
+                if not final_kb_roles:
+                    include_kb_records = False
+            else:
+                final_kb_roles = list(base_kb_roles)
+
+            # Precompute record filter and permission filter for reuse
 
             # Build filter conditions function
             def build_record_filters(include_filter_vars: bool = True) -> str:
@@ -979,15 +982,11 @@ class BaseArangoService:
                 if date_to and include_filter_vars:
                     conditions.append("record.createdAtTimestamp <= @date_to")
 
-                return " AND " + " AND ".join(conditions) if conditions else ""
+                # Fast path for empty conditions
+                if not conditions:
+                    return ""
+                return " AND " + " AND ".join(conditions)
 
-            base_kb_roles = {"OWNER", "READER", "FILEORGANIZER", "WRITER", "COMMENTER", "ORGANIZER"}
-            if permissions:
-                final_kb_roles = list(base_kb_roles.intersection(set(permissions)))
-                if not final_kb_roles:
-                    include_kb_records = False
-            else:
-                final_kb_roles = list(base_kb_roles)
 
             # Build permission filter for connector records
             def build_permission_filter(include_filter_vars: bool = True) -> str:
@@ -1003,16 +1002,14 @@ class BaseArangoService:
             LET user_from = @user_from
             LET org_id = @org_id
 
-            // KB Records Section - Get records DIRECTLY from belongs_to edges (not through folders)
-            LET kbRecords = {
-                f'''(
+            LET kbRecords = {{
+                {f'''(
                     FOR kbEdge IN @@permissions_to_kb
                         FILTER kbEdge._from == user_from
                         FILTER kbEdge.type == "USER"
                         FILTER kbEdge.role IN @kb_permissions
                         LET kb = DOCUMENT(kbEdge._to)
                         FILTER kb != null AND kb.orgId == org_id
-                        // Get records that belong directly to the KB
                         FOR belongsEdge IN @@belongs_to
                             FILTER belongsEdge._to == kb._id
                             LET record = DOCUMENT(belongsEdge._from)
@@ -1020,7 +1017,6 @@ class BaseArangoService:
                             FILTER record.isDeleted != true
                             FILTER record.orgId == org_id OR record.orgId == null
                             FILTER record.origin == "UPLOAD"
-                            // Only include actual records (not folders)
                             FILTER record.isFile != false
                             {record_filter}
                             RETURN {{
@@ -1029,12 +1025,11 @@ class BaseArangoService:
                                 kb_id: kb._key,
                                 kb_name: kb.groupName
                             }}
-                )''' if include_kb_records else '[]'
-            }
+                )''' if include_kb_records else '[]'}
+            }}
 
-            // Connector Records Section - Direct connector permissions
-            LET connectorRecords = {
-                f'''(
+            LET connectorRecords = {{
+                {f'''(
                     FOR permissionEdge IN @@permissions
                         FILTER permissionEdge._to == user_from
                         FILTER permissionEdge.type == "USER"
@@ -1050,11 +1045,11 @@ class BaseArangoService:
                             record: record,
                             permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
                         }}
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
 
-            LET connectorRecordsNewPermission = {
-                f'''(
+            LET connectorRecordsNewPermission = {{
+                {f'''(
                     FOR permissionEdge IN @@permission
                         FILTER permissionEdge._from == user_from
                         FILTER permissionEdge.type == "USER"
@@ -1070,11 +1065,11 @@ class BaseArangoService:
                             record: record,
                             permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
                         }}
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
 
-            LET groupConnectorRecordsNewPermission = {
-                f'''(
+            LET groupConnectorRecordsNewPermission = {{
+                {f'''(
                     FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
                         FILTER userToGroupEdge.type == "GROUP"
 
@@ -1093,8 +1088,9 @@ class BaseArangoService:
                                 record: record,
                                 permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
                             }}
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
+
 
             LET allConnectorRecordsNewPermission = UNION_DISTINCT(connectorRecordsNewPermission, groupConnectorRecordsNewPermission)
             LET allConnectorRecordsDistinct = (
@@ -1105,13 +1101,12 @@ class BaseArangoService:
             )
 
             LET mergeRecords = APPEND(kbRecords, connectorRecords)
-            //LET mergeRecordsNewPermission = APPEND(mergeRecords, connectorRecordsNewPermission)
             LET allRecords = APPEND(mergeRecords, allConnectorRecordsDistinct)
 
             LET sortedRecords = (
                 FOR item IN allRecords
                     LET record = item.record
-                    SORT record.{sort_by} {sort_order.upper()}
+                    SORT record.{sort_by} {sort_order_upper}
                     RETURN item
             )
 
@@ -1191,8 +1186,8 @@ class BaseArangoService:
             LET user_from = @user_from
             LET org_id = @org_id
 
-            LET kbCount = {
-                f'''LENGTH(
+            LET kbCount = {{
+                {f'''LENGTH(
                     FOR kbEdge IN @@permissions_to_kb
                         FILTER kbEdge._from == user_from
                         FILTER kbEdge.type == "USER"
@@ -1209,11 +1204,11 @@ class BaseArangoService:
                             FILTER record.isFile != false
                             {record_filter}
                             RETURN 1
-                )''' if include_kb_records else '0'
-            }
+                )''' if include_kb_records else '0'}
+            }}
 
-            LET connectorCount = {
-                f'''LENGTH(
+            LET connectorCount = {{
+                {f'''LENGTH(
                     FOR permissionEdge IN @@permissions
                         FILTER permissionEdge._to == user_from
                         FILTER permissionEdge.type == "USER"
@@ -1226,12 +1221,11 @@ class BaseArangoService:
                         FILTER record.origin == "CONNECTOR"
                         {record_filter}
                         RETURN 1
-                )''' if include_connector_records else '0'
-            }
+                )''' if include_connector_records else '0'}
+            }}
 
-            // Only return record keys for new permission queries (much lighter)
-            LET connectorKeysNewPermission = {
-                f'''(
+            LET connectorKeysNewPermission = {{
+                {f'''(
                     FOR permissionEdge IN @@permission
                         FILTER permissionEdge._from == user_from
                         FILTER permissionEdge.type == "USER"
@@ -1244,11 +1238,11 @@ class BaseArangoService:
                         FILTER record.origin == "CONNECTOR"
                         {record_filter}
                         RETURN record._key
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
 
-            LET groupConnectorKeysNewPermission = {
-                f'''(
+            LET groupConnectorKeysNewPermission = {{
+                {f'''(
                     FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
                         FILTER userToGroupEdge.type == "GROUP"
 
@@ -1263,10 +1257,9 @@ class BaseArangoService:
                             FILTER record.origin == "CONNECTOR"
                             {record_filter}
                             RETURN record._key
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
 
-            // Combine all keys and count unique ones
             LET allNewPermissionKeys = APPEND(connectorKeysNewPermission, groupConnectorKeysNewPermission)
             LET uniqueNewPermissionCount = LENGTH(UNIQUE(allNewPermissionKeys))
 
@@ -1278,8 +1271,8 @@ class BaseArangoService:
             LET user_from = @user_from
             LET org_id = @org_id
 
-            LET allKbRecords = {
-                '''(
+            LET allKbRecords = {{
+                {'''(
                     FOR kbEdge IN @@permissions_to_kb
                         FILTER kbEdge._from == user_from
                         FILTER kbEdge.type == "USER"
@@ -1298,11 +1291,11 @@ class BaseArangoService:
                                 record: record,
                                 permission: { role: kbEdge.role }
                             }
-                )''' if include_kb_records else '[]'
-            }
+                )''' if include_kb_records else '[]'}
+            }}
 
-            LET allConnectorRecords = {
-                '''(
+            LET allConnectorRecords = {{
+                {'''(
                     FOR permissionEdge IN @@permissions
                         FILTER permissionEdge._to == user_from
                         FILTER permissionEdge.type == "USER"
@@ -1316,11 +1309,11 @@ class BaseArangoService:
                             record: record,
                             permission: { role: permissionEdge.role }
                         }
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
 
-            LET allConnectorRecordsNewPermission = {
-                '''(
+            LET allConnectorRecordsNewPermission = {{
+                {'''(
                     FOR permissionEdge IN @@permission
                         FILTER permissionEdge._from == user_from
                         FILTER permissionEdge.type == "USER"
@@ -1334,11 +1327,11 @@ class BaseArangoService:
                             record: record,
                             permission: { role: permissionEdge.role }
                         }
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
 
-            LET allGroupConnectorRecordsNewPermission = {
-                f'''(
+            LET allGroupConnectorRecordsNewPermission = {{
+                {f'''(
                     FOR group, userToGroupEdge IN 1..1 ANY user_from @@permission
                         FILTER userToGroupEdge.type == "GROUP"
 
@@ -1357,8 +1350,9 @@ class BaseArangoService:
                                 record: record,
                                 permission: {{ role: permissionEdge.role, type: permissionEdge.type }}
                             }}
-                )''' if include_connector_records else '[]'
-            }
+                )''' if include_connector_records else '[]'}
+            }}
+
 
             LET ConnectorRecords = UNION_DISTINCT(allConnectorRecordsNewPermission, allGroupConnectorRecordsNewPermission)
             LET allConnectorRecordsDistinct = (
@@ -1369,7 +1363,6 @@ class BaseArangoService:
             )
 
             LET mergeRecords = APPEND(allKbRecords, allConnectorRecords)
-            //LET mergeRecordsNewPermission = APPEND(mergeRecords, connectorRecordsNewPermission)
             LET allRecords = APPEND(mergeRecords, allConnectorRecordsDistinct)
 
             LET flatRecords = (
@@ -1402,73 +1395,56 @@ class BaseArangoService:
             filter_bind_vars = {}
             if search:
                 filter_bind_vars["search"] = f"%{search.lower()}%"
-            if record_types:
-                filter_bind_vars["record_types"] = record_types
-            if origins:
-                filter_bind_vars["origins"] = origins
-            if connectors:
-                filter_bind_vars["connectors"] = connectors
-            if indexing_status:
-                filter_bind_vars["indexing_status"] = indexing_status
-            if permissions:
-                filter_bind_vars["permissions"] = permissions
-            if date_from:
-                filter_bind_vars["date_from"] = date_from
-            if date_to:
-                filter_bind_vars["date_to"] = date_to
+            # Combine conditional assignments in one block for memory & speed
+            if record_types: filter_bind_vars["record_types"] = record_types
+            if origins: filter_bind_vars["origins"] = origins
+            if connectors: filter_bind_vars["connectors"] = connectors
+            if indexing_status: filter_bind_vars["indexing_status"] = indexing_status
+            if permissions: filter_bind_vars["permissions"] = permissions
+            if date_from: filter_bind_vars["date_from"] = date_from
+            if date_to: filter_bind_vars["date_to"] = date_to
 
-            main_bind_vars = {
+            # Dict unpack and essential values
+            bind_common = {
                 "user_from": f"users/{user_id}",
                 "org_id": org_id,
+                "kb_permissions": final_kb_roles,
+                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
+                "@permissions": CollectionNames.PERMISSIONS.value,
+                "@permission": CollectionNames.PERMISSION.value,
+                "@belongs_to": CollectionNames.BELONGS_TO.value,
+                "drive_record_type": RecordTypes.DRIVE.value,
+                **filter_bind_vars
+            }
+            main_bind_vars = {
+                **bind_common,
                 "skip": skip,
                 "limit": limit,
-                "kb_permissions": final_kb_roles,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@permission": CollectionNames.PERMISSION.value,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "@is_of_type": CollectionNames.IS_OF_TYPE.value,
-                "drive_record_type": RecordTypes.DRIVE.value,
-                **filter_bind_vars,
             }
+            count_bind_vars = dict(bind_common)
+            filters_bind_vars = dict(bind_common)
 
-            count_bind_vars = {
-                "user_from": f"users/{user_id}",
-                "org_id": org_id,
-                "kb_permissions": final_kb_roles,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@permission": CollectionNames.PERMISSION.value,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "drive_record_type": RecordTypes.DRIVE.value,
-                **filter_bind_vars,
-            }
-
-            filters_bind_vars = {
-                "user_from": f"users/{user_id}",
-                "org_id": org_id,
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-                "@permissions": CollectionNames.PERMISSIONS.value,
-                "@permission": CollectionNames.PERMISSION.value,
-                "@belongs_to": CollectionNames.BELONGS_TO.value,
-                "drive_record_type": RecordTypes.DRIVE.value,
-                **filter_bind_vars,
-            }
 
             # Execute queries
             db = self.db
             records = list(db.aql.execute(main_query, bind_vars=main_bind_vars))
-            count = list(db.aql.execute(count_query, bind_vars=count_bind_vars))[0]
-            available_filters = list(db.aql.execute(filters_query, bind_vars=filters_bind_vars))[0]
+            count_iter = db.aql.execute(count_query, bind_vars=count_bind_vars)
+            count = next(count_iter)
+            filters_iter = db.aql.execute(filters_query, bind_vars=filters_bind_vars)
+            available_filters = next(filters_iter)
+
+            # Ensure filter structure with minimal mutability
 
             # Ensure filter structure
             if not available_filters:
                 available_filters = {}
-            available_filters.setdefault("recordTypes", [])
-            available_filters.setdefault("origins", [])
-            available_filters.setdefault("connectors", [])
-            available_filters.setdefault("indexingStatus", [])
-            available_filters.setdefault("permissions", [])
+            af_setdefault = available_filters.setdefault
+            af_setdefault("recordTypes", [])
+            af_setdefault("origins", [])
+            af_setdefault("connectors", [])
+            af_setdefault("indexingStatus", [])
+            af_setdefault("permissions", [])
+
 
             self.logger.info(f"✅ Listed {len(records)} records out of {count} total")
             return records, count, available_filters
@@ -1782,6 +1758,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1773,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3557,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3586,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
