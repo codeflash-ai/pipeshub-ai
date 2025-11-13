@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -1977,7 +1971,6 @@ class BaseArangoService:
         Delete a Google Drive record - handles Drive-specific permissions and logic
         """
         try:
-            self.logger.info(f"🔌 Deleting Google Drive record {record_id}")
 
             # Get user
             user = await self.get_user_by_user_id(user_id)
@@ -1988,11 +1981,14 @@ class BaseArangoService:
                     "reason": f"User not found: {user_id}"
                 }
 
+
+            self.logger.info(f"🔌 Deleting Google Drive record {record_id}")
             user_key = user.get('_key')
 
             # Check Drive-specific permissions
             user_role = await self._check_drive_permissions(record_id, user_key)
-            if not user_role or user_role not in self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]["allowed_roles"]:
+            allowed_roles = self.connector_delete_permissions[Connectors.GOOGLE_DRIVE.value]["allowed_roles"]
+            if user_role is None or user_role not in allowed_roles:
                 return {
                     "success": False,
                     "code": 403,
@@ -2019,24 +2015,30 @@ class BaseArangoService:
             )
 
             try:
-                # Get file record for event publishing
-                file_record = await self.get_document(record_id, CollectionNames.FILES.value)
+                # Optimize by parallelizing independent IO coroutines
+                file_record_coro = self.get_document(record_id, CollectionNames.FILES.value)
+                delete_edges_coro = self._delete_drive_specific_edges(transaction, record_id)
+                delete_anyone_coro = self._delete_drive_anyone_permissions(transaction, record_id)
 
-                # Delete Drive-specific edges
-                await self._delete_drive_specific_edges(transaction, record_id)
+                file_record, _, _ = await asyncio.gather(
+                    file_record_coro,
+                    delete_edges_coro,
+                    delete_anyone_coro
+                )
 
-                # Delete 'anyone' permissions specific to Drive
-                await self._delete_drive_anyone_permissions(transaction, record_id)
+                # Delete file record if it exists and main record (can be executed concurrently for further optimization)
+                tasks = []
 
                 # Delete file record
                 if file_record:
-                    await self._delete_file_record(transaction, record_id)
+                    tasks.append(self._delete_file_record(transaction, record_id))
+                tasks.append(self._delete_main_record(transaction, record_id))
+                await asyncio.gather(*tasks)
 
-                # Delete main record
-                await self._delete_main_record(transaction, record_id)
+                # Commit transaction in thread
+                await asyncio.to_thread(transaction.commit_transaction)
 
-                # Commit transaction
-                await asyncio.to_thread(lambda: transaction.commit_transaction())
+                # Publish Drive deletion event (do NOT fail deletion if event publish errors)
 
                 # Publish Drive deletion event
                 try:
@@ -2052,7 +2054,7 @@ class BaseArangoService:
                 }
 
             except Exception as e:
-                await asyncio.to_thread(lambda: transaction.abort_transaction())
+                await asyncio.to_thread(transaction.abort_transaction)
                 raise e
 
         except Exception as e:
@@ -2887,7 +2889,6 @@ class BaseArangoService:
         Checks: Direct permissions, Group permissions, Domain permissions, Anyone permissions, Drive-level access
         """
         try:
-            self.logger.info(f"🔍 Checking Drive permissions for record {record_id} and user {user_key}")
 
             drive_permission_query = """
             LET user_from = CONCAT('users/', @user_key)
@@ -3576,6 +3577,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3606,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -10531,14 +10537,18 @@ class BaseArangoService:
     async def get_user_by_user_id(self, user_id: str) -> Optional[Dict]:
         """Get user by user ID"""
         try:
-            query = f"""
-                FOR user IN {CollectionNames.USERS.value}
+            # Use static query rather than f-string for better DB engine query caching
+            query = """
+                FOR user IN @@users
                     FILTER user.userId == @user_id
                     RETURN user
             """
-            cursor = self.db.aql.execute(query, bind_vars={"user_id": user_id})
-            result = next(cursor, None)
-            return result
+            # Use a bind var for the collection name for higher query plan cache hits
+            cursor = self.db.aql.execute(
+                query,
+                bind_vars={"user_id": user_id, "@users": CollectionNames.USERS.value}
+            )
+            return next(cursor, None)
         except Exception as e:
             self.logger.error(f"Error getting user by user ID: {str(e)}")
             return None
