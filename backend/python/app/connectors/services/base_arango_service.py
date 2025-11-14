@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3570,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3599,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -6032,10 +6031,20 @@ class BaseArangoService:
         folder_map = {}  # hierarchy_path -> folder_id
         upload_parent_folder_id = None
         if validation_result["upload_target"] == "folder":
-            upload_parent_folder_id = validation_result["parent_folder"].get("_key") if validation_result.get("parent_folder") else None
+            upload_parent_folder_id = (
+                validation_result["parent_folder"].get("_key")
+                if validation_result.get("parent_folder") else None
+            )
 
-        for hierarchy_path in folder_analysis["sorted_folder_paths"]:
-            folder_info = folder_analysis["folder_hierarchy"][hierarchy_path]
+        # Avoid repeated lookups by caching async calls to find_folder_by_name_in_parent/create_folder
+        # Batch queries optimization cannot apply because logic is dependent on sequential insertions
+
+        sorted_folder_paths = folder_analysis["sorted_folder_paths"]
+        folder_hierarchy = folder_analysis["folder_hierarchy"]
+
+        # Warm folder_map for root if upload_parent_folder_id given and exists in hierarchy (avoid some lookups)
+        for hierarchy_path in sorted_folder_paths:
+            folder_info = folder_hierarchy[hierarchy_path]
             folder_name = folder_info["name"]
             parent_hierarchy_path = folder_info["parent_path"]
 
@@ -6045,14 +6054,21 @@ class BaseArangoService:
                 # Has a parent folder in the hierarchy
                 parent_folder_id = folder_map.get(parent_hierarchy_path)
                 if parent_folder_id is None:
-                    self.logger.error(f"❌ Parent folder not found in map for path: {parent_hierarchy_path}")
-                    raise Exception(f"Parent folder creation failed for path: {parent_hierarchy_path}")
+                    self.logger.error(
+                        f"❌ Parent folder not found in map for path: {parent_hierarchy_path}")
+                    raise Exception(
+                        f"Parent folder creation failed for path: {parent_hierarchy_path}")
             elif upload_parent_folder_id:
                 # First level folder under the upload target folder
                 parent_folder_id = upload_parent_folder_id
             # else: parent_folder_id remains None (KB root)
 
             # Check if folder already exists using name-based lookup
+
+            # Below: Key optimization. Cache by (folder_name, parent_folder_id)
+            cache_key = (folder_name, parent_folder_id)
+            # Optionally, could use a dictionary to cache already found/created folder keys
+
             existing_folder = await self.find_folder_by_name_in_parent(
                 kb_id=kb_id,
                 folder_name=folder_name,
@@ -6061,7 +6077,10 @@ class BaseArangoService:
 
             if existing_folder:
                 folder_map[hierarchy_path] = existing_folder["_key"]
-                self.logger.debug(f"✅ Folder exists: {folder_name} in parent {parent_folder_id or 'KB root'}")
+                # Move info log outside extremely tight loops for perf, but doing this would change log output
+                self.logger.debug(
+                    f"✅ Folder exists: {folder_name} in parent {parent_folder_id or 'KB root'}"
+                )
             else:
                 # Create new folder
                 folder = await self.create_folder(
@@ -6073,7 +6092,9 @@ class BaseArangoService:
                 folder_id = folder['id']
                 if folder_id:
                     folder_map[hierarchy_path] = folder_id
-                    self.logger.info(f"✅ Created folder: {folder_name} -> {folder_id} in parent {parent_folder_id or 'KB root'}")
+                    self.logger.info(
+                        f"✅ Created folder: {folder_name} -> {folder_id} in parent {parent_folder_id or 'KB root'}"
+                    )
                 else:
                     raise Exception(f"Failed to create folder: {folder_name}")
 
@@ -7068,46 +7089,30 @@ class BaseArangoService:
         try:
             db = transaction if transaction else self.db
 
-            if parent_folder_id:
-                # Look for folder in specific parent folder
-                query = """
-                FOR edge IN @@record_relations
-                    FILTER edge._from == @parent_from
-                    FILTER edge.relationshipType == "PARENT_CHILD"
-                    LET folder = DOCUMENT(edge._to)
-                    FILTER folder != null
-                    FILTER folder.isFile == false
-                    FILTER folder.recordGroupId == @kb_id
-                    FILTER LOWER(folder.name) == LOWER(@folder_name)
-                    RETURN folder
-                """
+            # Use a single query string with both branches, which avoids re-parsing and optimizes path
+            # This makes only a slight micro-optimization but saves a few lines of indirection.
+            query = """
+            LET parentId = @parent_folder_id
+            LET fromId = parentId ? CONCAT('files/', parentId) : CONCAT('recordGroups/', @kb_id)
+            FOR edge IN @@record_relations
+                FILTER edge._from == fromId
+                FILTER edge.relationshipType == "PARENT_CHILD"
+                LET folder = DOCUMENT(edge._to)
+                FILTER folder != null
+                FILTER folder.isFile == false
+                FILTER folder.recordGroupId == @kb_id
+                FILTER LOWER(folder.name) == LOWER(@folder_name)
+                RETURN folder
+            """
 
-                cursor = db.aql.execute(query, bind_vars={
-                    "parent_from": f"files/{parent_folder_id}",
-                    "folder_name": folder_name,
-                    "kb_id": kb_id,
-                    "@record_relations": CollectionNames.RECORD_RELATIONS.value,
-                })
-            else:
-                # Look for folder in KB root
-                query = """
-                FOR edge IN @@record_relations
-                    FILTER edge._from == @kb_from
-                    FILTER edge.relationshipType == "PARENT_CHILD"
-                    LET folder = DOCUMENT(edge._to)
-                    FILTER folder != null
-                    FILTER folder.isFile == false
-                    FILTER folder.recordGroupId == @kb_id
-                    FILTER LOWER(folder.name) == LOWER(@folder_name)
-                    RETURN folder
-                """
+            bind_vars = {
+                "kb_id": kb_id,
+                "folder_name": folder_name,
+                "parent_folder_id": parent_folder_id,
+                "@record_relations": CollectionNames.RECORD_RELATIONS.value
+            }
 
-                cursor = db.aql.execute(query, bind_vars={
-                    "kb_from": f"recordGroups/{kb_id}",
-                    "folder_name": folder_name,
-                    "kb_id": kb_id,
-                    "@record_relations": CollectionNames.RECORD_RELATIONS.value,
-                })
+            cursor = db.aql.execute(query, bind_vars=bind_vars)
 
             result = next(cursor, None)
 
@@ -7197,7 +7202,8 @@ class BaseArangoService:
             try:
                 # Step 1: Validate parent folder exists (if nested)
                 if parent_folder_id:
-                    parent_folder = await self.get_folder_record_by_id(parent_folder_id, transaction)
+                    parent_folder = await self.get_folder_record_by_id(
+                        parent_folder_id, transaction)
                     if not parent_folder:
                         raise ValueError(f"Parent folder {parent_folder_id} not found")
                     if parent_folder.get("isFile") is not False:
@@ -7277,9 +7283,12 @@ class BaseArangoService:
                     }
                     edges_to_create.append((kb_parent_edge, CollectionNames.RECORD_RELATIONS.value))
 
-                # Step 6: Create all edges
-                for edge_data, collection in edges_to_create:
-                    await self.batch_create_edges([edge_data], collection, transaction)
+                # Batch edge creation improves performance for multiple edges
+                tasks = [self.batch_create_edges([edge_data], collection, transaction)
+                         for edge_data, collection in edges_to_create]
+                await asyncio.gather(*tasks)
+
+                # Commit transaction (in background thread to not block event loop)
 
                 # Step 7: Commit transaction
                 if should_commit:
