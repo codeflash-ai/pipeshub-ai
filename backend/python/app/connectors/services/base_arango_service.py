@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3570,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3599,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -7069,45 +7068,40 @@ class BaseArangoService:
             db = transaction if transaction else self.db
 
             if parent_folder_id:
-                # Look for folder in specific parent folder
-                query = """
-                FOR edge IN @@record_relations
-                    FILTER edge._from == @parent_from
-                    FILTER edge.relationshipType == "PARENT_CHILD"
-                    LET folder = DOCUMENT(edge._to)
-                    FILTER folder != null
-                    FILTER folder.isFile == false
-                    FILTER folder.recordGroupId == @kb_id
-                    FILTER LOWER(folder.name) == LOWER(@folder_name)
-                    RETURN folder
-                """
-
-                cursor = db.aql.execute(query, bind_vars={
-                    "parent_from": f"files/{parent_folder_id}",
-                    "folder_name": folder_name,
-                    "kb_id": kb_id,
-                    "@record_relations": CollectionNames.RECORD_RELATIONS.value,
-                })
+                from_id = f"files/{parent_folder_id}"
+                from_param = "parent_from"
             else:
-                # Look for folder in KB root
-                query = """
-                FOR edge IN @@record_relations
-                    FILTER edge._from == @kb_from
-                    FILTER edge.relationshipType == "PARENT_CHILD"
-                    LET folder = DOCUMENT(edge._to)
-                    FILTER folder != null
-                    FILTER folder.isFile == false
-                    FILTER folder.recordGroupId == @kb_id
-                    FILTER LOWER(folder.name) == LOWER(@folder_name)
-                    RETURN folder
-                """
+                from_id = f"recordGroups/{kb_id}"
+                from_param = "kb_from"
 
-                cursor = db.aql.execute(query, bind_vars={
-                    "kb_from": f"recordGroups/{kb_id}",
-                    "folder_name": folder_name,
-                    "kb_id": kb_id,
-                    "@record_relations": CollectionNames.RECORD_RELATIONS.value,
-                })
+            query = """
+            FOR edge IN @@record_relations
+                FILTER edge._from == @from_id
+                FILTER edge.relationshipType == "PARENT_CHILD"
+                LET folder = DOCUMENT(edge._to)
+                FILTER folder != null
+                FILTER folder.isFile == false
+                FILTER folder.recordGroupId == @kb_id
+                FILTER LOWER(folder.name) == LOWER(@folder_name)
+                RETURN folder
+            """
+
+            bind_vars = {
+                from_param: from_id,
+                "folder_name": folder_name,
+                "kb_id": kb_id,
+                "@record_relations": CollectionNames.RECORD_RELATIONS.value,
+                "from_id": from_id  # Used in the query
+            }
+
+            # Remove the unused param depending on context for clarity (small perf gain in dict access)
+            if parent_folder_id:
+                bind_vars.pop("kb_from", None)
+            else:
+                bind_vars.pop("parent_from", None)
+
+            # Use .next() for cursor for lazy fetching, avoid materializing entire result set
+            cursor = db.aql.execute(query, bind_vars=bind_vars, batch_size=1)
 
             result = next(cursor, None)
 
