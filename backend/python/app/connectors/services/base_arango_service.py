@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -178,6 +167,12 @@ class BaseArangoService:
                 ]
             }
         }
+
+        # Initialize collections dictionary
+
+        # Import from base_arango_service.py: treat NODE_COLLECTIONS, EDGE_COLLECTIONS as read-only
+        from app.connectors.services.base_arango_service import (
+            EDGE_COLLECTIONS, NODE_COLLECTIONS)
 
         # Initialize collections dictionary
         self._collections = {
@@ -1782,6 +1777,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1792,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3576,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3605,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -6662,13 +6667,21 @@ class BaseArangoService:
     ) -> Optional[str]:
         """Validate user knowledge permission"""
         try:
-            self.logger.info(f"🔍 Checking permissions for user {user_id} on KB {kb_id}")
             db = transaction if transaction else self.db
 
+            user_ref = f'users/{user_id}'
+            kb_ref = f'recordGroups/{kb_id}'
+            permissions_collection = CollectionNames.PERMISSIONS_TO_KB.value
+
+            # Only log if the logger is enabled for INFO to cut string formatting cost
+            if hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(20):  # logging.INFO == 20
+                self.logger.info(f"🔍 Checking permissions for user {user_id} on KB {kb_id}")
+
+            # Use optimized query with indexed equality filters (same as original)
             query = """
             FOR perm IN @@permissions_collection
-                FILTER perm._from == CONCAT('users/', @user_id)
-                FILTER perm._to == CONCAT('recordGroups/', @kb_id)
+                FILTER perm._from == @user_ref
+                FILTER perm._to == @kb_ref
                 RETURN perm
             """
 
@@ -6677,7 +6690,9 @@ class BaseArangoService:
                 bind_vars={
                     "kb_id": kb_id,
                     "user_id": user_id,
-                    "@permissions_collection": CollectionNames.PERMISSIONS_TO_KB.value,
+                    "@permissions_collection": permissions_collection,
+                    "user_ref": user_ref,
+                    "kb_ref": kb_ref,
                 },
             )
 
@@ -6685,32 +6700,46 @@ class BaseArangoService:
 
             if permission:
                 role = permission.get("role")
-                self.logger.info(f"✅ Found permission: user {user_id} has role '{role}' on KB {kb_id}")
+                if hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(20):
+                    self.logger.info(f"✅ Found permission: user {user_id} has role '{role}' on KB {kb_id}")
                 return role
-            else:
+
+            # Only warn if enabled
+            if hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(30):  # logging.WARNING == 30
                 self.logger.warning(f"⚠️ No permission found for user {user_id} on KB {kb_id}")
 
-                # Debug: Let's see what permissions exist for this KB
-                debug_query = """
-                FOR perm IN @@permissions_collection
-                    FILTER perm._to == CONCAT('recordGroups/', @kb_id)
-                    RETURN {
-                        from: perm._from,
-                        role: perm.role,
-                        type: perm.type
-                    }
-                """
-                debug_cursor = db.aql.execute(
-                    debug_query,
-                    bind_vars={
-                        "kb_id": kb_id,
-                        "@permissions_collection": CollectionNames.PERMISSIONS_TO_KB.value,
-                    },
-                )
+            # Debug query for all permissions for this KB (unchanged, but optimize bind vars)
+            debug_query = """
+            FOR perm IN @@permissions_collection
+                FILTER perm._to == @kb_ref
+                RETURN {
+                    from: perm._from,
+                    role: perm.role,
+                    type: perm.type
+                }
+            """
+            debug_cursor = db.aql.execute(
+                debug_query,
+                bind_vars={
+                    "kb_id": kb_id,
+                    "@permissions_collection": permissions_collection,
+                    "kb_ref": kb_ref,
+                },
+            )
+
+            # Avoid constructing the entire list if not actually logging the info
+            existing_perms = None
+            should_log_debug = hasattr(self.logger, "isEnabledFor") and self.logger.isEnabledFor(20)
+            # Only construct list if we will log it
+            if should_log_debug:
                 existing_perms = list(debug_cursor)
                 self.logger.info(f"🔍 Debug - All permissions for KB {kb_id}: {existing_perms}")
+            else:
+                # Drain the cursor to let DB clean up the cursor, but don't build a list
+                for _ in debug_cursor:
+                    pass
+            return None
 
-                return None
 
         except Exception as e:
             self.logger.error(f"❌ Failed to validate knowledge base permission for user {user_id}: {str(e)}")
