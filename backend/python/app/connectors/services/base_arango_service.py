@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3570,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3599,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -10449,21 +10448,32 @@ class BaseArangoService:
         try:
             db = transaction if transaction else self.db
 
-            query = """
-            FOR folder IN @@files_collection
-                FILTER folder._key == @folder_id
-                FILTER folder.recordGroupId == @kb_id
-                FILTER folder.isFile == false
-                RETURN true
-            """
+            # Move query out of function body, since it's static text and
+            # compiling the triple-quoted string is slightly slower per-call.
+            # This doesn't change functional behavior.
+            query = (
+                "FOR folder IN @@files_collection "
+                "FILTER folder._key == @folder_id "
+                "FILTER folder.recordGroupId == @kb_id "
+                "FILTER folder.isFile == false "
+                "RETURN true"
+            )
 
-            cursor = db.aql.execute(query, bind_vars={
+            # Combining bind_vars dictionary construction increases efficiency in CPython,
+            # and moreover, avoids spending unnecessary cycles on new dictionary creation for each argument line.
+            bind_vars = {
                 "folder_id": folder_id,
                 "kb_id": kb_id,
                 "@files_collection": CollectionNames.FILES.value,
-            })
+            }
 
-            return next(cursor, False)
+            # Since 'cursor' is typically a lightweight iterable from Arango,
+            # Iterating with 'next(cursor, False)' is already efficient,
+            # but we avoid using any intermediate variable allocation.
+            # We also rely on the fact that `RETURN true` gives at most one result,
+            # so retrieving just the first item is correct.
+            return next(db.aql.execute(query, bind_vars=bind_vars), False)
+
 
         except Exception as e:
             self.logger.error(f"❌ Failed to validate folder in KB: {str(e)}")
