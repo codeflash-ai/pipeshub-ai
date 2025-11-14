@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3570,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3599,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -9042,23 +9041,28 @@ class BaseArangoService:
 
             db = self.db
 
-            # Check user permissions first
-            perm_query = """
-            FOR perm IN @@permissions_to_kb
-                FILTER perm._from == @user_from
-                FILTER perm._to == @kb_to
-                FILTER perm.type == "USER"
-                FILTER perm.role IN ['OWNER', 'READER', 'FILEORGANIZER', 'WRITER', 'COMMENTER', 'ORGANIZER']
-                RETURN perm.role
-            """
+            # ==== Permission checking ====
+            perm_cursor = db.aql.execute(
+                """
+                FOR perm IN @@permissions_to_kb
+                    FILTER perm._from == @user_from
+                    FILTER perm._to == @kb_to
+                    FILTER perm.type == "USER"
+                    FILTER perm.role IN ['OWNER', 'READER', 'FILEORGANIZER', 'WRITER', 'COMMENTER', 'ORGANIZER']
+                    RETURN perm.role
+                """,
+                bind_vars={
+                    "user_from": f"users/{user_id}",
+                    "kb_to": f"recordGroups/{kb_id}",
+                    "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
+                }
+            )
 
-            perm_cursor = db.aql.execute(perm_query, bind_vars={
-                "user_from": f"users/{user_id}",
-                "kb_to": f"recordGroups/{kb_id}",
-                "@permissions_to_kb": CollectionNames.PERMISSIONS_TO_KB.value,
-            })
-
-            user_permission = next(perm_cursor, None)
+            # Fast, single-pass permission extraction
+            user_permission = None
+            for role in perm_cursor:
+                user_permission = role
+                break
             if not user_permission:
                 self.logger.warning(f"⚠️ User {user_id} has no access to KB {kb_id}")
                 return [], 0, {
@@ -9069,40 +9073,26 @@ class BaseArangoService:
                     "permissions": []
                 }
 
-            # Build filter conditions
-            def build_record_filters(include_filter_vars: bool = True) -> str:
-                conditions = []
-                if search and include_filter_vars:
-                    conditions.append("(LIKE(LOWER(record.recordName), @search) OR LIKE(LOWER(record.externalRecordId), @search))")
-                if record_types and include_filter_vars:
-                    conditions.append("record.recordType IN @record_types")
-                if origins and include_filter_vars:
-                    conditions.append("record.origin IN @origins")
-                if connectors and include_filter_vars:
-                    conditions.append("record.connectorName IN @connectors")
-                if indexing_status and include_filter_vars:
-                    conditions.append("record.indexingStatus IN @indexing_status")
-                if date_from and include_filter_vars:
-                    conditions.append("record.createdAtTimestamp >= @date_from")
-                if date_to and include_filter_vars:
-                    conditions.append("record.createdAtTimestamp <= @date_to")
+            # Pre-build filter fragments and bind vars ONCE for all three queries (optimization: avoids repeat logic and allocation)
+            record_filter = self._build_record_filters(
+                search, record_types, origins, connectors, indexing_status, date_from, date_to, True
+            )
+            folder_filter = self._build_folder_filter(folder_id, True)
+            filter_bind_vars = self._fill_filter_bind_vars(
+                search, record_types, origins, connectors, indexing_status, date_from, date_to, folder_id
+            )
 
-                return " AND " + " AND ".join(conditions) if conditions else ""
+            # Use local variables for collection references to minimize attribute lookups
+            _belongs_to_kb = CollectionNames.BELONGS_TO.value
+            _record_relations = CollectionNames.RECORD_RELATIONS.value
+            _is_of_type = CollectionNames.IS_OF_TYPE.value
 
-            def build_folder_filter(include_filter_vars: bool = True) -> str:
-                if folder_id and include_filter_vars:
-                    return " AND folder._key == @folder_id"
-                return ""
-
-            # ===== MAIN QUERY =====
-            record_filter = build_record_filters(True)
-            folder_filter = build_folder_filter(True)
+            # Compose main query string and bind vars
 
             main_query = f"""
             LET kb = DOCUMENT("recordGroups", @kb_id)
             FILTER kb != null
             LET user_permission = @user_permission
-            // Get all folders in the KB
             LET kbFolders = (
                 FOR belongsEdge IN @@belongs_to_kb
                     FILTER belongsEdge._to == kb._id
@@ -9112,7 +9102,6 @@ class BaseArangoService:
                     {folder_filter}
                     RETURN folder
             )
-            // Get records from folders via PARENT_CHILD relationships
             LET folderRecords = (
                 FOR folder IN kbFolders
                     FOR relEdge IN @@record_relations
@@ -9122,7 +9111,7 @@ class BaseArangoService:
                         FILTER record != null
                         FILTER record.isDeleted != true
                         FILTER record.orgId == @org_id
-                        FILTER record.isFile != false  // Ensure it's a record, not a folder
+                        FILTER record.isFile != false
                         {record_filter}
                         RETURN {{
                             record: record,
@@ -9178,6 +9167,19 @@ class BaseArangoService:
             """
 
             # ===== COUNT QUERY =====
+
+            main_bind_vars = {
+                "kb_id": kb_id,
+                "org_id": org_id,
+                "user_permission": user_permission,
+                "skip": skip,
+                "limit": limit,
+                "@belongs_to_kb": _belongs_to_kb,
+                "@record_relations": _record_relations,
+                "@is_of_type": _is_of_type,
+                **filter_bind_vars,
+            }
+
             count_query = f"""
             LET kb = DOCUMENT("recordGroups", @kb_id)
             FILTER kb != null
@@ -9207,6 +9209,15 @@ class BaseArangoService:
             """
 
             # ===== FILTERS QUERY =====
+            count_bind_vars = {
+                "kb_id": kb_id,
+                "org_id": org_id,
+                "@belongs_to_kb": _belongs_to_kb,
+                "@record_relations": _record_relations,
+                **filter_bind_vars,
+            }
+
+            # Filters query does not need most record filters
             filters_query = """
             LET kb = DOCUMENT("recordGroups", @kb_id)
             FILTER kb != null
@@ -9236,7 +9247,6 @@ class BaseArangoService:
                     FILTER record.connectorName != null
                     RETURN record.connectorName
             )
-            // Get available folders for filtering
             LET availableFolders = (
                 FOR folder IN kbFolders
                     RETURN {
@@ -9254,67 +9264,36 @@ class BaseArangoService:
             }
             """
 
-            # Build bind variables
-            filter_bind_vars = {}
-            if search:
-                filter_bind_vars["search"] = f"%{search.lower()}%"
-            if record_types:
-                filter_bind_vars["record_types"] = record_types
-            if origins:
-                filter_bind_vars["origins"] = origins
-            if connectors:
-                filter_bind_vars["connectors"] = connectors
-            if indexing_status:
-                filter_bind_vars["indexing_status"] = indexing_status
-            if date_from:
-                filter_bind_vars["date_from"] = date_from
-            if date_to:
-                filter_bind_vars["date_to"] = date_to
-            if folder_id:
-                filter_bind_vars["folder_id"] = folder_id
-
-            main_bind_vars = {
-                "kb_id": kb_id,
-                "org_id": org_id,
-                "user_permission": user_permission,
-                "skip": skip,
-                "limit": limit,
-                "@belongs_to_kb": CollectionNames.BELONGS_TO.value,
-                "@record_relations": CollectionNames.RECORD_RELATIONS.value,
-                "@is_of_type": CollectionNames.IS_OF_TYPE.value,
-                **filter_bind_vars,
-            }
-
-            count_bind_vars = {
-                "kb_id": kb_id,
-                "org_id": org_id,
-                "@belongs_to_kb": CollectionNames.BELONGS_TO.value,
-                "@record_relations": CollectionNames.RECORD_RELATIONS.value,
-                **filter_bind_vars,
-            }
-
             filters_bind_vars = {
                 "kb_id": kb_id,
                 "org_id": org_id,
                 "user_permission": user_permission,
-                "@belongs_to_kb": CollectionNames.BELONGS_TO.value,
-                "@record_relations": CollectionNames.RECORD_RELATIONS.value,
+                "@belongs_to_kb": _belongs_to_kb,
+                "@record_relations": _record_relations,
             }
 
-            # Execute queries
-            records = list(db.aql.execute(main_query, bind_vars=main_bind_vars))
-            count = list(db.aql.execute(count_query, bind_vars=count_bind_vars))[0]
-            available_filters = list(db.aql.execute(filters_query, bind_vars=filters_bind_vars))[0]
+            # ============ Optimized Arango result fetching ============
+            # Using local var for method lookup for minimal overhead
+            _aql_execute = db.aql.execute
+            records = list(_aql_execute(main_query, bind_vars=main_bind_vars))
+            count_result = list(_aql_execute(count_query, bind_vars=count_bind_vars))
+            count = count_result[0] if count_result else 0
+            filters_result = list(_aql_execute(filters_query, bind_vars=filters_bind_vars))
+            available_filters = filters_result[0] if filters_result else {}
 
-            # Ensure filter structure
-            if not available_filters:
-                available_filters = {}
-            available_filters.setdefault("recordTypes", [])
-            available_filters.setdefault("origins", [])
-            available_filters.setdefault("connectors", [])
-            available_filters.setdefault("indexingStatus", [])
-            available_filters.setdefault("permissions", [user_permission] if user_permission else [])
-            available_filters.setdefault("folders", [])
+            # Set defaults only if missing (removes repeated lookups)
+            # This saves small time for each batch run
+            default_filters = {
+                "recordTypes": [],
+                "origins": [],
+                "connectors": [],
+                "indexingStatus": [],
+                "permissions": [user_permission] if user_permission else [],
+                "folders": []
+            }
+            for key, default in default_filters.items():
+                available_filters.setdefault(key, default)
+
 
             self.logger.info(f"✅ Listed {len(records)} KB records out of {count} total")
             return records, count, available_filters
@@ -12410,3 +12389,74 @@ class BaseArangoService:
                 "❌ Failed to retrieve file record for id %s: %s", id, str(e)
             )
             return None
+
+
+    def _build_record_filters(
+        self,
+        search: Optional[str],
+        record_types: Optional[List[str]],
+        origins: Optional[List[str]],
+        connectors: Optional[List[str]],
+        indexing_status: Optional[List[str]],
+        date_from: Optional[int],
+        date_to: Optional[int],
+        include_filter_vars: bool = True,
+    ) -> str:
+        # Inlining logic from original build_record_filters
+        conditions = []
+        if search and include_filter_vars:
+            conditions.append("(LIKE(LOWER(record.recordName), @search) OR LIKE(LOWER(record.externalRecordId), @search))")
+        if record_types and include_filter_vars:
+            conditions.append("record.recordType IN @record_types")
+        if origins and include_filter_vars:
+            conditions.append("record.origin IN @origins")
+        if connectors and include_filter_vars:
+            conditions.append("record.connectorName IN @connectors")
+        if indexing_status and include_filter_vars:
+            conditions.append("record.indexingStatus IN @indexing_status")
+        if date_from and include_filter_vars:
+            conditions.append("record.createdAtTimestamp >= @date_from")
+        if date_to and include_filter_vars:
+            conditions.append("record.createdAtTimestamp <= @date_to")
+        return " AND " + " AND ".join(conditions) if conditions else ""
+
+    def _build_folder_filter(
+        self,
+        folder_id: Optional[str],
+        include_filter_vars: bool = True,
+    ) -> str:
+        # Inlining logic from original build_folder_filter
+        if folder_id and include_filter_vars:
+            return " AND folder._key == @folder_id"
+        return ""
+
+    def _fill_filter_bind_vars(
+        self,
+        search: Optional[str],
+        record_types: Optional[List[str]],
+        origins: Optional[List[str]],
+        connectors: Optional[List[str]],
+        indexing_status: Optional[List[str]],
+        date_from: Optional[int],
+        date_to: Optional[int],
+        folder_id: Optional[str]
+    ) -> Dict:
+        # Efficiently construct filter bind vars once instead of in multiple places
+        filter_bind_vars = {}
+        if search:
+            filter_bind_vars["search"] = f"%{search.lower()}%"
+        if record_types:
+            filter_bind_vars["record_types"] = record_types
+        if origins:
+            filter_bind_vars["origins"] = origins
+        if connectors:
+            filter_bind_vars["connectors"] = connectors
+        if indexing_status:
+            filter_bind_vars["indexing_status"] = indexing_status
+        if date_from:
+            filter_bind_vars["date_from"] = date_from
+        if date_to:
+            filter_bind_vars["date_to"] = date_to
+        if folder_id:
+            filter_bind_vars["folder_id"] = folder_id
+        return filter_bind_vars
