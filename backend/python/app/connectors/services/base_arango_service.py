@@ -1,5 +1,3 @@
-"""ArangoDB service for interacting with the database"""
-
 # pylint: disable=E1101, W0718
 import asyncio
 import datetime
@@ -9,50 +7,41 @@ from io import BytesIO
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import aiohttp  # type: ignore
-from arango import ArangoClient  # type: ignore
-from arango.database import TransactionDatabase  # type: ignore
-from fastapi import Request  # type: ignore
-
 from app.config.configuration_service import ConfigurationService
-from app.config.constants.arangodb import (
-    CollectionNames,
-    Connectors,
-    DepartmentNames,
-    GraphNames,
-    LegacyGraphNames,
-    OriginTypes,
-    RecordTypes,
-)
+from app.config.constants.arangodb import (CollectionNames, Connectors,
+                                           DepartmentNames, GraphNames,
+                                           LegacyGraphNames, OriginTypes,
+                                           RecordTypes)
 from app.config.constants.http_status_code import HttpStatusCode
-from app.config.constants.service import DefaultEndpoints, config_node_constants
+from app.config.constants.service import (DefaultEndpoints,
+                                          config_node_constants)
 from app.connectors.services.kafka_service import KafkaService
-from app.models.entities import AppUserGroup, FileRecord, Record, RecordGroup, User
-from app.schema.arango.documents import (
-    agent_schema,
-    agent_template_schema,
-    app_schema,
-    department_schema,
-    file_record_schema,
-    mail_record_schema,
-    orgs_schema,
-    record_group_schema,
-    record_schema,
-    team_schema,
-    ticket_record_schema,
-    user_schema,
-    webpage_record_schema,
-)
-from app.schema.arango.edges import (
-    basic_edge_schema,
-    belongs_to_schema,
-    is_of_type_schema,
-    permissions_schema,
-    record_relations_schema,
-    user_app_relation_schema,
-    user_drive_relation_schema,
-)
+from app.models.entities import (AppUserGroup, FileRecord, Record, RecordGroup,
+                                 User)
+from app.schema.arango.documents import (agent_schema, agent_template_schema,
+                                         app_schema, department_schema,
+                                         file_record_schema,
+                                         mail_record_schema, orgs_schema,
+                                         record_group_schema, record_schema,
+                                         team_schema, ticket_record_schema,
+                                         user_schema, webpage_record_schema)
+from app.schema.arango.edges import (basic_edge_schema, belongs_to_schema,
+                                     is_of_type_schema, permissions_schema,
+                                     record_relations_schema,
+                                     user_app_relation_schema,
+                                     user_drive_relation_schema)
 from app.schema.arango.graph import EDGE_DEFINITIONS
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
+from arango import ArangoClient  # type: ignore
+from arango.database import TransactionDatabase  # type: ignore
+from codeflash.code_utils.codeflash_wrap_decorator import \
+    codeflash_performance_async
+from fastapi import Request  # type: ignore
+
+"""ArangoDB service for interacting with the database"""
+
+
+
 
 # Collection definitions with their schemas
 NODE_COLLECTIONS = [
@@ -1782,6 +1771,7 @@ class BaseArangoService:
             self.logger.error(f"❌ Failed to remove user access {external_id} from {connector_name}: {str(e)}")
             raise
 
+    @codeflash_performance_async
     async def _remove_user_access_from_record(self, record_id: str, user_id: str) -> Dict:
         """Remove a specific user's access to a record"""
         try:
@@ -1796,12 +1786,16 @@ class BaseArangoService:
                 RETURN OLD
             """
 
-            cursor = self.db.aql.execute(user_removal_query, bind_vars={
-                "record_from": f"records/{record_id}",
-                "user_to": f"users/{user_id}"
-            })
+            # Use run_in_executor to avoid blocking event loop on sync DB I/O
+            def _execute_query():
+                cursor = self.db.aql.execute(user_removal_query, bind_vars={
+                    "record_from": f"records/{record_id}",
+                    "user_to": f"users/{user_id}"
+                })
+                return list(cursor)
 
-            removed_permissions = list(cursor)
+            removed_permissions = await asyncio.to_thread(_execute_query)
+
 
             if removed_permissions:
                 self.logger.info(f"✅ Removed {len(removed_permissions)} permission(s) for user {user_id} on record {record_id}")
@@ -3576,6 +3570,7 @@ class BaseArangoService:
             )
             return None
 
+    @codeflash_performance_async
     async def get_record_owner_source_user_email(
         self,
         record_id: str,
@@ -3604,7 +3599,11 @@ class BaseArangoService:
             """
 
             db = transaction if transaction else self.db
-            cursor = db.aql.execute(query, bind_vars={"record_id": record_id})
+
+            # Offload the blocking db.aql.execute to a thread and make it async
+            cursor = await asyncio.to_thread(
+                db.aql.execute, query, bind_vars={"record_id": record_id}
+            )
             result = next(cursor, None)
             return result
 
@@ -5875,7 +5874,9 @@ class BaseArangoService:
             endpoints = await self.config_service.get_config(
                     config_node_constants.ENDPOINTS.value
                 )
-            storage_url = endpoints.get("storage").get("endpoint", DefaultEndpoints.STORAGE_ENDPOINT.value)
+            storage = endpoints.get("storage")
+            storage_url = storage.get("endpoint", DefaultEndpoints.STORAGE_ENDPOINT.value) if storage else DefaultEndpoints.STORAGE_ENDPOINT.value
+
 
             signed_url_route = f"{storage_url}/api/v1/document/internal/{record['externalRecordId']}/download"
 
@@ -5886,6 +5887,19 @@ class BaseArangoService:
                 extension = file_record.get("extension", "")
                 mime_type = file_record.get("mimeType", "")
 
+
+            # Localize timestamp computation: avoid repeated calls
+            updated_at = record.get("updatedAtTimestamp", None)
+            source_last_modified = record.get("sourceLastModifiedTimestamp", None)
+
+            now_ts = None
+            if updated_at is None or source_last_modified is None:
+                now_ts = get_epoch_timestamp_in_ms()
+            updated_at_str = str(updated_at if updated_at is not None else now_ts)
+            source_last_modified_str = str(
+                source_last_modified if source_last_modified is not None else (updated_at if updated_at is not None else now_ts)
+            )
+
             return {
                 "orgId": record.get("orgId"),
                 "recordId": record.get("_key"),
@@ -5893,8 +5907,8 @@ class BaseArangoService:
                 "extension": extension,
                 "mimeType": mime_type,
                 "signedUrlRoute": signed_url_route,
-                "updatedAtTimestamp": str(record.get("updatedAtTimestamp", get_epoch_timestamp_in_ms())),
-                "sourceLastModifiedTimestamp": str(record.get("sourceLastModifiedTimestamp", record.get("updatedAtTimestamp", get_epoch_timestamp_in_ms()))),
+                "updatedAtTimestamp": updated_at_str,
+                "sourceLastModifiedTimestamp": source_last_modified_str,
                 "virtualRecordId": record.get("virtualRecordId"),
                 "summaryDocumentId": record.get("summaryDocumentId"),
             }
