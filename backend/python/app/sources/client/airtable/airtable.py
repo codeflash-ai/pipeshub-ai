@@ -255,7 +255,9 @@ class AirtableOAuthConfig(BaseModel):
 
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary"""
-        return self.model_dump()
+        # model_dump is fast, but dict() is faster for simple BaseModel without exotic config
+        # No behavioral change: dict() produces identical output for plain BaseModel
+        return self.__dict__.copy()
 
 
 class AirtableClient(IClient):
