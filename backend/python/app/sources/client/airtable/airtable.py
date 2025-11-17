@@ -1,7 +1,7 @@
 import base64
 import logging
 from typing import Any, Dict, Optional
-from urllib.parse import urlencode
+from urllib.parse import quote_plus, urlencode
 
 from pydantic import BaseModel  # type: ignore
 
@@ -101,17 +101,17 @@ class AirtableRESTClientViaOAuth(HTTPClient):
         Returns:
             Authorization URL
         """
-        params = {
-            "client_id": self.client_id,
-            "redirect_uri": self.redirect_uri,
-            "response_type": "code",
-            "scope": scope
-        }
+        params = [
+            "client_id=" + quote_plus(self.client_id),
+            "redirect_uri=" + quote_plus(self.redirect_uri),
+            "response_type=code",
+            "scope=" + quote_plus(scope)
+        ]
 
         if state:
-            params["state"] = state
+            params.append("state=" + quote_plus(state))
 
-        return f"{self.oauth_base_url}/authorize?{urlencode(params)}"
+        return f"{self.oauth_base_url}/authorize?{'&'.join(params)}"
 
     async def initiate_oauth_flow(self, authorization_code: str) -> Optional[str]:
         """Complete OAuth flow with authorization code
