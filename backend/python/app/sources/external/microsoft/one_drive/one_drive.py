@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -1650,28 +1648,34 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters()
-
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
 
             # Create proper typed request configuration
             config = DrivesRequestBuilder.DrivesRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            qp_ctor = DrivesRequestBuilder.DrivesRequestBuilderGetQueryParameters
+
+            select_val = select if select else None
+            expand_val = expand if expand else None
+
+            # Perform all truthy checks outside so attribute assignment skips if all are None/False quickly
+            if select_val or expand_val or filter or orderby or search or top is not None or skip is not None:
+                query_params = qp_ctor()
+                # Bulk assignment for select/expand to avoid repetitive checks
+                if select_val:
+                    query_params.select = select_val if isinstance(select_val, list) else [select_val]
+                if expand_val:
+                    query_params.expand = expand_val if isinstance(expand_val, list) else [expand_val]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
