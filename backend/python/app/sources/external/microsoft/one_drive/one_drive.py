@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -117,30 +115,44 @@ class OneDriveDataSource:
             if response is None:
                 return OneDriveResponse(success=False, error="Empty response from OneDrive API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for OneDrive operations
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_code = error_info.get('code', 'Unknown')
-                    error_message = error_info.get('message', 'No message')
-                    error_msg = f"{error_code}: {error_message}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return OneDriveResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+
+            # dict check before expensive hasattr/attribute checks
+            if isinstance(response, dict):
+                error_info = response.get('error')
+                if error_info is not None:
+                    if isinstance(error_info, dict):
+                        error_code = error_info.get('code', 'Unknown')
+                        error_message = error_info.get('message', 'No message')
+                        error_msg = f"{error_code}: {error_message}"
+                    else:
+                        error_msg = str(error_info)
+                    return OneDriveResponse(
+                        success=False,
+                        data=response,
+                        error=error_msg,
+                    )
+
+            # Check for code/message attributes
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return OneDriveResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}",
+                )
+
+            # Fast-path for success (likely common case)
 
             return OneDriveResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneDrive response: {e}")
@@ -1338,39 +1350,61 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Build query parameters using a single pass dictionary;
+            # Avoid repeated attribute assignment to the typed object unless needed
+            qp = {}
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                qp["select"] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                qp["expand"] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                qp["filter"] = filter
             if orderby:
-                query_params.orderby = orderby
+                qp["orderby"] = orderby
             if search:
-                query_params.search = search
+                qp["search"] = search
             if top is not None:
-                query_params.top = top
+                qp["top"] = top
             if skip is not None:
-                query_params.skip = skip
+                qp["skip"] = skip
+
+            # Only create RequestConfiguration/query_parameters if needed
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+
+            # Assign query parameters efficiently
+            if qp:
+                qparams = RequestConfiguration()
+                for k, v in qp.items():
+                    setattr(qparams, k, v)
+                config.query_parameters = qparams
+
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy() if not isinstance(headers, dict) else headers
+
+            # Only add search header if searching (avoid branching unless necessary)
 
             # Add consistency level for search operations in OneDrive
             if search:
-                if not config.headers:
+                if not hasattr(config, 'headers') or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.drives.by_drive_id(drive_id).items.by_drive_item_id(driveItem_id).copy.post(body=request_body, request_configuration=config)
+            # Avoid repeated attribute lookups
+            drives = self.client.drives
+            drive = drives.by_drive_id(drive_id)
+            items = drive.items
+            item = items.by_drive_item_id(driveItem_id)
+            request_copy = item.copy
+
+            response = await request_copy.post(
+                body=request_body,
+                request_configuration=config
+            )
             return self._handle_onedrive_response(response)
         except Exception as e:
             return OneDriveResponse(
