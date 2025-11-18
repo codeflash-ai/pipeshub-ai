@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -876,31 +874,31 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Use single config instance for both headers and query_params to avoid redundant objects
+            config = RequestConfiguration()
+
+            # Direct attribute set to avoid intermediate query_params object
 
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                config.query_parameters.select = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                config.query_parameters.expand = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                config.query_parameters.filter = filter
             if orderby:
-                query_params.orderby = orderby
+                config.query_parameters.orderby = orderby
             if search:
-                query_params.search = search
+                config.query_parameters.search = search
             if top is not None:
-                query_params.top = top
+                config.query_parameters.top = top
             if skip is not None:
-                query_params.skip = skip
+                config.query_parameters.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Assign headers directly; merge with consistency if search is present
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
 
             # Add consistency level for search operations in OneDrive
             if search:
@@ -908,7 +906,10 @@ class OneDriveDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.drives.by_drive_id(drive_id).items.by_drive_item_id(driveItem_id).patch(body=request_body, request_configuration=config)
+            # Await PATCH operation directly
+            response = await self.client.drives.by_drive_id(drive_id).items.by_drive_item_id(driveItem_id).patch(
+                body=request_body, request_configuration=config
+            )
             return self._handle_onedrive_response(response)
         except Exception as e:
             return OneDriveResponse(
