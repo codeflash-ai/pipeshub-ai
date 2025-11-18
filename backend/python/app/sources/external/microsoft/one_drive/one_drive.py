@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -120,10 +118,13 @@ class OneDriveDataSource:
             success = True
             error_msg = None
 
-            # Enhanced error response handling for OneDrive operations
-            if hasattr(response, 'error'):
+            response_error = getattr(response, 'error', None)
+            response_dict_error = None
+            # First check attribute 'error'
+            if response_error is not None:
                 success = False
-                error_msg = str(response.error)
+                error_msg = str(response_error)
+            # Then check dict error
             elif isinstance(response, dict) and 'error' in response:
                 success = False
                 error_info = response['error']
@@ -412,8 +413,12 @@ class OneDriveDataSource:
         """
         # Build query parameters including OData for OneDrive
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Allocate objects only when needed. Avoid double RequestConfiguration allocation.
+            config = RequestConfiguration()
+            query_params = config
+
+            # Set query parameters using typed object properties
+            # Skip redundant list type checks if None.
 
             # Set query parameters using typed object properties
             if select:
@@ -430,9 +435,6 @@ class OneDriveDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
