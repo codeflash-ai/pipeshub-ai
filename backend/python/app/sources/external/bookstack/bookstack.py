@@ -439,7 +439,6 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
-        params: Dict[str, Union[str, int]] = {}
 
         body: Dict[str, Union[str, int, bool, List, Dict, None]] = {}
         if name is not None:
@@ -457,7 +456,8 @@ class BookStackDataSource:
         if image is not None:
             files["image"] = image
 
-        url = self.base_url + "/api/books/{id}".format(id=id)
+        url = f"{self.base_url}/api/books/{id}"
+
 
         headers = dict(self.http.headers)
         # Note: multipart/form-data requests need special handling
@@ -467,7 +467,7 @@ class BookStackDataSource:
             method="PUT",
             url=url,
             headers=headers,
-            query_params=params,
+            query_params={},
             body=body,
             files=files
         )
