@@ -184,7 +184,8 @@ class BookStackDataSource:
         )
 
         try:
-            response = await self.http.execute(request)
+            async with self.http:
+                response = await self.http.execute(request)
             return BookStackResponse(success=True, data=response.json())
         except Exception as e:
             return BookStackResponse(success=False, error=str(e))
