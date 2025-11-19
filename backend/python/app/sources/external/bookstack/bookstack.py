@@ -492,9 +492,10 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/books/{id}".format(id=id)
+        url = f"{self.base_url}/api/books/{id}"
+        # Using the original headers reference - if BookStackResponse mutates it, fallback to copy
+        headers = self.http.headers
 
-        headers = dict(self.http.headers)
 
         request = HTTPRequest(
             method="DELETE",
