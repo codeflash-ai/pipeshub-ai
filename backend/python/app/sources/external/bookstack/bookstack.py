@@ -1319,9 +1319,9 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/pages/{id}/export/plaintext".format(id=id)
+        url = f"{self.base_url}/api/pages/{id}/export/plaintext"
+        headers = self.http.headers
 
-        headers = dict(self.http.headers)
 
         request = HTTPRequest(
             method="GET",
@@ -1333,8 +1333,9 @@ class BookStackDataSource:
 
         try:
             response = await self.http.execute(request)
-            # PDF exports return binary data, not JSON
-            return BookStackResponse(success=True, data={"content": base64.b64encode(response.bytes()).decode('utf-8'), "content_type": response.content_type})
+            encoded_content = base64.b64encode(response.bytes()).decode('utf-8')
+            data = {"content": encoded_content, "content_type": getattr(response, 'content_type', '')}
+            return BookStackResponse(success=True, data=data)
         except Exception as e:
             return BookStackResponse(success=False, error=str(e))
 
