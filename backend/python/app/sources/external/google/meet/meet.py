@@ -102,16 +102,7 @@ class GoogleMeetDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if name is not None:
-            kwargs['name'] = name
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.spaces().endActiveConference(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.spaces().endActiveConference(**kwargs) # type: ignore
+        request = self.client.spaces().endActiveConference(name=name)  # type: ignore
         return request.execute()
 
     async def conference_records_get(
