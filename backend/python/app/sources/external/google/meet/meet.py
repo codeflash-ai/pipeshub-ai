@@ -336,11 +336,7 @@ class GoogleMeetDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if name is not None:
-            kwargs['name'] = name
-
-        request = self.client.conferenceRecords_transcripts().get(**kwargs) # type: ignore
+        request = self.client.conferenceRecords_transcripts().get(name=name) # type: ignore
         return request.execute()
 
     async def conference_records_transcripts_list(
