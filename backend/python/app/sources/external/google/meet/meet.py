@@ -56,7 +56,8 @@ class GoogleMeetDataSource:
             kwargs['name'] = name
 
         request = self.client.spaces().get(**kwargs) # type: ignore
-        return request.execute()
+        # The Google API client execute() is a blocking call; run it in a thread.
+        return await asyncio.to_thread(request.execute)
 
     async def spaces_patch(
         self,
