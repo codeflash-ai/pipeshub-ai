@@ -21,6 +21,9 @@ class GoogleMeetDataSource:
         """
         self.client = client
 
+        # Cache the bound get method for better performance in repeated calls.
+        self._participants_get = self.client.conferenceRecords_participants().get
+
     async def spaces_create(self, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Google Meet API: Creates a space.
 
@@ -178,11 +181,9 @@ class GoogleMeetDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if name is not None:
-            kwargs['name'] = name
-
-        request = self.client.conferenceRecords_participants().get(**kwargs) # type: ignore
+        # Only construct kwargs when name is provided (always required, so skip extra logic).
+        # Directly call the pre-bound get method.
+        request = self._participants_get(name=name)  # type: ignore
         return request.execute()
 
     async def conference_records_participants_list(
