@@ -856,8 +856,7 @@ class BookStackDataSource:
             BookStackResponse: Response object with success status and data/error
         """
         params: Dict[str, Union[str, int]] = {}
-
-        url = self.base_url + "/api/chapters/{id}".format(id=id)
+        url = f"{self.base_url}/api/chapters/{id}"
 
         headers = dict(self.http.headers)
 
