@@ -1528,7 +1528,7 @@ class BookStackDataSource:
         if image is not None:
             files["image"] = image
 
-        url = self.base_url + "/api/image-gallery/{id}".format(id=id)
+        url = f'{self.base_url}/api/image-gallery/{id}'
 
         headers = dict(self.http.headers)
         # Note: multipart/form-data requests need special handling
