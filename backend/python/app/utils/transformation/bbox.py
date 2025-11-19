@@ -15,27 +15,28 @@ def transform_bbox_to_corners(bbox: dict) -> list[list[float]]:
               Order: top-left, top-right, bottom-right, bottom-left
     """
     # Validate input
-
-
-    required_keys = ['l', 't', 'r', 'b']
-    for key in required_keys:
-        if key not in bbox:
-            raise ValueError(f"bbox missing required key: {key}")
-
-    left, top, right, bottom = bbox['l'], bbox['t'], bbox['r'], bbox['b']
-
-
+    # Fast path: catch KeyError at extraction, this is more efficient than iterative membership checking.
+    try:
+        left = bbox["l"]
+        top = bbox["t"]
+        right = bbox["r"]
+        bottom = bbox["b"]
+    except KeyError as key:
+        raise ValueError(f"bbox missing required key: {key.args[0]}")
 
     corners = [
-        [left, top],        # top-left
-        [right, top],        # top-right
-        [right, bottom],     # bottom-right
-        [left, bottom]      # bottom-left
+        [left, top],  # top-left
+        [right, top],  # top-right
+        [right, bottom],  # bottom-right
+        [left, bottom],  # bottom-left
     ]
 
     return corners
 
-def normalize_corner_coordinates(corners: list[list[float]], page_width: float, page_height: float) -> list[list[float]]:
+
+def normalize_corner_coordinates(
+    corners: list[list[float]], page_width: float, page_height: float
+) -> list[list[float]]:
     """
     Normalize corner coordinates to [0, 1] range using page dimensions.
 
@@ -50,13 +51,17 @@ def normalize_corner_coordinates(corners: list[list[float]], page_width: float, 
     # Validate input
 
     if page_width <= 0 or page_height <= 0:
-        raise ValueError(f"page_width and page_height must be positive, got {page_width}, {page_height}")
+        raise ValueError(
+            f"page_width and page_height must be positive, got {page_width}, {page_height}"
+        )
 
     normalized_corners = []
     CORNERS_COUNT = 2
     for i, corner in enumerate(corners):
         if not isinstance(corner, list) or len(corner) < CORNERS_COUNT:
-            raise ValueError(f"corner {i} must be a list with at least 2 elements, got {corner}")
+            raise ValueError(
+                f"corner {i} must be a list with at least 2 elements, got {corner}"
+            )
         x, y = corner
         normalized_x = x / page_width
         normalized_y = (page_height - y) / page_height
@@ -65,7 +70,9 @@ def normalize_corner_coordinates(corners: list[list[float]], page_width: float, 
     return normalized_corners
 
 
-def denormalize_corner_coordinates(normalized_corners: list[list[float]], page_width: float, page_height: float) -> list[list[float]]:
+def denormalize_corner_coordinates(
+    normalized_corners: list[list[float]], page_width: float, page_height: float
+) -> list[list[float]]:
     """
     Convert normalized coordinates back to absolute pixel coordinates.
 
