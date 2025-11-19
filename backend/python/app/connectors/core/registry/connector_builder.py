@@ -122,9 +122,12 @@ class ConnectorConfigBuilder:
 
     def with_realtime_support(self, supported: bool = True, connection_type: str = "WEBSOCKET") -> 'ConnectorConfigBuilder':
         """Enable or disable realtime support"""
-        self.config["supportsRealtime"] = supported
-        self.config["sync"]["realtimeConfig"]["supported"] = supported
-        self.config["sync"]["realtimeConfig"]["connectionType"] = connection_type
+        config = self.config
+        sync = config["sync"]
+        realtime_config = sync["realtimeConfig"]
+        config["supportsRealtime"] = supported
+        realtime_config["supported"] = supported
+        realtime_config["connectionType"] = connection_type
         return self
 
     def with_sync_support(self, supported: bool = True) -> 'ConnectorConfigBuilder':
