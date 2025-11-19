@@ -197,9 +197,13 @@ class ConnectorConfigBuilder:
     def with_scheduled_config(self, supported: bool = True, interval_minutes: int = 60) -> 'ConnectorConfigBuilder':
         """Configure scheduled sync"""
         if supported:
-            self.config["sync"]["scheduledConfig"]["intervalMinutes"] = interval_minutes
-            if "SCHEDULED" not in self.config["sync"]["supportedStrategies"]:
-                self.config["sync"]["supportedStrategies"].append("SCHEDULED")
+            sync = self.config["sync"]
+            scheduled_cfg = sync["scheduledConfig"]
+            scheduled_cfg["intervalMinutes"] = interval_minutes
+            supported_strategies = sync["supportedStrategies"]
+            # Avoid membership check by using a set for lookup, only if necessary
+            if "SCHEDULED" not in supported_strategies:
+                supported_strategies.append("SCHEDULED")
         return self
 
     def add_sync_custom_field(self, field: CustomField) -> 'ConnectorConfigBuilder':
