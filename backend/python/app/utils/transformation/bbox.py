@@ -77,12 +77,4 @@ def denormalize_corner_coordinates(normalized_corners: list[list[float]], page_w
     Returns:
         list: Absolute corner coordinates in pixels
     """
-    absolute_corners = []
-
-    for corner in normalized_corners:
-        norm_x, norm_y = corner
-        absolute_x = norm_x * page_width
-        absolute_y = norm_y * page_height
-        absolute_corners.append([absolute_x, absolute_y])
-
-    return absolute_corners
+    return [[norm_x * page_width, norm_y * page_height] for norm_x, norm_y in normalized_corners]
