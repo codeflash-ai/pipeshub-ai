@@ -148,8 +148,9 @@ class ConnectorConfigBuilder:
 
     def with_redirect_uri(self, redirect_uri: str, display: bool = True) -> 'ConnectorConfigBuilder':
         """Set redirect URI configuration"""
-        self.config["auth"]["redirectUri"] = redirect_uri
-        self.config["auth"]["displayRedirectUri"] = display
+        auth = self.config["auth"]
+        auth["redirectUri"] = redirect_uri
+        auth["displayRedirectUri"] = display
         return self
 
     def add_auth_field(self, field: AuthField) -> 'ConnectorConfigBuilder':
