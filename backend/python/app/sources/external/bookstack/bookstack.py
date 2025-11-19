@@ -1484,9 +1484,12 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/image-gallery/{id}".format(id=id)
+        # Use f-string for efficient URL construction
+        url = f"{self.base_url}/api/image-gallery/{id}"
 
-        headers = dict(self.http.headers)
+        # Pass self.http.headers directly, since we do not mutate it here
+        headers = self.http.headers
+
 
         request = HTTPRequest(
             method="GET",
