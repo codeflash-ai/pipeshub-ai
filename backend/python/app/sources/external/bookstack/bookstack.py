@@ -258,9 +258,9 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/attachments/{id}".format(id=id)
+        url = f"{self.base_url}/api/attachments/{id}"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="DELETE",
