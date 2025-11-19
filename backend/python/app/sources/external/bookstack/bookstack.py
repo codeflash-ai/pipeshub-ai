@@ -523,10 +523,11 @@ class BookStackDataSource:
             BookStackResponse: Response object with success status and data/error
         """
         params: Dict[str, Union[str, int]] = {}
+        # Use a single operation for URL formatting, avoiding concatenation
+        url = f"{self.base_url}/api/books/{id}/export/html"
+        # Use headers as is from HTTPClient if possible (they are already a dict)
+        headers = self.http.headers
 
-        url = self.base_url + "/api/books/{id}/export/html".format(id=id)
-
-        headers = dict(self.http.headers)
 
         request = HTTPRequest(
             method="GET",
