@@ -96,15 +96,14 @@ class CSVParser:
         )
 
         # Convert all rows to dictionaries and store them
-        data = []
+        data_append = data = []
+        _parse_value = self._parse_value  # Localize for speed
         for row in reader:
             # Clean up the row data
-            cleaned_row = {
-                key: self._parse_value(value)
-                for key, value in row.items()
-                if key is not None  # Skip None keys that might appear in malformed CSVs
-            }
-            data.append(cleaned_row)
+            items = row.items()
+            cleaned_row = {key: _parse_value(value) for key, value in items if key is not None}
+            data_append.append(cleaned_row)
+
 
         if not data:
             raise ValueError("CSV file is empty or has no valid rows")
@@ -192,30 +191,45 @@ class CSVParser:
         Returns:
             Parsed value as the appropriate type (int, float, bool, or string)
         """
-        if value is None or value.strip() == "":
+        if value is None:
             return None
 
-        # Remove leading/trailing whitespace
-        value = value.strip()
+        stripped = value.strip()
+        if not stripped:
+            return None
 
-        # Try to convert to boolean
-        if value.lower() in ("true", "false"):
-            return value.lower() == "true"
+        lowered = stripped.lower()
+        if lowered == "true":
+            return True
+        if lowered == "false":
+            return False
+
+        # Fast path for int and float
+        # Avoids try/except unless needed
+        # Int detection (whole number, optionally with sign)
+        s = stripped
+        sign = s[0] == '-' or s[0] == '+'
+        digits = s[1:] if sign else s
+        if digits.isdigit():
+            try:
+                return int(s)
+            except ValueError:
+                pass
+
+        # Float detection: contains one '.' and all other chars must be digits (or sign)
+        # Also covers scientific notation
 
         # Try to convert to integer
         try:
-            return int(value)
+            val = float(s)
+            # But don't convert strings like '.' or '-' or '+'
+            # Must contain a digit
+            if any(c.isdigit() for c in s):
+                return val
         except ValueError:
             pass
 
-        # Try to convert to float
-        try:
-            return float(value)
-        except ValueError:
-            pass
-
-        # Return as string if no other type matches
-        return value
+        return stripped
 
     @retry(
         stop=stop_after_attempt(3),
