@@ -889,14 +889,12 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/chapters/{id}/export/html".format(id=id)
-
-        headers = dict(self.http.headers)
+        url = f"{self.base_url}/api/chapters/{id}/export/html"
 
         request = HTTPRequest(
             method="GET",
             url=url,
-            headers=headers,
+            headers=self.http.headers,
             query_params=params,
             body=None
         )
