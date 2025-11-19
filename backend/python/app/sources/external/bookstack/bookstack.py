@@ -984,17 +984,15 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
-        params: Dict[str, Union[str, int]] = {}
+        url = f"{self.base_url}/api/chapters/{id}/export/markdown"
+        headers = self.http.headers
 
-        url = self.base_url + "/api/chapters/{id}/export/markdown".format(id=id)
-
-        headers = dict(self.http.headers)
 
         request = HTTPRequest(
             method="GET",
             url=url,
             headers=headers,
-            query_params=params,
+            query_params={},
             body=None
         )
 
