@@ -3,22 +3,14 @@ from logging import Logger
 from typing import TYPE_CHECKING, AsyncContextManager, List, Optional
 
 from app.config.constants.arangodb import Connectors
-from app.models.entities import (
-    Anyone,
-    AnyoneSameOrg,
-    AnyoneWithLink,
-    AppUser,
-    Domain,
-    Org,
-    Record,
-    RecordGroup,
-    User,
-    UserGroup,
-)
+from app.models.entities import (Anyone, AnyoneSameOrg, AnyoneWithLink,
+                                 AppUser, Domain, Org, Record, RecordGroup,
+                                 User, UserGroup)
 from app.models.permission import Permission
 
 if TYPE_CHECKING:
     from app.connectors.core.base.sync_point.sync_point import SyncPoint
+
 
 class DataStoreProvider(ABC):
     logger: Logger
@@ -27,6 +19,7 @@ class DataStoreProvider(ABC):
         self.logger = logger
 
     """Base class for all data store providers"""
+
     @abstractmethod
     async def transaction(self) -> AsyncContextManager["TransactionStore"]:
         """
@@ -54,6 +47,7 @@ class DataStoreProvider(ABC):
         """
         pass
 
+
 class BaseDataStore(ABC):
     """Base class for all data stores"""
 
@@ -62,15 +56,21 @@ class BaseDataStore(ABC):
         pass
 
     @abstractmethod
-    async def get_record_by_external_id(self, connector_name: Connectors, external_id: str) -> Optional[Record]:
+    async def get_record_by_external_id(
+        self, connector_name: Connectors, external_id: str
+    ) -> Optional[Record]:
         pass
 
     @abstractmethod
-    async def get_record_group_by_external_id(self, connector_name: Connectors, external_id: str) -> Optional[RecordGroup]:
+    async def get_record_group_by_external_id(
+        self, connector_name: Connectors, external_id: str
+    ) -> Optional[RecordGroup]:
         pass
 
     @abstractmethod
-    async def create_record_groups_relation(self, child_id: str, parent_id: str) -> None:
+    async def create_record_groups_relation(
+        self, child_id: str, parent_id: str
+    ) -> None:
         pass
 
     @abstractmethod
@@ -86,19 +86,32 @@ class BaseDataStore(ABC):
         pass
 
     @abstractmethod
-    async def delete_record_by_external_id(self, connector_name: Connectors, external_id: str) -> None:
+    async def delete_record_by_external_id(
+        self, connector_name: Connectors, external_id: str
+    ) -> None:
         pass
 
     @abstractmethod
-    async def get_record_by_conversation_index(self, connector_name: Connectors, conversation_index: str, thread_id: str, org_id: str, user_id: str) -> Optional[Record]:
+    async def get_record_by_conversation_index(
+        self,
+        connector_name: Connectors,
+        conversation_index: str,
+        thread_id: str,
+        org_id: str,
+        user_id: str,
+    ) -> Optional[Record]:
         pass
 
     @abstractmethod
-    async def remove_user_access_to_record(self, connector_name: Connectors, external_id: str, user_id: str) -> None:
+    async def remove_user_access_to_record(
+        self, connector_name: Connectors, external_id: str, user_id: str
+    ) -> None:
         pass
 
     @abstractmethod
-    async def delete_record_group_by_external_id(self, connector_name: Connectors, external_id: str) -> None:
+    async def delete_record_group_by_external_id(
+        self, connector_name: Connectors, external_id: str
+    ) -> None:
         pass
 
     @abstractmethod
@@ -110,15 +123,21 @@ class BaseDataStore(ABC):
         pass
 
     @abstractmethod
-    async def batch_upsert_record_groups(self, record_groups: List[RecordGroup]) -> None:
+    async def batch_upsert_record_groups(
+        self, record_groups: List[RecordGroup]
+    ) -> None:
         pass
 
     @abstractmethod
-    async def batch_upsert_record_permissions(self, record_id: str, permissions: List[Permission]) -> None:
+    async def batch_upsert_record_permissions(
+        self, record_id: str, permissions: List[Permission]
+    ) -> None:
         pass
 
     @abstractmethod
-    async def batch_upsert_record_group_permissions(self, record_group_id: str, permissions: List[Permission]) -> None:
+    async def batch_upsert_record_group_permissions(
+        self, record_group_id: str, permissions: List[Permission]
+    ) -> None:
         pass
 
     @abstractmethod
@@ -142,19 +161,27 @@ class BaseDataStore(ABC):
         pass
 
     @abstractmethod
-    async def batch_upsert_anyone_with_link(self, anyone_with_link: List[AnyoneWithLink]) -> None:
+    async def batch_upsert_anyone_with_link(
+        self, anyone_with_link: List[AnyoneWithLink]
+    ) -> None:
         pass
 
     @abstractmethod
-    async def batch_upsert_anyone_same_org(self, anyone_same_org: List[AnyoneSameOrg]) -> None:
+    async def batch_upsert_anyone_same_org(
+        self, anyone_same_org: List[AnyoneSameOrg]
+    ) -> None:
         pass
 
     @abstractmethod
-    async def create_record_relation(self, from_record_id: str, to_record_id: str, relation_type: str) -> None:
+    async def create_record_relation(
+        self, from_record_id: str, to_record_id: str, relation_type: str
+    ) -> None:
         pass
 
     @abstractmethod
-    async def create_record_group_relation(self, record_id: str, record_group_id: str) -> None:
+    async def create_record_group_relation(
+        self, record_id: str, record_group_id: str
+    ) -> None:
         pass
 
     @abstractmethod
@@ -186,4 +213,3 @@ class TransactionStore(BaseDataStore):
     async def rollback(self) -> None:
         """Rollback the transaction"""
         pass
-
