@@ -2077,9 +2077,9 @@ class BookStackDataSource:
         if migrate_ownership_id is not None:
             body["migrate_ownership_id"] = migrate_ownership_id
 
-        url = self.base_url + "/api/users/{id}".format(id=id)
+        url = f"{self.base_url}/api/users/{id}"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="DELETE",
