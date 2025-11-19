@@ -187,11 +187,17 @@ class ConnectorConfigBuilder:
 
     def with_webhook_config(self, supported: bool = True, events: Optional[List[str]] = None) -> 'ConnectorConfigBuilder':
         """Configure webhook support"""
-        self.config["sync"]["webhookConfig"]["supported"] = supported
+        sync = self.config["sync"]
+        webhookConfig = sync["webhookConfig"]
+
+        webhookConfig["supported"] = supported
         if events:
-            self.config["sync"]["webhookConfig"]["events"] = events
-        if supported and "WEBHOOK" not in self.config["sync"]["supportedStrategies"]:
-            self.config["sync"]["supportedStrategies"].append("WEBHOOK")
+            webhookConfig["events"] = events
+        # Store local reference to avoid repeated dict lookups
+        supportedStrategies = sync["supportedStrategies"]
+
+        if supported and "WEBHOOK" not in supportedStrategies:
+            supportedStrategies.append("WEBHOOK")
         return self
 
     def with_scheduled_config(self, supported: bool = True, interval_minutes: int = 60) -> 'ConnectorConfigBuilder':
