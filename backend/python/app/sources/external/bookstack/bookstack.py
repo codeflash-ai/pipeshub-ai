@@ -2294,17 +2294,17 @@ class BookStackDataSource:
         Returns:
             BookStackResponse: Response object with success status and data/error
         """
-        params: Dict[str, Union[str, int]] = {}
+        url = f"{self.base_url}/api/roles/{id}"
 
-        url = self.base_url + "/api/roles/{id}".format(id=id)
+        # Directly use self.http.headers (assume not mutated in HTTPRequest)
+        headers = self.http.headers
 
-        headers = dict(self.http.headers)
 
         request = HTTPRequest(
             method="DELETE",
             url=url,
             headers=headers,
-            query_params=params,
+            query_params={},  # Inline; avoids extra assignment
             body=None
         )
 
