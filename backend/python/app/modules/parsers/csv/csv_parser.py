@@ -125,31 +125,28 @@ class CSVParser:
         # Get headers from the first row
         headers = list(data[0].keys())
 
-        # Start building the markdown table
-        markdown_lines = []
-
-        # Add header row
-        header_row = "| " + " | ".join(str(header) for header in headers) + " |"
-        markdown_lines.append(header_row)
-
         # Add separator row
         separator_row = "|" + "|".join(" --- " for _ in headers) + "|"
-        markdown_lines.append(separator_row)
+
+        # Prepare all markdown rows in one pass using list comprehensions
+        markdown_lines = [
+            "| " + " | ".join(str(header) for header in headers) + " |",
+            separator_row,
+        ]
+
+        # Preallocate for speed
+        append = markdown_lines.append
+        headers_range = range(len(headers))
+
 
         # Add data rows
         for row in data:
-            # Handle None values and convert to string, escape pipe characters
-            formatted_values = []
-            for header in headers:
-                value = row.get(header, "")
-                if value is None:
-                    value = ""
-                # Escape pipe characters and convert to string
-                value_str = str(value).replace("|", "\\|")
-                formatted_values.append(value_str)
+            formatted_values = [
+                str(row.get(header, "") if row.get(header, "") is not None else "").replace("|", "\\|")
+                for header in headers
+            ]
+            append("| " + " | ".join(formatted_values) + " |")
 
-            data_row = "| " + " | ".join(formatted_values) + " |"
-            markdown_lines.append(data_row)
 
         return "\n".join(markdown_lines)
 
@@ -230,14 +227,13 @@ class CSVParser:
         try:
             headers = list(rows[0].keys())
             sample_data = [
-                {
-                    key: (value.isoformat() if isinstance(value, datetime) else value)
-                    for key, value in row.items()
-                }
+                {key: (value.isoformat() if isinstance(value, datetime) else value)
+                 for key, value in row.items()}
                 for row in rows[:3]
             ]
             messages = self.table_summary_prompt.format_messages(
-                sample_data=json.dumps(sample_data, indent=2),headers=headers
+                sample_data=json.dumps(sample_data, separators=(',', ':'), ensure_ascii=False),
+                headers=headers
             )
             response = await self._call_llm(llm, messages)
             if '</think>' in response.content:
@@ -252,33 +248,42 @@ class CSVParser:
         """Convert multiple rows into natural language text in batches."""
         processed_texts = []
 
-        for i in range(0, len(rows), batch_size):
+        # Precompute sheet_summary and table_summary
+        sheet_summary = " "
+        table_summary = " "
+
+        # Optimize inner row conversion and batch slicing for performance
+        length = len(rows)
+        for i in range(0, length, batch_size):
             batch = rows[i : i + batch_size]
             # Prepare rows data
             rows_data = [
-                {
-                    key: (value.isoformat() if isinstance(value, datetime) else value)
-                    for key, value in row.items()
-                }
+                {key: (value.isoformat() if isinstance(value, datetime) else value)
+                 for key, value in row.items()}
                 for row in batch
             ]
 
             # Get natural language text from LLM with retry
+
+            # Use compact JSON for rows data
+            json_rows_data = json.dumps(rows_data, separators=(',', ':'), ensure_ascii=False)
+
             messages = self.row_text_prompt.format_messages(
-                sheet_summary=" ",
-                table_summary=" ",
-                rows_data=json.dumps(rows_data, indent=2),
+                sheet_summary=sheet_summary,
+                table_summary=table_summary,
+                rows_data=json_rows_data,
             )
 
             response = await self._call_llm(llm, messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            content = response.content
+            if '</think>' in content:
+                content = content.split('</think>')[-1]
+
+            # Try extract JSON array fast
             # Try to extract JSON array from response
             try:
-                processed_texts.extend(json.loads(response.content))
+                processed_texts.extend(json.loads(content))
             except json.JSONDecodeError:
-                # If that fails, try to find and parse a JSON array in the response
-                content = response.content
                 start = content.find("[")
                 end = content.rfind("]")
                 if start != -1 and end != -1:
@@ -301,13 +306,10 @@ class CSVParser:
         # Determine optimal batch size based on file size
         batch_size = 50
 
+        # Prepare batches in advance for scheduling
+        batches = [(i, csv_result[i:i+batch_size]) for i in range(0, len(csv_result), batch_size)]
 
-
-        # Create batches
-        batches = []
-        for i in range(0, len(csv_result), batch_size):
-            batch = csv_result[i : i + batch_size]
-            batches.append((i, batch))  # Store start index and batch data
+        # Process batches with controlled concurrency to avoid overwhelming the system
 
         # Process batches with controlled concurrency to avoid overwhelming the system
 
@@ -317,25 +319,23 @@ class CSVParser:
         for i in range(0, len(batches), max_concurrent_batches):
             current_batches = batches[i:i + max_concurrent_batches]
 
-            # Process current batch group
-            batch_tasks = []
-            for start_idx, batch in current_batches:
-                task = self.get_rows_text(llm, batch)
-                batch_tasks.append((start_idx, batch, task))
+            batch_tasks = [
+                self.get_rows_text(llm, batch)
+                for _, batch in current_batches
+            ]
 
             # Wait for current batch group to complete
-            task_results = await asyncio.gather(*[task for _, _, task in batch_tasks])
+            task_results = await asyncio.gather(*batch_tasks)
 
             # Combine results with their metadata
-            for j, (start_idx, batch, _) in enumerate(batch_tasks):
+            for j, (start_idx, batch) in enumerate(current_batches):
                 row_texts = task_results[j]
                 batch_results.append((start_idx, batch, row_texts))
 
         # Process results and create blocks
         for start_idx, batch, row_texts in batch_results:
-            for idx, (row, row_text) in enumerate(
-                    zip(batch, row_texts), start=start_idx
-                ):
+            for idx, (row, row_text) in enumerate(zip(batch, row_texts), start=start_idx):
+                # Efficient dict construction, avoid unnecessary variable creation
                 # row_entry = {"number": idx, "content": row, "type": "row"}
                 blocks.append(
                     Block(
@@ -344,12 +344,12 @@ class CSVParser:
                         format=DataFormat.JSON,
                         data={
                             "row_natural_language_text": row_text,
-                            "row_number": idx+1,
-                            "row":json.dumps(row)
+                            "row_number": idx + 1,
+                            "row": json.dumps(row, separators=(',', ':'), ensure_ascii=False)
                         },
                         parent_index=0,
                     )
-                    )
+                )
                 children.append(BlockContainerIndex(block_index=idx))
 
         csv_markdown = self.to_markdown(csv_result)
