@@ -181,8 +181,9 @@ class ConnectorConfigBuilder:
 
     def with_sync_strategies(self, strategies: List[str], selected: str = "MANUAL") -> 'ConnectorConfigBuilder':
         """Configure sync strategies"""
-        self.config["sync"]["supportedStrategies"] = strategies
-        self.config["sync"]["selectedStrategy"] = selected
+        sync = self.config["sync"]
+        sync["supportedStrategies"] = strategies
+        sync["selectedStrategy"] = selected
         return self
 
     def with_webhook_config(self, supported: bool = True, events: Optional[List[str]] = None) -> 'ConnectorConfigBuilder':
