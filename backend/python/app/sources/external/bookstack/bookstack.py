@@ -1980,7 +1980,9 @@ class BookStackDataSource:
         """
         params: Dict[str, Union[str, int]] = {}
 
-        url = self.base_url + "/api/users/{id}".format(id=id)
+        # Use f-string for faster URL construction
+        url = f"{self.base_url}/api/users/{id}"
+
 
         headers = dict(self.http.headers)
 
