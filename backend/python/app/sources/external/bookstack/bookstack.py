@@ -45,11 +45,17 @@ class BookStackDataSource:
             client: BookStackClient instance with authentication configured
         """
         self._client = client
-        self.http = client.get_client()
-        if self.http is None:
+        http = client.get_client()
+        if http is None:
             raise ValueError('HTTP client is not initialized')
+        # Only assign to self.http after check passes
+        self.http = http
         try:
-            self.base_url = self.http.get_base_url().rstrip('/')
+            # Avoid extra rstrip if already cleansed
+            base_url = http.get_base_url()
+            if base_url.endswith('/'):
+                base_url = base_url.rstrip('/')
+            self.base_url = base_url
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
 
