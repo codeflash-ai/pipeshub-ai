@@ -47,7 +47,6 @@ class CSVParser:
         self.encoding = encoding
         self.table_summary_prompt = table_summary_prompt
 
-
         # Configure retry parameters
         self.max_retries = 3
         self.min_wait = 1  # seconds
@@ -237,11 +236,11 @@ class CSVParser:
                 for row in rows[:3]
             ]
             messages = self.table_summary_prompt.format_messages(
-                sample_data=json.dumps(sample_data, indent=2),headers=headers
+                sample_data=json.dumps(sample_data, indent=2), headers=headers
             )
             response = await self._call_llm(llm, messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             return response.content
         except Exception:
             raise
@@ -267,12 +266,12 @@ class CSVParser:
             messages = self.row_text_prompt.format_messages(
                 sheet_summary=" ",
                 table_summary=" ",
-                rows_data=json.dumps(rows_data, indent=2),
+                rows_data=json.dumps(rows_data, separators=(",", ":")),
             )
 
             response = await self._call_llm(llm, messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             # Try to extract JSON array from response
             try:
                 processed_texts.extend(json.loads(response.content))
@@ -292,16 +291,23 @@ class CSVParser:
                     processed_texts.append(content)
 
         return processed_texts
-    #  recordName, recordId, version, source, orgId, csv_binary, virtual_record_id
-    async def get_blocks_from_csv_result(self, csv_result: List[Dict[str, Any]], recordId: str, orgId: str, recordName: str, version: str, origin: str, llm: BaseChatModel) -> BlocksContainer:
 
+    #  recordName, recordId, version, source, orgId, csv_binary, virtual_record_id
+    async def get_blocks_from_csv_result(
+        self,
+        csv_result: List[Dict[str, Any]],
+        recordId: str,
+        orgId: str,
+        recordName: str,
+        version: str,
+        origin: str,
+        llm: BaseChatModel,
+    ) -> BlocksContainer:
         blocks = []
         children = []
 
         # Determine optimal batch size based on file size
         batch_size = 50
-
-
 
         # Create batches
         batches = []
@@ -315,7 +321,7 @@ class CSVParser:
         batch_results = []
 
         for i in range(0, len(batches), max_concurrent_batches):
-            current_batches = batches[i:i + max_concurrent_batches]
+            current_batches = batches[i : i + max_concurrent_batches]
 
             # Process current batch group
             batch_tasks = []
@@ -334,8 +340,8 @@ class CSVParser:
         # Process results and create blocks
         for start_idx, batch, row_texts in batch_results:
             for idx, (row, row_text) in enumerate(
-                    zip(batch, row_texts), start=start_idx
-                ):
+                zip(batch, row_texts), start=start_idx
+            ):
                 # row_entry = {"number": idx, "content": row, "type": "row"}
                 blocks.append(
                     Block(
@@ -344,12 +350,12 @@ class CSVParser:
                         format=DataFormat.JSON,
                         data={
                             "row_natural_language_text": row_text,
-                            "row_number": idx+1,
-                            "row":json.dumps(row)
+                            "row_number": idx + 1,
+                            "row": json.dumps(row),
                         },
                         parent_index=0,
                     )
-                    )
+                )
                 children.append(BlockContainerIndex(block_index=idx))
 
         csv_markdown = self.to_markdown(csv_result)
@@ -371,6 +377,7 @@ class CSVParser:
         )
         blocks_container = BlocksContainer(blocks=blocks, block_groups=[blockGroup])
         return blocks_container
+
 
 def main() -> None:
     """Test the CSV parser functionality"""
@@ -414,13 +421,9 @@ def main() -> None:
         first_row = read_data[0]
         print(f"name (str): {first_row['name']} ({type(first_row['name'])})")
         print(f"age (int): {first_row['age']} ({type(first_row['age'])})")
+        print(f"""active (bool): {first_row["active"]} ({type(first_row["active"])})""")
         print(
-            f"""active (bool): {first_row['active']} ({
-              type(first_row['active'])})"""
-        )
-        print(
-            f"""salary (float): {
-              first_row['salary']} ({type(first_row['salary'])})"""
+            f"""salary (float): {first_row["salary"]} ({type(first_row["salary"])})"""
         )
 
     finally:
