@@ -407,6 +407,8 @@ class DoclingDocToBlocksConverter():
 
 
     async def _call_llm(self, messages) -> Union[str, dict, list]:
+        if self.llm is None:
+            self.llm, _ = await get_llm(self.config)
         return await self.llm.ainvoke(messages)
 
     async def get_rows_text(
@@ -414,56 +416,59 @@ class DoclingDocToBlocksConverter():
     ) -> Tuple[List[str], List[List[dict]]]:
         """Convert multiple rows into natural language text using context from summaries in a single prompt"""
         table = table_data.get("grid")
-        if table:
-            try:
-                # Prepare rows data
-                if column_headers:
-                    table_rows = table[1:]
-                else:
-                    table_rows = table
-
-                rows_data = [
-                    {
-                        column_headers[i] if column_headers and i<len(column_headers) else f"Column_{i+1}": (
-                            cell.get("text", "")
-                        )
-                        for i, cell in enumerate(row)
-                    }
-                    for row in table_rows
-                ]
-
-                # Get natural language text from LLM with retry
-                messages = row_text_prompt.format_messages(
-                    table_summary=table_summary, rows_data=json.dumps(rows_data, indent=2)
-                )
-
-                response = await self._call_llm(messages)
-                if '</think>' in response.content:
-                    response.content = response.content.split('</think>')[-1]
-                # Try to extract JSON array from response
-                try:
-                    # First try direct JSON parsing
-                    return json.loads(response.content),table_rows
-                except json.JSONDecodeError:
-                    # If that fails, try to find and parse a JSON array in the response
-                    content = response.content
-                    # Look for array between [ and ]
-                    start = content.find("[")
-                    end = content.rfind("]")
-                    if start != -1 and end != -1:
-                        try:
-                            return json.loads(content[start : end + 1]),table_rows
-                        except json.JSONDecodeError:
-                            # If still can't parse, return response as single-item array
-                            return [content],table_rows
-                    else:
-                        # If no array found, return response as single-item array
-                        return [content],table_rows
-            except Exception:
-                raise
-        else:
+        if not table:
             self.logger.error(f"❌ No table found in the table data: {table_data}")
             return [], []
+
+        try:
+            # Prepare rows data
+            if column_headers:
+                table_rows = table[1:]
+            else:
+                table_rows = table
+
+            # Use local variable to avoid repeated lookups in the loop
+            ch_len = len(column_headers) if column_headers else 0
+            add_column_headers = bool(column_headers)
+            # Small optimization: eliminate repeated lookups and per-cell conditionals
+            rows_data = []
+            for row in table_rows:
+                row_dict = {}
+                for i, cell in enumerate(row):
+                    key = column_headers[i] if add_column_headers and i < ch_len else f"Column_{i+1}"
+                    row_dict[key] = cell.get("text", "")
+                rows_data.append(row_dict)
+
+            # Use compact JSON, no unnecessary indentation
+            rows_data_json = json.dumps(rows_data, separators=(",", ":"))
+            # Prepare messages
+            messages = row_text_prompt.format_messages(
+                table_summary=table_summary, rows_data=rows_data_json
+            )
+
+            response = await self._call_llm(messages)
+            content = response.content
+
+            if '</think>' in content:
+                content = content.split('</think>')[-1]
+
+            # Try to extract JSON array from response
+            try:
+                return json.loads(content), table_rows
+            except json.JSONDecodeError:
+                # Find JSON array boundaries only once
+                start = content.find("[")
+                end = content.rfind("]")
+                if start != -1 and end != -1:
+                    json_str = content[start : end + 1]
+                    try:
+                        return json.loads(json_str), table_rows
+                    except json.JSONDecodeError:
+                        return [content], table_rows
+                else:
+                    return [content], table_rows
+        except Exception:
+            raise
 
     async def get_table_summary_n_headers(self, table_markdown: str) -> TableSummary:
         """
@@ -561,7 +566,7 @@ class DoclingDocToBlocksConverter():
 
     async def _call_llm(self, messages) -> Union[str, dict, list]:
         if self.llm is None:
-            self.llm,_ = await get_llm(self.config)
+            self.llm, _ = await get_llm(self.config)
         return await self.llm.ainvoke(messages)
 
 
