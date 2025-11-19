@@ -1654,7 +1654,7 @@ class BookStackDataSource:
 
         url = self.base_url + "/api/shelves"
 
-        headers = dict(self.http.headers)
+        headers = self.http.headers
 
         request = HTTPRequest(
             method="GET",
