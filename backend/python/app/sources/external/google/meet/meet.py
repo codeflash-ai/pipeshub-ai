@@ -75,17 +75,21 @@ class GoogleMeetDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if name is not None:
-            kwargs['name'] = name
-        if updateMask is not None:
-            kwargs['updateMask'] = updateMask
 
         # Handle request body if provided
         if body is not None:
-            request = self.client.spaces().patch(**kwargs, body=body) # type: ignore
+            # Most common case: body is provided
+            if updateMask is not None:
+                request = self.client.spaces().patch(name=name, updateMask=updateMask, body=body)  # type: ignore
+            else:
+                request = self.client.spaces().patch(name=name, body=body)  # type: ignore
         else:
-            request = self.client.spaces().patch(**kwargs) # type: ignore
+            # Uncommon path: no body
+            if updateMask is not None:
+                request = self.client.spaces().patch(name=name, updateMask=updateMask)  # type: ignore
+            else:
+                request = self.client.spaces().patch(name=name)  # type: ignore
+
         return request.execute()
 
     async def spaces_end_active_conference(
