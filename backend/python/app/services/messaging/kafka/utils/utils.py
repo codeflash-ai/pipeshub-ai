@@ -307,8 +307,8 @@ class KafkaUtils:
                     logger.error("Missing event_type in AI config message")
                     return False
 
-                # Only process AI configuration events
-                if event_type not in ["llmConfigured", "embeddingModelConfigured"]:
+                # Use a set for O(1) membership testing if event types grow
+                if event_type not in {"llmConfigured", "embeddingModelConfigured"}:
                     logger.debug(f"Skipping non-AI config event: {event_type}")
                     return True  # Return True to acknowledge the message without processing
 
