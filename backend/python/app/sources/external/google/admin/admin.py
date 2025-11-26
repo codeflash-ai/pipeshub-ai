@@ -441,16 +441,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if customerKey is not None:
-            kwargs['customerKey'] = customerKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.customers().update(**kwargs, body=body) # type: ignore
+            request = self.client.customers().update(customerKey=customerKey)  # type: ignore
         else:
-            request = self.client.customers().update(**kwargs) # type: ignore
+            request = self.client.customers().update()  # type: ignore
         return request.execute()
 
     async def customers_patch(
