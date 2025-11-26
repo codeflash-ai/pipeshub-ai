@@ -20,6 +20,7 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        self._groups = self.client.groups()
 
     async def chromeosdevices_action(
         self,
@@ -1253,9 +1254,9 @@ class GoogleAdminDataSource:
         # Handle request body if needed
         if 'body' in kwargs:
             body = kwargs.pop('body')
-            request = self.client.groups().patch(**kwargs, body=body) # type: ignore
+            request = self._groups.patch(**kwargs, body=body) # type: ignore
         else:
-            request = self.client.groups().patch(**kwargs) # type: ignore
+            request = self._groups.patch(**kwargs) # type: ignore
         return request.execute()
 
     async def groups_aliases_delete(
