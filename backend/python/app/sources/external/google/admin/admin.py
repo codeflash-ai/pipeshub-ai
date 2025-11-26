@@ -3457,16 +3457,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.users_photos().patch(**kwargs, body=body) # type: ignore
+            request = self.client.users_photos().patch(userKey=userKey)  # type: ignore
         else:
-            request = self.client.users_photos().patch(**kwargs) # type: ignore
+            request = self.client.users_photos().patch()  # type: ignore
         return request.execute()
 
     async def verification_codes_generate(
