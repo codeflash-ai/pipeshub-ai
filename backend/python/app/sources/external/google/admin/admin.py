@@ -2546,13 +2546,7 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customer is not None:
-            kwargs['customer'] = customer
-        if roleId is not None:
-            kwargs['roleId'] = roleId
-
-        request = self.client.roles().get(**kwargs) # type: ignore
+        request = self.client.roles().get(customer=customer, roleId=roleId) # type: ignore
         return request.execute()
 
     async def roles_insert(
