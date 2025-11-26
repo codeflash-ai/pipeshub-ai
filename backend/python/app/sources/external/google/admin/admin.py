@@ -1274,13 +1274,11 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if groupKey is not None:
-            kwargs['groupKey'] = groupKey
-        if alias is not None:
-            kwargs['alias'] = alias
-
-        request = self.client.groups_aliases().delete(**kwargs) # type: ignore
+        # Direct argument passing avoids unnecessary dict creation and branching.
+        request = self.client.groups_aliases().delete(
+            groupKey=groupKey,
+            alias=alias
+        ) # type: ignore
         return request.execute()
 
     async def groups_aliases_insert(
