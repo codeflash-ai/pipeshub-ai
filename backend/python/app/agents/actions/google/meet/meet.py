@@ -11,6 +11,16 @@ from app.sources.client.google.google import GoogleClient
 from app.sources.client.http.http_response import HTTPResponse
 from app.sources.external.google.meet.meet import GoogleMeetDataSource
 
+_SINGLE_QUOTE_VALUE_RE = re.compile(r"'([^']*)'")
+
+_START_TIME_RE = re.compile(r"\bstartTime\b")
+
+_END_TIME_RE = re.compile(r"\bendTime\b")
+
+_MEETING_CODE_RE = re.compile(r"\bmeetingCode\b")
+
+_SPACE_MEETING_CODE_RE = re.compile(r"space\.meetingCode")
+
 logger = logging.getLogger(__name__)
 
 class GoogleMeet:
@@ -52,18 +62,13 @@ class GoogleMeet:
 
         # Normalize quotes: replace smart quotes and single quotes with double quotes around values
         normalized = normalized.replace("“", '"').replace("”", '"').replace("’", "'")
-        normalized = re.sub(r"'([^']*)'", r'"\1"', normalized)
+        normalized = _SINGLE_QUOTE_VALUE_RE.sub(r'"\1"', normalized)
 
-        # Field mappings (use word-boundaries where possible)
-        replacements = [
-            (r"\bstartTime\b", "start_time"),
-            (r"\bendTime\b", "end_time"),
-            (r"\bmeetingCode\b", "meeting_code"),
-            (r"space\.meetingCode", "space.meeting_code"),
-        ]
-
-        for pattern, repl in replacements:
-            normalized = re.sub(pattern, repl, normalized)
+        # Field mappings (use precompiled regex for speed)
+        normalized = _SPACE_MEETING_CODE_RE.sub("space.meeting_code", normalized)
+        normalized = _START_TIME_RE.sub("start_time", normalized)
+        normalized = _END_TIME_RE.sub("end_time", normalized)
+        normalized = _MEETING_CODE_RE.sub("meeting_code", normalized)
 
         return normalized
 
