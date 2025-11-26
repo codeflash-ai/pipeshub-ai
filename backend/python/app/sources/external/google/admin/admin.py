@@ -3308,16 +3308,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.users_aliases().insert(**kwargs, body=body) # type: ignore
+            request = self.client.users_aliases().insert(userKey=userKey) # type: ignore
         else:
-            request = self.client.users_aliases().insert(**kwargs) # type: ignore
+            request = self.client.users_aliases().insert() # type: ignore
         return request.execute()
 
     async def users_aliases_list(
