@@ -962,16 +962,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if customer is not None:
-            kwargs['customer'] = customer
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.domainAliases().insert(**kwargs, body=body) # type: ignore
+            request = self.client.domainAliases().insert(customer=customer)  # type: ignore
         else:
-            request = self.client.domainAliases().insert(**kwargs) # type: ignore
+            request = self.client.domainAliases().insert()  # type: ignore
         return request.execute()
 
     async def domain_aliases_list(
