@@ -20,6 +20,7 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        self._verification_codes = client.verificationCodes()
 
     async def chromeosdevices_action(
         self,
@@ -3483,16 +3484,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.verificationCodes().generate(**kwargs, body=body) # type: ignore
+            request = self._verification_codes.generate(userKey=userKey) # type: ignore
         else:
-            request = self.client.verificationCodes().generate(**kwargs) # type: ignore
+            request = self._verification_codes.generate() # type: ignore
         return request.execute()
 
     async def verification_codes_invalidate(
