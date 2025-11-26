@@ -19,11 +19,14 @@ from app.services.docling.docling_service import (
 )
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
+_container_initialized = asyncio.Event()
+
 
 # Only for development/debugging
 def handle_sigterm(signum, frame) -> None:
     print(f"Received signal {signum}, {frame} shutting down gracefully")
     sys.exit(0)
+
 
 signal.signal(signal.SIGTERM, handle_sigterm)
 signal.signal(signal.SIGINT, handle_sigterm)
@@ -32,15 +35,27 @@ signal.signal(signal.SIGINT, handle_sigterm)
 container = DoclingAppContainer.init("docling_service")
 container_lock = asyncio.Lock()
 
+
 async def get_initialized_container() -> DoclingAppContainer:
     """Dependency provider for initialized container"""
-    if not hasattr(get_initialized_container, "initialized"):
-        async with container_lock:
-            if not hasattr(get_initialized_container, "initialized"):
+    if _container_initialized.is_set():
+        return container
+
+    async with container_lock:
+        if not _container_initialized.is_set():
+            try:
                 await initialize_container(container)
                 container.wire(modules=["app.services.docling.docling_service"])
-                get_initialized_container.initialized = True
+            except Exception:
+                # If initialization fails, event is not set so others can retry
+                raise
+            else:
+                _container_initialized.set()
+
+    # Wait until any in-progress initialization is complete (or re-checks if already set)
+    await _container_initialized.wait()
     return container
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -79,6 +94,7 @@ app = FastAPI(
 
 # Mount the Docling service routes
 app.mount("/", docling_app)
+
 
 @app.get("/health")
 async def health_check() -> JSONResponse:
@@ -140,11 +156,13 @@ async def health_check() -> JSONResponse:
             },
         )
 
+
 def run(host: str = "0.0.0.0", port: int = 8081, reload: bool = False) -> None:
     """Run the Docling service"""
     uvicorn.run(
         "app.docling_main:app", host=host, port=port, log_level="info", reload=reload
     )
+
 
 if __name__ == "__main__":
     run(reload=False)
