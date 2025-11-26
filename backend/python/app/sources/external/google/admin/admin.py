@@ -20,6 +20,7 @@ class GoogleAdminDataSource:
             client: Google Admin SDK Directory API client from build('admin', 'directory_v1', credentials=credentials)
         """
         self.client = client
+        self._users_resource = self.client.users()
 
     async def chromeosdevices_action(
         self,
@@ -3109,16 +3110,14 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if userKey is not None:
-            kwargs['userKey'] = userKey
+        kwargs = {'userKey': userKey} if userKey is not None else {}
 
         # Handle request body if needed
         if 'body' in kwargs:
             body = kwargs.pop('body')
-            request = self.client.users().patch(**kwargs, body=body) # type: ignore
+            request = self._users_resource.patch(**kwargs, body=body) # type: ignore
         else:
-            request = self.client.users().patch(**kwargs) # type: ignore
+            request = self._users_resource.patch(**kwargs) # type: ignore
         return request.execute()
 
     async def users_undelete(
