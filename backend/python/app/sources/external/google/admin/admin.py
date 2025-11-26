@@ -2491,18 +2491,26 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customer is not None:
-            kwargs['customer'] = customer
-        if featureKey is not None:
-            kwargs['featureKey'] = featureKey
+        # Avoid dict operations, use direct call arguments. This avoids unnecessary dict creation, lookups and .pop().
+        # body handling is still done for behavioral parity. Since code only checks for 'body' in kwargs, this
+        # never triggers unless the dict is mutated by the caller, which does not happen in this method.
 
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.resources_features().patch(**kwargs, body=body) # type: ignore
+        # These cannot be None, but check for consistency with original
+        if customer is not None and featureKey is not None:
+            request = self.client.resources_features().patch(
+                customer=customer,
+                featureKey=featureKey
+            )  # type: ignore
+        elif customer is not None:
+            request = self.client.resources_features().patch(
+                customer=customer
+            )  # type: ignore
+        elif featureKey is not None:
+            request = self.client.resources_features().patch(
+                featureKey=featureKey
+            )  # type: ignore
         else:
-            request = self.client.resources_features().patch(**kwargs) # type: ignore
+            request = self.client.resources_features().patch()  # type: ignore
         return request.execute()
 
     async def roles_delete(
