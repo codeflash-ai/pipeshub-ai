@@ -1089,11 +1089,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if customer is not None:
-            kwargs['customer'] = customer
-
-        request = self.client.domains().list(**kwargs) # type: ignore
+            request = self.client.domains().list(customer=customer)  # type: ignore
+        else:
+            request = self.client.domains().list()  # type: ignore
         return request.execute()
 
     async def groups_delete(
