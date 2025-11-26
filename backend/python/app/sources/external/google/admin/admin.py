@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache customers_chrome_printers() since it's identical for repeated calls
+        self._chrome_printers = self.client.customers_chrome_printers()
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -567,11 +570,11 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if name is not None:
-            kwargs['name'] = name
-
-        request = self.client.customers_chrome_printers().get(**kwargs) # type: ignore
+            # Avoid unnecessary kwargs dict creation
+            request = self._chrome_printers.get(name=name)  # type: ignore
+        else:
+            request = self._chrome_printers.get()  # type: ignore
         return request.execute()
 
     async def customers_chrome_printers_create(
