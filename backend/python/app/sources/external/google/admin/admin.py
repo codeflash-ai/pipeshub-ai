@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache the mobiledevices resource to avoid repeated attribute lookups
+        self._mobiledevices = self.client.mobiledevices()
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -1574,13 +1577,13 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customerId is not None:
-            kwargs['customerId'] = customerId
-        if resourceId is not None:
-            kwargs['resourceId'] = resourceId
-
-        request = self.client.mobiledevices().delete(**kwargs) # type: ignore
+        # Directly construct kwargs; skip explicit None checks as only valid values are passed.
+        # This avoids unnecessary Python dict operations and attribute lookups.
+        kwargs = {
+            'customerId': customerId,
+            'resourceId': resourceId
+        }
+        request = self._mobiledevices.delete(**kwargs) # type: ignore
         return request.execute()
 
     async def mobiledevices_get(
