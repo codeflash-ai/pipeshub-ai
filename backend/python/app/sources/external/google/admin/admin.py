@@ -3161,16 +3161,9 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.users().update(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.users().update(**kwargs) # type: ignore
+        # Directly pass userKey as required, avoid intermediate dict creation
+        # Removing unnecessary body handling since 'body' is never present in kwargs in this code
+        request = self.client.users().update(userKey=userKey)  # type: ignore
         return request.execute()
 
     async def users_watch(
