@@ -1721,16 +1721,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if customerId is not None:
-            kwargs['customerId'] = customerId
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.orgunits().insert(**kwargs, body=body) # type: ignore
+            request = self.client.orgunits().insert(customerId=customerId) # type: ignore
         else:
-            request = self.client.orgunits().insert(**kwargs) # type: ignore
+            request = self.client.orgunits().insert() # type: ignore
         return request.execute()
 
     async def orgunits_list(
