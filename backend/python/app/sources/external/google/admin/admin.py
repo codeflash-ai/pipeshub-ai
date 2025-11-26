@@ -332,13 +332,8 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if userKey is not None:
-            kwargs['userKey'] = userKey
-        if codeId is not None:
-            kwargs['codeId'] = codeId
-
-        request = self.client.asps().delete(**kwargs) # type: ignore
+        # skip constructing dict and conditionals, pass directly to client.delete
+        request = self.client.asps().delete(userKey=userKey, codeId=codeId) # type: ignore
         return request.execute()
 
     async def asps_get(
