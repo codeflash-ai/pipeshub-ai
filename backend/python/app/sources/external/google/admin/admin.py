@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache the bound method to avoid repeated attribute lookups
+        self._users_photos_get = self.client.users_photos().get
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -3410,11 +3413,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        request = self.client.users_photos().get(**kwargs) # type: ignore
+            request = self._users_photos_get(userKey=userKey)  # type: ignore
+        else:
+            request = self._users_photos_get()  # type: ignore
         return request.execute()
 
     async def users_photos_update(
