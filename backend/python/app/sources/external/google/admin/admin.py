@@ -1131,11 +1131,8 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if groupKey is not None:
-            kwargs['groupKey'] = groupKey
-
-        request = self.client.groups().get(**kwargs) # type: ignore
+        # Inline kwargs assignment for groupKey, reducing unnecessary dict construction overhead
+        request = self.client.groups().get(groupKey=groupKey)  # type: ignore
         return request.execute()
 
     async def groups_insert(self) -> Dict[str, Any]:
