@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache bound customers().get for improved performance on repeated calls
+        self._customers_get_method = self.client.customers().get
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -420,11 +423,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if customerKey is not None:
-            kwargs['customerKey'] = customerKey
-
-        request = self.client.customers().get(**kwargs) # type: ignore
+            request = self._customers_get_method(customerKey=customerKey)  # type: ignore
+        else:
+            request = self._customers_get_method()  # type: ignore
         return request.execute()
 
     async def customers_update(
