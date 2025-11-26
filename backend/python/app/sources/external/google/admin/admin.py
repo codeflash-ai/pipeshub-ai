@@ -674,11 +674,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if name is not None:
-            kwargs['name'] = name
-
-        request = self.client.customers_chrome_printers().delete(**kwargs) # type: ignore
+            request = self.client.customers_chrome_printers().delete(name=name)  # type: ignore
+        else:
+            request = self.client.customers_chrome_printers().delete()  # type: ignore
         return request.execute()
 
     async def customers_chrome_printers_batch_delete_printers(
