@@ -21,6 +21,8 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        self._members = client.members()  # Cache .members() since it is used on each call
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -1396,13 +1398,15 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if groupKey is not None:
-            kwargs['groupKey'] = groupKey
-        if memberKey is not None:
-            kwargs['memberKey'] = memberKey
-
-        request = self.client.members().hasMember(**kwargs) # type: ignore
+        # Avoid redundant checks and dictionary allocations:
+        if groupKey is None and memberKey is None:
+            request = self._members.hasMember()  # type: ignore
+        elif groupKey is None:
+            request = self._members.hasMember(memberKey=memberKey)  # type: ignore
+        elif memberKey is None:
+            request = self._members.hasMember(groupKey=groupKey)  # type: ignore
+        else:
+            request = self._members.hasMember(groupKey=groupKey, memberKey=memberKey)  # type: ignore
         return request.execute()
 
     async def members_insert(
