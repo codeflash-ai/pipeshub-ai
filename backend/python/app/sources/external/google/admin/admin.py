@@ -1514,18 +1514,7 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if groupKey is not None:
-            kwargs['groupKey'] = groupKey
-        if memberKey is not None:
-            kwargs['memberKey'] = memberKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.members().patch(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.members().patch(**kwargs) # type: ignore
+        request = self.client.members().patch(groupKey=groupKey, memberKey=memberKey) # type: ignore
         return request.execute()
 
     async def mobiledevices_action(
