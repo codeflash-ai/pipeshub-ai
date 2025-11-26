@@ -614,16 +614,11 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if parent is not None:
-            kwargs['parent'] = parent
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.customers_chrome_printers().batchCreatePrinters(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.customers_chrome_printers().batchCreatePrinters(**kwargs) # type: ignore
+        # Optimize kwarg handling by avoiding needless dict and lookups
+        # parent is required, so we always include it
+        printer_client = self.client.customers_chrome_printers()  # cache attr lookup
+        
+        request = printer_client.batchCreatePrinters(parent=parent)  # type: ignore
         return request.execute()
 
     async def customers_chrome_printers_patch(
