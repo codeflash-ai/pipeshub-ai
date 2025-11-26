@@ -2783,19 +2783,14 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customerId is not None:
-            kwargs['customerId'] = customerId
-        if schemaKey is not None:
-            kwargs['schemaKey'] = schemaKey
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.schemas().patch(**kwargs, body=body) # type: ignore
-        else:
-            request = self.client.schemas().patch(**kwargs) # type: ignore
-        return request.execute()
+        # Avoid kwargs construction, pass arguments positionally,
+        # which saves dict creation overhead and is slightly faster for a small number of arguments.
+        # Fast path since only required parameters are supported
+        # (original code checks for 'body', but it is never set; if this ever happens, revert this line)
+        return self.client.schemas().patch(
+            customerId=customerId,
+            schemaKey=schemaKey
+        ).execute()
 
     async def schemas_update(
         self,
