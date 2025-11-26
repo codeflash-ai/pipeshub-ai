@@ -2868,13 +2868,7 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if userKey is not None:
-            kwargs['userKey'] = userKey
-        if clientId is not None:
-            kwargs['clientId'] = clientId
-
-        request = self.client.tokens().get(**kwargs) # type: ignore
+        request = self.client.tokens().get(userKey=userKey, clientId=clientId) # type: ignore
         return request.execute()
 
     async def tokens_list(
