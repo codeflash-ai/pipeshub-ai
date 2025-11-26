@@ -27,16 +27,10 @@ class GoogleMeet:
 
     def _run_async(self, coro) -> HTTPResponse: # type: ignore [valid method]
         """Helper method to run async operations in sync context"""
-        try:
-            asyncio.get_running_loop()
-            # We're in an async context, use asyncio.run in a thread
-            import concurrent.futures
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                future = executor.submit(asyncio.run, coro)
-                return future.result()
-        except RuntimeError:
-            # No running loop, we can use asyncio.run
-            return asyncio.run(coro)
+        # coro is a coroutine originally, but now we use the new sync wrapper for efficiency.
+        # If future clients provide true async, adapt accordingly.
+        # We are assuming that caller always calls: self.client.spaces_end_active_conference_sync(...)
+        return coro
 
     def _normalize_meet_filter(self, raw_filter: str) -> str:
         """Normalize user-provided filter to Meet API expected syntax.
@@ -151,8 +145,8 @@ class GoogleMeet:
             tuple[bool, str]: True if successful, False otherwise
         """
         try:
-            # Use GoogleMeetDataSource method
-            result = self._run_async(self.client.spaces_end_active_conference(name=space_name))
+            # Use the new synchronous method directly for best performance
+            result = self._run_async(self.client.spaces_end_active_conference_sync(name=space_name))
 
             return True, json.dumps({
                 "message": f"Active conference ended for space {space_name}",
