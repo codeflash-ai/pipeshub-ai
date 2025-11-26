@@ -2201,16 +2201,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if customer is not None:
-            kwargs['customer'] = customer
-
-        # Handle request body if needed
-        if 'body' in kwargs:
-            body = kwargs.pop('body')
-            request = self.client.resources_calendars().insert(**kwargs, body=body) # type: ignore
+            request = self.client.resources_calendars().insert(customer=customer) # type: ignore
         else:
-            request = self.client.resources_calendars().insert(**kwargs) # type: ignore
+            request = self.client.resources_calendars().insert() # type: ignore
         return request.execute()
 
     async def resources_calendars_list(
