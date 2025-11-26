@@ -2843,13 +2843,14 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if userKey is not None:
-            kwargs['userKey'] = userKey
-        if clientId is not None:
-            kwargs['clientId'] = clientId
-
-        request = self.client.tokens().delete(**kwargs) # type: ignore
+        if userKey is not None and clientId is not None:
+            request = self.client.tokens().delete(userKey=userKey, clientId=clientId)  # type: ignore
+        elif userKey is not None:
+            request = self.client.tokens().delete(userKey=userKey)  # type: ignore
+        elif clientId is not None:
+            request = self.client.tokens().delete(clientId=clientId)  # type: ignore
+        else:
+            request = self.client.tokens().delete()  # type: ignore
         return request.execute()
 
     async def tokens_get(
