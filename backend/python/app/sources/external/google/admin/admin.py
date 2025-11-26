@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache orgunits() to avoid attribute lookup per call.
+        self._orgunits = self.client.orgunits()
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -1698,13 +1701,18 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customerId is not None:
-            kwargs['customerId'] = customerId
-        if orgUnitPath is not None:
-            kwargs['orgUnitPath'] = orgUnitPath
+        # Avoid unnecessary dict creation if both are given (common case)
+        if customerId is not None and orgUnitPath is not None:
+            kwargs = {'customerId': customerId, 'orgUnitPath': orgUnitPath}
+        else:
+            kwargs = {}
+            if customerId is not None:
+                kwargs['customerId'] = customerId
+            if orgUnitPath is not None:
+                kwargs['orgUnitPath'] = orgUnitPath
 
-        request = self.client.orgunits().get(**kwargs) # type: ignore
+        # Use cached self._orgunits rather than repeated method lookups
+        request = self._orgunits.get(**kwargs)  # type: ignore
         return request.execute()
 
     async def orgunits_insert(
