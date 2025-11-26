@@ -46,13 +46,17 @@ class ZendeskDataSource:
     def __init__(self, client: ZendeskClient) -> None:
         """Initialize with ZendeskClient."""
         self._client = client
-        self.http = client.get_client()
-        if self.http is None:
+        http = client.get_client()
+        if http is None:
             raise ValueError('HTTP client is not initialized')
+        # Avoids repeated attribute access
+        self.http = http
         try:
-            self.base_url = self.http.get_base_url().rstrip('/')
+            base_url = http.get_base_url()
         except AttributeError as exc:
             raise ValueError('HTTP client does not have get_base_url method') from exc
+
+        self.base_url = base_url.rstrip('/')
 
     def get_data_source(self) -> 'ZendeskDataSource':
         return self
