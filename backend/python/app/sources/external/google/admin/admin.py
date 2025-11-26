@@ -2760,11 +2760,7 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customerId is not None:
-            kwargs['customerId'] = customerId
-
-        request = self.client.schemas().list(**kwargs) # type: ignore
+        request = self.client.schemas().list(customerId=customerId) # type: ignore
         return request.execute()
 
     async def schemas_patch(
