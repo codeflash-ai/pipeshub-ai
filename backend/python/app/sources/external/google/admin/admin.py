@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache the orgunits().delete method for improved performance
+        self._delete_method = self.client.orgunits().delete
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -1673,13 +1676,19 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
-        if customerId is not None:
-            kwargs['customerId'] = customerId
-        if orgUnitPath is not None:
-            kwargs['orgUnitPath'] = orgUnitPath
+        # Direct construction for kwargs dict (micro-optimize vs. multiple "if" statements)
+        kwargs = {
+            'customerId': customerId,
+            'orgUnitPath': orgUnitPath
+        }
 
-        request = self.client.orgunits().delete(**kwargs) # type: ignore
+        # Remove keys with None values (maintains original behavior, but is more concise)
+        for k in list(kwargs):
+            if kwargs[k] is None:
+                del kwargs[k]
+
+        # Use cached method reference for better performance
+        request = self._delete_method(**kwargs) # type: ignore
         return request.execute()
 
     async def orgunits_get(
