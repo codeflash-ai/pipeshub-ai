@@ -21,6 +21,9 @@ class GoogleAdminDataSource:
         """
         self.client = client
 
+        # Cache the bound delete method for faster repeated calls
+        self._delete = self.client.resources_calendars().delete
+
     async def chromeosdevices_action(
         self,
         customerId: str,
@@ -2159,7 +2162,7 @@ class GoogleAdminDataSource:
         if calendarResourceId is not None:
             kwargs['calendarResourceId'] = calendarResourceId
 
-        request = self.client.resources_calendars().delete(**kwargs) # type: ignore
+        request = self._delete(**kwargs) # type: ignore
         return request.execute()
 
     async def resources_calendars_get(
