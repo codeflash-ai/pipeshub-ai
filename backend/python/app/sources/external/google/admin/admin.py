@@ -2891,11 +2891,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if userKey is not None:
-            kwargs['userKey'] = userKey
-
-        request = self.client.tokens().list(**kwargs) # type: ignore
+            request = self.client.tokens().list(userKey=userKey)  # type: ignore
+        else:
+            request = self.client.tokens().list()  # type: ignore
         return request.execute()
 
     async def two_step_verification_turn_off(
