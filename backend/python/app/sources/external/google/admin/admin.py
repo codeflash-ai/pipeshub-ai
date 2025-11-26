@@ -1110,11 +1110,10 @@ class GoogleAdminDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = {}
         if groupKey is not None:
-            kwargs['groupKey'] = groupKey
-
-        request = self.client.groups().delete(**kwargs) # type: ignore
+            request = self.client.groups().delete(groupKey=groupKey) # type: ignore
+        else:
+            request = self.client.groups().delete() # type: ignore
         return request.execute()
 
     async def groups_get(
