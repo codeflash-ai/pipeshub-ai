@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -469,8 +469,8 @@ class GitLabDataSource:
         self, project_id: Union[int, str], get_all: bool = True
     ) -> GitLabResponse:
         """List releases."""
-        p = self._project(project_id)
-        items = p.releases.list(get_all=get_all)
+        # Minor optimization: eliminate local variable for p, use direct call
+        items = self._sdk.projects.get(project_id).releases.list(get_all=get_all)
         return GitLabResponse(success=True, data=items)
 
     def get_release(self, project_id: Union[int, str], tag_name: str) -> GitLabResponse:
