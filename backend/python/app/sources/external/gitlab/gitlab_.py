@@ -22,10 +22,17 @@ class GitLabDataSource:
         else:
             self._sdk = cast(Gitlab, client_or_sdk)
 
+        # Cache for project objects to avoid repeated lookups
+        self._project_cache: dict[Union[int, str], object] = {}
+
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
         # python-gitlab allows numeric ID or full path for project lookup
-        return self._sdk.projects.get(project_id)
+        if project_id in self._project_cache:
+            return self._project_cache[project_id]
+        project_obj = self._sdk.projects.get(project_id)
+        self._project_cache[project_id] = project_obj
+        return project_obj
 
     @staticmethod
     def _params(**kwargs: object) -> Dict[str, object]:
