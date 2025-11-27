@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -345,7 +345,15 @@ class GitLabDataSource:
 
     def delete_branch(self, project_id: Union[int, str], branch: str) -> GitLabResponse:
         """Delete a branch.  [branches]"""
-        p = self._project(project_id)
+        # Inline the fast path to avoid unnecessary function call if project already cached
+        if not hasattr(self, "_project_cache"):
+            self._project_cache = {}
+        cache = self._project_cache
+        if project_id in cache:
+            p = cache[project_id]
+        else:
+            p = self._sdk.projects.get(project_id)
+            cache[project_id] = p
         p.branches.delete(branch)
         return GitLabResponse(success=True, data=True)
 
