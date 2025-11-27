@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -475,8 +475,8 @@ class GitLabDataSource:
 
     def get_release(self, project_id: Union[int, str], tag_name: str) -> GitLabResponse:
         """Get a release by tag."""
-        p = self._project(project_id)
-        r = p.releases.get(tag_name)
+        # Inline variable usage to reduce attribute access overhead
+        r = self._sdk.projects.get(project_id).releases.get(tag_name)
         return GitLabResponse(success=True, data=r)
 
     def create_release(
