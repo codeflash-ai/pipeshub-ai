@@ -354,14 +354,37 @@ class JiraClient:
     async def fetch_projects_with_permissions(self) -> List[Tuple[RecordGroup, List[Permission]]]:
         url = f"{BASE_URL}/{self.cloud_id}/rest/api/3/project/search"
 
-        projects = []
-        while True:
-            projects_batch = await self.make_authenticated_json_request("GET", url, params={"maxResults": 25, "expand": "description,url,permissions,issueTypes"})
-            projects = projects + projects_batch.get("values", [])
-            next_url = projects_batch.get("nextPage", None)
-            if not next_url:
-                break
-            url = next_url
+        # Optimize: Batch multiple concurrent requests if multiple pages exist.
+        # We'll use asyncio.gather to fetch all pages concurrently if pagination is detected.
+        # First request gets the total list of paged URLs, then we fetch all pages concurrently.
+
+        # Step 1: Get initial batch and determine if there is pagination
+        first_batch = await self.make_authenticated_json_request(
+            "GET", url, params={"maxResults": 25, "expand": "description,url,permissions,issueTypes"}
+        )
+        projects = first_batch.get("values", [])
+        next_url = first_batch.get("nextPage", None)
+
+        # Step 2: Collect all subsequent page URLs, if any
+        page_urls = []
+        while next_url:
+            page_urls.append(next_url)
+            batch = await self.make_authenticated_json_request("GET", next_url)
+            next_url = batch.get("nextPage", None)
+
+        # If there are page_urls (all except first batch), fire concurrent requests for all those URLs
+        if page_urls:
+            # Creating a list of async requests (all are GET, no extra params required for nextPage URLs)
+            tasks = [
+                self.make_authenticated_json_request("GET", page_url)
+                for page_url in page_urls
+            ]
+            results = await self._gather_fast(tasks)
+            # Results are batches, extend project list
+            for batch in results:
+                projects.extend(batch.get("values", []))
+
+        # All projects have been collected, create record groups
 
         record_groups = []
         for project in projects:
@@ -412,6 +435,13 @@ class JiraClient:
         combined_text = f"# {summary_text}\n\n{description_text}"
 
         return combined_text
+
+    async def _gather_fast(self, tasks: List[Any]) -> List[Any]:
+        # Use asyncio.gather for concurrent execution; results returned in input order
+        import asyncio
+        if not tasks:
+            return []
+        return await asyncio.gather(*tasks)
 
 @ConnectorBuilder("Jira")\
     .in_group("Atlassian")\
