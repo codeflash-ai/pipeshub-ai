@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -325,7 +325,9 @@ class GitLabDataSource:
         self, project_id: Union[int, str], get_all: bool = True
     ) -> GitLabResponse:
         """List branches for a project.  [branches]"""
-        p = self._project(project_id)
+        # Inline _project lookup for micro-optimization to avoid function call overhead.
+        sdk_projects = self._sdk.projects
+        p = sdk_projects.get(project_id)
         items = p.branches.list(get_all=get_all)
         return GitLabResponse(success=True, data=items)
 
