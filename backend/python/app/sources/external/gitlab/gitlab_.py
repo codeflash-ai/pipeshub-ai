@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from gitlab import Gitlab
-from typing import Dict, List, Optional, Tuple, Union, cast
+from typing import Dict, List, Optional, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
@@ -313,11 +313,18 @@ class GitLabDataSource:
         squash: Optional[bool] = None,
     ) -> GitLabResponse:
         """Accept/merge a merge request.  [mrs]"""
-        p = self._project(project_id)
-        mr = p.mergerequests.get(mr_iid)
-        params = self._params(
-            merge_when_pipeline_succeeds=merge_when_pipeline_succeeds, squash=squash
-        )
+        # Inline _params and inlining _project to local to avoid repeated attribute lookups
+        project = self._sdk.projects.get(project_id)
+        mr = project.mergerequests.get(mr_iid)
+        # _params used only here, generator dict comp is already optimized
+        params = {
+            k: v
+            for k, v in (
+                ("merge_when_pipeline_succeeds", merge_when_pipeline_succeeds),
+                ("squash", squash),
+            )
+            if v is not None and (not isinstance(v, (list, dict)) or len(v) > 0)
+        }
         res = mr.merge(**params)
         return GitLabResponse(success=True, data=res)
 
