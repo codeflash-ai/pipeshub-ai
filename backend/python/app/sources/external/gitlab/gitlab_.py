@@ -6,6 +6,8 @@ from typing import Dict, List, Optional, Tuple, Union, cast
 
 from app.sources.client.gitlab.gitlab import GitLabResponse
 
+_SUCCESS_RESPONSE = GitLabResponse(success=True, data=True)
+
 
 class GitLabDataSource:
     """
@@ -754,4 +756,4 @@ class GitLabDataSource:
         """Delete a group."""
         g = self._sdk.groups.get(group_id)
         g.delete()
-        return GitLabResponse(success=True, data=True)
+        return _SUCCESS_RESPONSE
