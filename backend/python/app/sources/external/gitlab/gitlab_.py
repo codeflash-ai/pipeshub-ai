@@ -32,10 +32,7 @@ class GitLabDataSource:
         # Filter out Nones to avoid overriding SDK defaults
         out: Dict[str, object] = {}
         for k, v in kwargs.items():
-            if v is None:
-                continue
-            # Skip empty containers that GitLab rejects in some endpoints
-            if isinstance(v, (list, dict)) and len(v) == 0:
+            if v is None or (isinstance(v, (list, dict)) and not v):
                 continue
             out[k] = v
         return out
