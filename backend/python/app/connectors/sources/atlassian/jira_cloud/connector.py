@@ -248,7 +248,6 @@ class JiraClient:
     ) -> Dict[str, Any]:
         """Make authenticated API request and return JSON response"""
         config = await self.config_service.get_config(f"{OAUTH_JIRA_CONFIG_PATH}")
-        token = None
         if not config:
             self.logger.error("❌ Jira credentials not found")
             raise ValueError("Jira credentials not found")
@@ -259,13 +258,13 @@ class JiraClient:
             self.logger.error("❌ Jira credentials not found")
             raise ValueError("Jira credentials not found")
 
-        token = {
-            "token_type": credentials_config.get("token_type"),
-            "access_token": credentials_config.get("access_token")
-        }
+        token_type = credentials_config.get("token_type")
+        access_token = credentials_config.get("access_token")
+
 
         headers = kwargs.pop("headers", {})
-        headers["Authorization"] = f"{token.get('token_type')} {token.get('access_token')}"
+        headers["Authorization"] = f"{token_type} {access_token}"
+
 
         session = await self._ensure_session()
         async with session.request(method, url, headers=headers, **kwargs) as response:
@@ -300,35 +299,68 @@ class JiraClient:
 
     async def fetch_issues_with_permissions(self, project_key: str, project_id: str, user: AppUser) -> List[Tuple[Record, List[Permission]]]:
         url = f"{BASE_URL}/{self.cloud_id}/rest/api/3/search"
-        issues = []
+        issues: List[Any] = []
+        params = {"projectKey": project_key, "maxResults": 25}
+
+        # Batch-fetch all issues, avoid repeated list concatenation
+        append_issues = issues.append  # micro-optimization
 
         while True:
-            issues_batch = await self.make_authenticated_json_request("GET", url, params={"projectKey": project_key, "maxResults": 25})
-            issues = issues + issues_batch.get("issues", [])
-            next_url = issues_batch.get("_links", {}).get("next", None)
+            issues_batch = await self.make_authenticated_json_request("GET", url, params=params)
+            batch_issues = issues_batch.get("issues", [])
+            if batch_issues:
+                # Extending by batch instead of repeated "+", which copies each time
+                issues.extend(batch_issues)
+            next_url = issues_batch.get("_links", {}).get("next")
             if not next_url:
                 break
             url = next_url
 
-        issue_records = []
-        for issue in issues:
-            issue_id = f"project-{project_key}/issue-{issue.get('id')}"
-            fields = issue.get("fields", {})
-            issue_name = fields.get("summary")
-            status = fields.get("status", {}).get("name")
-            priority = fields.get("priority", {}).get("name")
-            creator = fields.get("creator") or {}
-            creator_email = creator.get("emailAddress")
-            creator_name = creator.get("displayName")
+            # After first request, let server control the page (avoiding re-sending projectKey/maxResults)
+            params = None
 
+        # Precompute constant values outside loop for performance
+        accessible_resource = self.accessible_resources[0]
+        atlassian_domain = accessible_resource.url
+        record_type = RecordType.TICKET
+        origin = OriginTypes.CONNECTOR
+        connector_name = Connectors.JIRA
+        record_group_type = RecordGroupType.JIRA_PROJECT
+        mime_type = MimeTypes.PLAIN_TEXT.value
+        permission_entity_type = EntityType.USER
+        permission_type = PermissionType.OWNER
+
+        issue_records = []
+        append_issue_record = issue_records.append  # micro-optimization
+
+        # Avoid attribute lookup in loop for user.email
+        user_email = user.email
+
+        for issue in issues:
+            issue_fields = issue.get("fields", {})
+            issue_id_part = issue.get('id')
+            issue_id = f"project-{project_key}/issue-{issue_id_part}"
+
+            issue_name = issue_fields.get("summary")
+            status = None
+            priority = None
+            fields_status = issue_fields.get("status")
+            if fields_status is not None:
+                status = fields_status.get("name")
+            fields_priority = issue_fields.get("priority")
+            if fields_priority is not None:
+                priority = fields_priority.get("name")
+
+            creator = issue_fields.get("creator") or {}
+            creator_email = creator.get("emailAddress")
             if creator_email is None:
-                creator_email = user.email
+                creator_email = user_email
+            creator_name = creator.get("displayName")
             permissions = [Permission(
-                entity_type=EntityType.USER,
+                entity_type=permission_entity_type,
                 email=creator_email,
-                type=PermissionType.OWNER,
+                type=permission_type,
             )]
-            atlassian_domain = self.accessible_resources[0].url
 
             issue_record = TicketRecord(
                 priority=priority,
@@ -338,16 +370,16 @@ class JiraClient:
                 creator_name=creator_name,
                 external_record_id=issue_id,
                 record_name=issue_name,
-                record_type=RecordType.TICKET,
-                origin=OriginTypes.CONNECTOR,
-                connector_name=Connectors.JIRA,
-                record_group_type=RecordGroupType.JIRA_PROJECT,
+                record_type=record_type,
+                origin=origin,
+                connector_name=connector_name,
+                record_group_type=record_group_type,
                 external_record_group_id=project_id,
                 version=0,
-                mime_type=MimeTypes.PLAIN_TEXT.value,
+                mime_type=mime_type,
                 weburl=f"{atlassian_domain}/browse/{issue.get('key')}"
             )
-            issue_records.append((issue_record, permissions))
+            append_issue_record((issue_record, permissions))
 
         return issue_records
 
