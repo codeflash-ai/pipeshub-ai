@@ -22,10 +22,13 @@ class GitLabDataSource:
         else:
             self._sdk = cast(Gitlab, client_or_sdk)
 
+        # ---- helpers ----
+        self._projects_get = self._sdk.projects.get  # Cache bound method for hot path
+
     # ---- helpers ----
     def _project(self, project_id: Union[int, str]) -> object:
         # python-gitlab allows numeric ID or full path for project lookup
-        return self._sdk.projects.get(project_id)
+        return self._projects_get(project_id)
 
     @staticmethod
     def _params(**kwargs: object) -> Dict[str, object]:
