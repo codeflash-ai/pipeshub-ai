@@ -1119,11 +1119,18 @@ class GoogleGmailDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = kwargs or {}
-        if userId is not None:
-            kwargs['userId'] = userId
-
-        request = self.client.users().settings().getPop(**kwargs) # type: ignore
+        if not kwargs:
+            if userId is not None:
+                request = self.client.users().settings().getPop(userId=userId)  # type: ignore
+            else:
+                request = self.client.users().settings().getPop()  # type: ignore
+        else:
+            if userId is not None:
+                call_kwargs = dict(kwargs)
+                call_kwargs['userId'] = userId
+                request = self.client.users().settings().getPop(**call_kwargs)  # type: ignore
+            else:
+                request = self.client.users().settings().getPop(**kwargs)  # type: ignore
         return request.execute()
 
     async def users_settings_update_pop(
