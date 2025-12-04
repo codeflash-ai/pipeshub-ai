@@ -21,6 +21,9 @@ class GoogleGmailDataSource:
         """
         self.client = client
 
+        # Cache references to the users().settings().getLanguage method for performance
+        self._get_language = self.client.users().settings().getLanguage
+
     async def users_get_profile(
         self,
         userId: str,
@@ -1217,11 +1220,19 @@ class GoogleGmailDataSource:
         Returns:
             Dict[str, Any]: API response
         """
-        kwargs = kwargs or {}
-        if userId is not None:
-            kwargs['userId'] = userId
+        # Avoid unnecessary dict allocation: only create a new dict if kwargs is None or not a dict
+        # Don't mutate input kwargs if it might be shared; instead, copy only if we insert.
+        if kwargs is None:
+            local_kwargs = {}
+        else:
+            # Only copy if we need to insert userId, else use as-is
+            local_kwargs = kwargs if userId is None else dict(kwargs)
 
-        request = self.client.users().settings().getLanguage(**kwargs) # type: ignore
+        if userId is not None:
+            local_kwargs['userId'] = userId
+
+        # Use cached method reference for performance
+        request = self._get_language(**local_kwargs)  # type: ignore
         return request.execute()
 
     async def users_settings_update_language(
