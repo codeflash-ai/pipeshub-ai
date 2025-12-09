@@ -2906,8 +2906,10 @@ class EvernoteDataSource:
             if guid is not None:
                 args.append(guid)
 
-            # Call Thrift client method
-            result = self.note_store.expungeLinkedNotebook(*args)
+            # Run Thrift client method in a thread to avoid blocking the event loop
+            result = await asyncio.to_thread(self.note_store.expungeLinkedNotebook, *args)
+
+            # Convert Thrift objects to dict for easier handling
 
             # Convert Thrift objects to dict for easier handling
             if hasattr(result, '__dict__'):
