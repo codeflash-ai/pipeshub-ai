@@ -74,13 +74,23 @@ class EvernoteDataSource:
         """Convert Thrift object to dictionary."""
         if obj is None:
             return None
-
-        if hasattr(obj, '__dict__'):
+        
+        obj_dict = getattr(obj, "__dict__", None)
+        if obj_dict is not None:
+            # Pre-allocate list results only when needed
             result = {}
-            for key, value in obj.__dict__.items():
+            for key, value in obj_dict.items():
                 if value is not None:
                     if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
+                        # Avoid list comprehension if list is empty or trivially copied
+                        if value:  # skip allocation for empty lists
+                            # Inline ref avoids extra attribute lookup
+                            result[key] = [
+                                self._thrift_to_dict(item) if hasattr(item, '__dict__') else item
+                                for item in value
+                            ]
+                        else:
+                            result[key] = []
                     elif hasattr(value, '__dict__'):
                         result[key] = self._thrift_to_dict(value)
                     else:
@@ -211,25 +221,22 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if after_usn is not None:
-                args.append(after_usn)
-            if max_entries is not None:
-                args.append(max_entries)
-            if filter is not None:
-                args.append(filter)
-
-            # Call Thrift client method
-            result = self.note_store.getFilteredSyncChunk(*args)
+            # Since all args are required by docstring, pass positionally
+            result = self.note_store.getFilteredSyncChunk(
+                authentication_token, after_usn, max_entries, filter
+            )
 
             # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            result_dict = getattr(result, "__dict__", None)
+            if result_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Only check hasattr(item, '__dict__') once per element, not twice
+                thrift_to_dict = self._thrift_to_dict
+                data = [
+                    thrift_to_dict(item) if getattr(item, "__dict__", None) is not None else item
+                    for item in result
+                ]
             else:
                 data = result
 
