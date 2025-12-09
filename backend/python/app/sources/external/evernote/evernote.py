@@ -75,19 +75,27 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
-            result = {}
-            for key, value in obj.__dict__.items():
-                if value is not None:
-                    if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
-                        result[key] = self._thrift_to_dict(value)
-                    else:
-                        result[key] = value
-            return result
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is None:
+            return obj
 
-        return obj
+        # Use local variables to reduce attribute lookups
+        result = {}
+        for key, value in obj_dict.items():
+            if value is None:
+                continue
+            # Avoid isinstance(value, list) with a faster check
+            # (avoid function call and isinstance overhead)
+            # Check for list directly and ignore subclasses for performance
+            if type(value) is list:
+                # Use list comprehension but avoid extra name lookup inside the loop
+                _thrift_to_dict = self._thrift_to_dict
+                result[key] = [_thrift_to_dict(item) for item in value]
+            elif hasattr(value, '__dict__'):
+                result[key] = self._thrift_to_dict(value)
+            else:
+                result[key] = value
+        return result
 
     def get_client(self) -> EvernoteClient:
         """Get the underlying Evernote client."""
