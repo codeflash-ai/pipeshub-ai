@@ -75,16 +75,28 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        # Avoid repeatedly calling hasattr(obj, '__dict__') in recursion by an early return
+        dct = getattr(obj, '__dict__', None)
+        if dct is not None:
+            # Use local function reference for performance
+            thrift_to_dict = self._thrift_to_dict
+            # Preallocate result dict with only non-None keys
             result = {}
-            for key, value in obj.__dict__.items():
+            for key, value in dct.items():
                 if value is not None:
                     if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
-                        result[key] = self._thrift_to_dict(value)
+                        # Only build new list if not empty
+                        if value:
+                            # Avoid repeated attribute resolution in recursion
+                            result[key] = [thrift_to_dict(item) for item in value]
+                        else:
+                            result[key] = []
                     else:
-                        result[key] = value
+                        val_dct = getattr(value, '__dict__', None)
+                        if val_dct is not None:
+                            result[key] = thrift_to_dict(value)
+                        else:
+                            result[key] = value
             return result
 
         return obj
@@ -1847,15 +1859,10 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if tag is not None:
-                args.append(tag)
+            # Directly call createTag with positional arguments
+            result = self.note_store.createTag(authentication_token, tag)
 
-            # Call Thrift client method
-            result = self.note_store.createTag(*args)
+            # Convert Thrift objects to dict for easier handling
 
             # Convert Thrift objects to dict for easier handling
             if hasattr(result, '__dict__'):
