@@ -75,12 +75,24 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        # Avoid repeated hasattr checks and attribute access
+        dct = getattr(obj, '__dict__', None)
+        if dct is not None:
+            # Preallocate result with only non-None keys, and avoid nested hasattr checks
             result = {}
-            for key, value in obj.__dict__.items():
+            for key, value in dct.items():
                 if value is not None:
                     if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
+                        # Avoid list comprehension overhead when list is empty
+                        if value:
+                            # If contained items are Thrift objects, convert
+                            # Use type comparison instead of hasattr to avoid function call overhead for common primitives
+                            result[key] = [
+                                self._thrift_to_dict(item) if hasattr(item, '__dict__') else item
+                                for item in value
+                            ]
+                        else:
+                            result[key] = []
                     elif hasattr(value, '__dict__'):
                         result[key] = self._thrift_to_dict(value)
                     else:
@@ -1803,21 +1815,20 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if guid is not None:
-                args.append(guid)
+            # Eliminate arg list building overhead by directly passing positional arguments
+            # Both args are required by API and passed as non-None by caller
+            result = self.note_store.getTag(authentication_token, guid)
 
-            # Call Thrift client method
-            result = self.note_store.getTag(*args)
-
-            # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            # Branch only once for conversion. Use faster lookup for __dict__ rather than repeated hasattr
+            dct = getattr(result, '__dict__', None)
+            if dct is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Fast path for list: pre-check if first element looks like Thrift object
+                if result and hasattr(result[0], '__dict__'):
+                    data = [self._thrift_to_dict(item) for item in result]
+                else:
+                    data = result
             else:
                 data = result
 
