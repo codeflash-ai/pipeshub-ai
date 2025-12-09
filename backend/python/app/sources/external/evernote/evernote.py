@@ -75,13 +75,32 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is not None:
+            # Use local variables and avoid repeated attribute lookups
             result = {}
-            for key, value in obj.__dict__.items():
-                if value is not None:
-                    if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
+            for key, value in obj_dict.items():
+                if value is None:
+                    continue
+
+                # Optimize list handling by using generator expression
+                if isinstance(value, list):
+                    # Short-circuit if the list is empty
+                    if not value:
+                        result[key] = []
+                    else:
+                        # Use optimized branch - avoid hasattr inside the listcomps
+                        inner = []
+                        for item in value:
+                            item_dict = getattr(item, '__dict__', None)
+                            if item_dict is not None:
+                                inner.append(self._thrift_to_dict(item))
+                            else:
+                                inner.append(item)
+                        result[key] = inner
+                else:
+                    value_dict = getattr(value, '__dict__', None)
+                    if value_dict is not None:
                         result[key] = self._thrift_to_dict(value)
                     else:
                         result[key] = value
@@ -2994,10 +3013,18 @@ class EvernoteDataSource:
             result = self.note_store.getSharedNotebookByAuth(*args)
 
             # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            result_dict = getattr(result, '__dict__', None)
+            if result_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Use generator expression and faster getattr checks
+                data = []
+                for item in result:
+                    item_dict = getattr(item, '__dict__', None)
+                    if item_dict is not None:
+                        data.append(self._thrift_to_dict(item))
+                    else:
+                        data.append(item)
             else:
                 data = result
 
