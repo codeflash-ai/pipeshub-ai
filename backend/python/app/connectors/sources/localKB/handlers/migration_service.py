@@ -341,21 +341,78 @@ class KnowledgeBaseMigrationService:
         """Migrate knowledge bases from old to new system"""
         self.logger.info("🔄 Starting knowledge base migration")
 
-        migration_results = []
+        migration_results: List[Dict] = []
         timestamp = get_epoch_timestamp_in_ms()
 
-        for org_id, org_users in migration_data['org_data'].items():
+        # Precompute top-level loop to reduce attribute accesses and dict lookups
+        org_data = migration_data['org_data']
+
+        for org_id, org_users in org_data.items():
             for user_id, user_data in org_users.items():
                 try:
                     # Get or create user in new system
                     user_key = await self._ensure_user_exists(user_id, org_id, transaction)
 
-                    for old_kb in user_data['kbs']:
+                    kbs = user_data['kbs']
+                    # Batch: build all new_kb_data and permission_edges for user/org
+                    new_kb_rows = []
+                    permission_edges = []
+                    kb_infos = []
+                    # Gather all upserts and permission edges for batching
+                    for old_kb in kbs:
+                        old_kb_id = old_kb['_key']
+                        old_kb_name = old_kb.get('name', 'Migrated Knowledge Base')
+                        new_kb_id = str(uuid.uuid4())
+                        new_kb_data = {
+                            "_key": new_kb_id,
+                            "createdBy": user_key,
+                            "orgId": org_id,
+                            "groupName": old_kb_name,
+                            "groupType": Connectors.KNOWLEDGE_BASE.value,
+                            "connectorName": Connectors.KNOWLEDGE_BASE.value,
+                            "createdAtTimestamp": old_kb.get('createdAtTimestamp', timestamp),
+                            "updatedAtTimestamp": timestamp,
+                            "lastSyncTimestamp": timestamp,
+                            "sourceCreatedAtTimestamp": old_kb.get('createdAtTimestamp', timestamp),
+                            "sourceLastModifiedTimestamp": timestamp,
+                        }
+                        permission_edge = {
+                            "_from": f"{CollectionNames.USERS.value}/{user_key}",
+                            "_to": f"{self.NEW_KB_COLLECTION}/{new_kb_id}",
+                            "externalPermissionId": "",
+                            "type": "USER",
+                            "role": "OWNER",
+                            "createdAtTimestamp": timestamp,
+                            "updatedAtTimestamp": timestamp,
+                            "lastUpdatedTimestampAtSource": timestamp,
+                        }
+                        new_kb_rows.append(new_kb_data)
+                        permission_edges.append(permission_edge)
+                        kb_infos.append((old_kb, old_kb_id, old_kb_name, new_kb_id))
+
+                    # Batch upsert all KBs at once for this user
+                    if new_kb_rows:
+                        await self.arango_service.batch_upsert_nodes(new_kb_rows, self.NEW_KB_COLLECTION, transaction)
+                    # Batch upsert all permission edges for this user
+                    if permission_edges:
+                        await self.arango_service.batch_create_edges(permission_edges, self.NEW_USER_TO_KB_EDGES, transaction)
+
+                    # Migrate records for each kb (still must call one at a time, as they use user_data & IDs)
+                    for old_kb, old_kb_id, old_kb_name, new_kb_id in kb_infos:
                         try:
-                            result = await self._migrate_single_kb(
-                                old_kb, user_key, org_id, user_data, timestamp, transaction
+                            migrated_records = await self._migrate_kb_records(
+                                old_kb_id, new_kb_id, user_data, timestamp, transaction
                             )
-                            migration_results.append(result)
+                            self.logger.info(f"✅ Successfully migrated KB {old_kb_name}: {migrated_records} records")
+                            migration_results.append({
+                                'old_kb_id': old_kb_id,
+                                'new_kb_id': new_kb_id,
+                                'kb_name': old_kb_name,
+                                'user_key': user_key,
+                                'org_id': org_id,
+                                'migrated_records': migrated_records,
+                                'success': True
+                            })
 
                         except Exception as kb_error:
                             self.logger.error(f"❌ Failed to migrate KB {old_kb.get('_key')}: {str(kb_error)}")
@@ -368,8 +425,13 @@ class KnowledgeBaseMigrationService:
                 except Exception as user_error:
                     self.logger.error(f"❌ Failed to process user {user_id} in org {org_id}: {str(user_error)}")
 
-        self.logger.info(f"✅ Migration completed: {len([r for r in migration_results if r.get('success')])} successful, "
-                        f"{len([r for r in migration_results if not r.get('success')])} failed")
+        # Precompute successful and failed results for summary logging
+        success_count = sum(1 for r in migration_results if r.get('success'))
+        fail_count = len(migration_results) - success_count
+        self.logger.info(
+            f"✅ Migration completed: {success_count} successful, {fail_count} failed"
+        )
+
 
         return migration_results
 
