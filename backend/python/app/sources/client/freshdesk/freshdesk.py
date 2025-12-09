@@ -11,6 +11,7 @@ from app.sources.client.iclient import IClient
 
 class FreshDeskConfigurationError(Exception):
     """Custom exception for FreshDesk configuration errors"""
+
     def __init__(self, message: str, details: Optional[Dict[str, Any]] = None) -> None:
         super().__init__(message)
         self.details = details or {}
@@ -18,6 +19,7 @@ class FreshDeskConfigurationError(Exception):
 
 class FreshDeskResponse(BaseModel):
     """Standardized FreshDesk API response wrapper"""
+
     success: bool
     data: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
@@ -44,9 +46,10 @@ class FreshDeskRESTClientViaApiKey(HTTPClient):
 
     def __init__(self, domain: str, api_key: str) -> None:
         # FreshDesk uses Basic auth with API key as username, 'X' as password
-        # Encode as base64 for Basic auth
-        credentials = f"{api_key}:X"
-        encoded_credentials = base64.b64encode(credentials.encode()).decode()
+        # Avoid intermediate variable for credentials and do encoding in a single step
+        encoded_credentials = base64.b64encode(f"{api_key}:X".encode()).decode()
+
+        # Initialize HTTPClient with Basic token
 
         # Initialize HTTPClient with Basic token
         super().__init__(encoded_credentials, "Basic")
@@ -71,11 +74,12 @@ class FreshDeskApiKeyConfig(BaseModel):
         api_key: The API key for authentication
         ssl: Whether to use SSL (default: True)
     """
+
     domain: str
     api_key: str
     ssl: bool = True
 
-    @field_validator('domain')
+    @field_validator("domain")
     @classmethod
     def validate_domain(cls, v: str) -> str:
         """Validate domain field"""
@@ -83,12 +87,12 @@ class FreshDeskApiKeyConfig(BaseModel):
             raise ValueError("domain cannot be empty or None")
 
         # Validate domain format - should not include protocol
-        if v.startswith(('http://', 'https://')):
+        if v.startswith(("http://", "https://")):
             raise ValueError("domain should not include protocol (http:// or https://)")
 
         return v
 
-    @field_validator('api_key')
+    @field_validator("api_key")
     @classmethod
     def validate_api_key(cls, v: str) -> str:
         """Validate api_key field"""
@@ -104,9 +108,9 @@ class FreshDeskApiKeyConfig(BaseModel):
     def to_dict(self) -> dict:
         """Convert the configuration to a dictionary"""
         return {
-            'domain': self.domain,
-            'ssl': self.ssl,
-            'has_api_key': bool(self.api_key)
+            "domain": self.domain,
+            "ssl": self.ssl,
+            "has_api_key": bool(self.api_key),
         }
 
 
@@ -117,13 +121,17 @@ class FreshDeskClient(IClient):
         """Initialize with a FreshDesk client object"""
         self.client = client
 
+        # Pre-cache base_url since get_base_url is called very frequently
+        self._base_url = client.get_base_url()
+
     def get_client(self) -> FreshDeskRESTClientViaApiKey:
         """Return the FreshDesk REST client object"""
         return self.client
 
     def get_base_url(self) -> str:
         """Get the base URL"""
-        return self.client.get_base_url()
+        # Return cached value to avoid repeat Python method indirection
+        return self._base_url
 
     def get_domain(self) -> str:
         """Get the FreshDesk domain"""
@@ -144,7 +152,9 @@ class FreshDeskClient(IClient):
         return cls(config.create_client())
 
     @classmethod
-    def build_with_api_key_config(cls, config: FreshDeskApiKeyConfig) -> "FreshDeskClient":
+    def build_with_api_key_config(
+        cls, config: FreshDeskApiKeyConfig
+    ) -> "FreshDeskClient":
         """Build FreshDeskClient with API key configuration
 
         Args:
@@ -157,10 +167,7 @@ class FreshDeskClient(IClient):
 
     @classmethod
     def build_with_api_key(
-        cls,
-        domain: str,
-        api_key: str,
-        ssl: bool = True
+        cls, domain: str, api_key: str, ssl: bool = True
     ) -> "FreshDeskClient":
         """Build FreshDeskClient with API key directly
 
@@ -172,11 +179,7 @@ class FreshDeskClient(IClient):
         Returns:
             FreshDeskClient: Configured client instance
         """
-        config = FreshDeskApiKeyConfig(
-            domain=domain,
-            api_key=api_key,
-            ssl=ssl
-        )
+        config = FreshDeskApiKeyConfig(domain=domain, api_key=api_key, ssl=ssl)
         return cls.build_with_config(config)
 
     @classmethod
