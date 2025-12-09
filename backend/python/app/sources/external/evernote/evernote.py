@@ -75,19 +75,32 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
-            result = {}
-            for key, value in obj.__dict__.items():
-                if value is not None:
-                    if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
-                        result[key] = self._thrift_to_dict(value)
-                    else:
-                        result[key] = value
-            return result
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is None:
+            return obj
 
-        return obj
+        result = {}
+        append_result = result.__setitem__  # micro-optimization to avoid attribute access in loop
+        for key, value in obj_dict.items():
+            if value is None:
+                continue
+            # Fast path: value is list
+            if isinstance(value, list):
+                # Avoid function call if list is empty or primitive
+                if value:
+                    # Only call _thrift_to_dict for members that are (probably) thrift objects
+                    if hasattr(value[0], '__dict__'):
+                        append_result(key, [self._thrift_to_dict(item) for item in value])
+                    else:
+                        append_result(key, value)
+                else:
+                    append_result(key, [])
+            # Fast path: value is thrift object
+            elif hasattr(value, '__dict__'):
+                append_result(key, self._thrift_to_dict(value))
+            else:
+                append_result(key, value)
+        return result
 
     def get_client(self) -> EvernoteClient:
         """Get the underlying Evernote client."""
@@ -2639,21 +2652,25 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if search is not None:
-                args.append(search)
+            if authentication_token is not None and search is not None:
+                result = self.note_store.createSearch(authentication_token, search)
+            elif authentication_token is not None:
+                result = self.note_store.createSearch(authentication_token)
+            elif search is not None:
+                result = self.note_store.createSearch(search)
+            else:
+                result = self.note_store.createSearch()
 
-            # Call Thrift client method
-            result = self.note_store.createSearch(*args)
-
-            # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            # Branch hinting: most likely result is thrift object with __dict__
+            res_dict = getattr(result, '__dict__', None)
+            if res_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Preallocate only if needed (avoid redundant hasattr on builtins)
+                if result and hasattr(result[0], '__dict__'):
+                    data = [self._thrift_to_dict(item) for item in result]
+                else:
+                    data = result
             else:
                 data = result
 
