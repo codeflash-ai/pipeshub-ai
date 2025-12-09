@@ -75,14 +75,20 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        # Optimization: use a local reference for the method to minimize attribute lookup overhead in loop.
+        thrift_to_dict = self._thrift_to_dict
+
+        # Optimization: replace hasattr with type lookup for __dict__ speedup.
+        if type(obj).__dict__ is not type.__dict__:
             result = {}
-            for key, value in obj.__dict__.items():
+            obj_dict = obj.__dict__
+            for key, value in obj_dict.items():
                 if value is not None:
                     if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
-                        result[key] = self._thrift_to_dict(value)
+                        # Use list comprehension but use thrift_to_dict directly
+                        result[key] = [thrift_to_dict(item) for item in value]
+                    elif type(value).__dict__ is not type.__dict__:
+                        result[key] = thrift_to_dict(value)
                     else:
                         result[key] = value
             return result
@@ -3119,21 +3125,29 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if guid is not None:
-                args.append(guid)
+            # Preallocate args for reduced branching - both are required, and None checks
+            # are very cheap, but reusing list instead of appends slightly improves throughput
+            args = [authentication_token, guid]
+
+            # Remove trailing None arguments for Thrift
+            while args and args[-1] is None:
+                args.pop()
+
+            # Call Thrift client method
 
             # Call Thrift client method
             result = self.note_store.stopSharingNote(*args)
 
-            # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            # Fast path: produce data using _thrift_to_dict only when needed, otherwise passthrough
+            if type(result).__dict__ is not type.__dict__:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Use local reference and type checks
+                thrift_to_dict = self._thrift_to_dict
+                data = [
+                    thrift_to_dict(item) if type(item).__dict__ is not type.__dict__ else item
+                    for item in result
+                ]
             else:
                 data = result
 
