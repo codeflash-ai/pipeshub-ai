@@ -770,14 +770,22 @@ class EvernoteDataSource:
             if guid is not None:
                 args.append(guid)
 
-            # Call Thrift client method
-            result = self.note_store.getNoteApplicationData(*args)
+            # Offload potentially blocking Thrift I/O to a thread
+            result = await asyncio.to_thread(self.note_store.getNoteApplicationData, *args)
+
+            # Convert Thrift objects to dict for easier handling
 
             # Convert Thrift objects to dict for easier handling
             if hasattr(result, '__dict__'):
-                data = self._thrift_to_dict(result)
+                data = await asyncio.to_thread(self._thrift_to_dict, result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Concurrent dictionary conversion for list items
+                data = await asyncio.gather(
+                    *[
+                        asyncio.to_thread(self._thrift_to_dict, item) if hasattr(item, '__dict__') else asyncio.to_thread(lambda x: x, item)
+                        for item in result
+                    ]
+                )
             else:
                 data = result
 
