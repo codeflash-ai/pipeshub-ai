@@ -74,14 +74,21 @@ class EvernoteDataSource:
         """Convert Thrift object to dictionary."""
         if obj is None:
             return None
-
-        if hasattr(obj, '__dict__'):
+        # Avoid unnecessary hasattr(obj, '__dict__') for primitives and collections
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is not None:
             result = {}
-            for key, value in obj.__dict__.items():
+            # Avoid repeated attribute lookups by localizing obj_dict.items()
+            for key, value in obj_dict.items():
                 if value is not None:
                     if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
+                        # If every item is non-object (no __dict__), just copy
+                        # Otherwise, pay the conversion cost
+                        if value and not hasattr(value[0], '__dict__'):
+                            result[key] = value
+                        else:
+                            result[key] = [self._thrift_to_dict(item) for item in value]
+                    elif getattr(value, '__dict__', None) is not None:
                         result[key] = self._thrift_to_dict(value)
                     else:
                         result[key] = value
@@ -2562,10 +2569,22 @@ class EvernoteDataSource:
             result = self.note_store.listSearches(*args)
 
             # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            result_dict = getattr(result, '__dict__', None)
+            if result_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Precompute flags and branch for best-case all-primitives
+                if result and not hasattr(result[0], '__dict__'):
+                    data = list(result)
+                else:
+                    # Save repeated hasattr lookups and merge conversion
+                    data = []
+                    for item in result:
+                        item_dict = getattr(item, '__dict__', None)
+                        if item_dict is not None:
+                            data.append(self._thrift_to_dict(item))
+                        else:
+                            data.append(item)
             else:
                 data = result
 
