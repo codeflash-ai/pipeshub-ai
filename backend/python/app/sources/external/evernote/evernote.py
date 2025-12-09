@@ -75,16 +75,31 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        # Fast path for common case: Thrift object
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is not None:
+            # Avoid repeated lookups and build up the result dict in-place.
             result = {}
-            for key, value in obj.__dict__.items():
-                if value is not None:
-                    if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
-                        result[key] = self._thrift_to_dict(value)
+            for key, value in obj_dict.items():
+                if value is None:
+                    continue
+                # Optimize: Only check for list or dict type if needed
+                if isinstance(value, list):
+                    if not value:
+                        result[key] = []
                     else:
-                        result[key] = value
+                        # Avoid hasattr unless necessary
+                        # Pre-check if the first item is likely a Thrift object or not
+                        val0 = value[0]
+                        # All Thrift lists are homogenous, so we check only the first item
+                        if hasattr(val0, '__dict__'):
+                            result[key] = [self._thrift_to_dict(item) for item in value]
+                        else:
+                            result[key] = list(value)
+                elif hasattr(value, '__dict__'):
+                    result[key] = self._thrift_to_dict(value)
+                else:
+                    result[key] = value
             return result
 
         return obj
@@ -365,11 +380,21 @@ class EvernoteDataSource:
             # Call Thrift client method
             result = self.note_store.listNotebooks(*args)
 
-            # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            # Fast path: list (most likely for listNotebooks)
+            if isinstance(result, list):
+                if not result:
+                    data = []
+                else:
+                    # Precompute thrift status for first element of list
+                    r0 = result[0]
+                    if hasattr(r0, '__dict__'):
+                        thrift_to_dict = self._thrift_to_dict
+                        # Use list comprehension for optimal performance; localize method for speed
+                        data = [thrift_to_dict(item) for item in result]
+                    else:
+                        data = list(result)
+            elif hasattr(result, '__dict__'):
                 data = self._thrift_to_dict(result)
-            elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
             else:
                 data = result
 
