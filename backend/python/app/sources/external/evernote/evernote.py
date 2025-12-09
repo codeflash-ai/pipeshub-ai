@@ -1758,7 +1758,8 @@ class EvernoteDataSource:
         Returns:
             EvernoteResponse: Standardized response with success/data/error
         """
-        try:
+        def call_and_convert():
+            # Build arguments list
             # Build arguments list
             args = []
             if authentication_token is not None:
@@ -1777,6 +1778,10 @@ class EvernoteDataSource:
             else:
                 data = result
 
+            return data
+
+        try:
+            data = await asyncio.to_thread(call_and_convert)
             return EvernoteResponse(
                 success=True,
                 data=data
