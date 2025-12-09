@@ -870,8 +870,10 @@ class EvernoteDataSource:
             if value is not None:
                 args.append(value)
 
-            # Call Thrift client method
-            result = self.note_store.setNoteApplicationDataEntry(*args)
+            # Execute Thrift call in a thread to avoid blocking the event loop
+            result = await asyncio.to_thread(self.note_store.setNoteApplicationDataEntry, *args)
+
+            # Convert Thrift objects to dict for easier handling
 
             # Convert Thrift objects to dict for easier handling
             if hasattr(result, '__dict__'):
