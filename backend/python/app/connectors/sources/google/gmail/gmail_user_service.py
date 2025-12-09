@@ -30,6 +30,10 @@ from app.connectors.utils.decorators import exponential_backoff, token_refresh
 from app.connectors.utils.rate_limiter import GoogleAPIRateLimiter
 from app.utils.time_conversion import get_epoch_timestamp_in_ms
 
+_FILE_ID_REGEX = re.compile(
+    r"https://drive\.google\.com/file/d/([^/]+)/view\?usp=drive_web"
+)
+
 
 class GmailUserService:
     """GmailUserService class for interacting with Google Gmail API"""
@@ -144,7 +148,9 @@ class GmailUserService:
                         )
                     else:
                         # As a last resort, set short-lived window to avoid tight loops
-                        self.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+                        self.token_expiry = datetime.now(timezone.utc) + timedelta(
+                            hours=1
+                        )
                 self.logger.info("✅ Token expiry time: %s", self.token_expiry)
             except Exception as e:
                 raise GoogleAuthError(
@@ -196,7 +202,9 @@ class GmailUserService:
         )
 
         if time_until_refresh.total_seconds() <= 0:
-            await self.google_token_handler.refresh_token(self.org_id, self.user_id, app_name="gmail")
+            await self.google_token_handler.refresh_token(
+                self.org_id, self.user_id, app_name="gmail"
+            )
 
             creds_data = await self.google_token_handler.get_individual_token(
                 self.org_id, self.user_id, app_name="gmail"
@@ -229,7 +237,9 @@ class GmailUserService:
                             int(expiry_ms) / 1000, tz=timezone.utc
                         )
                     else:
-                        self.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+                        self.token_expiry = datetime.now(timezone.utc) + timedelta(
+                            hours=1
+                        )
             except Exception as e:
                 self.logger.warning("Failed to set refreshed token expiry: %s", str(e))
 
@@ -620,8 +630,13 @@ class GmailUserService:
                                 else ""
                             )
 
-                            constructed_attachment_id = f"{message['id']}_{part.get('partId', 'unknown')}"
-                            self.logger.debug("📝 Constructed attachment ID: %s", constructed_attachment_id)
+                            constructed_attachment_id = (
+                                f"{message['id']}_{part.get('partId', 'unknown')}"
+                            )
+                            self.logger.debug(
+                                "📝 Constructed attachment ID: %s",
+                                constructed_attachment_id,
+                            )
 
                             attachments.append(
                                 {
@@ -705,52 +720,22 @@ class GmailUserService:
     async def get_file_ids(self, message) -> List[str]:
         """Get file ids from message by recursively checking all parts and MIME types"""
         try:
-
-            def extract_file_ids(html_content: str) -> List[str]:
-                if not isinstance(html_content, str):
-                    return []
-                try:
-                    unencoded_data = base64.urlsafe_b64decode(html_content).decode(
-                        "UTF-8"
-                    )
-                    return re.findall(
-                        r"https://drive\.google\.com/file/d/([^/]+)/view\?usp=drive_web",
-                        unencoded_data,
-                    )
-                except Exception as e:
-                    self.logger.warning(f"Failed to decode content: {str(e)}")
-                    return []
-
-            def process_part(part: Dict) -> List[str]:
-                if not isinstance(part, dict):
-                    return []
-
-                file_ids = []
-
-                # Check for body data
-                body = part.get("body", {})
-                if isinstance(body, dict) and body.get("data"):
-                    mime_type = part.get("mimeType", "")
-                    if "text/html" in mime_type or "text/plain" in mime_type:
-                        file_ids.extend(extract_file_ids(body["data"]))
-
-                # Recursively process nested parts
-                parts = part.get("parts", [])
-                if isinstance(parts, list):
-                    for nested_part in parts:
-                        file_ids.extend(process_part(nested_part))
-
-                return file_ids
-
             # Start processing from the payload
             if not isinstance(message, dict):
                 return []
 
             payload = message.get("payload", {})
-            all_file_ids = process_part(payload)
+            # Use the optimized non-recursive method
+            all_file_ids = type(self)._process_part(payload, self.logger)
 
             # Remove duplicates while preserving order
-            return list(dict.fromkeys(all_file_ids))
+            seen = set()
+            result = []
+            for fid in all_file_ids:
+                if fid not in seen:
+                    seen.add(fid)
+                    result.append(fid)
+            return result
 
         except Exception as e:
             self.logger.error(
@@ -762,7 +747,9 @@ class GmailUserService:
 
     @exponential_backoff()
     @token_refresh
-    async def create_gmail_user_watch(self, user_id="me", accountType=AccountType.INDIVIDUAL.value) -> Dict:
+    async def create_gmail_user_watch(
+        self, user_id="me", accountType=AccountType.INDIVIDUAL.value
+    ) -> Dict:
         """Create user watch"""
         try:
             self.logger.info("🚀 Creating user watch for user %s", user_id)
@@ -872,7 +859,11 @@ class GmailUserService:
                             userId=user_email,
                             startHistoryId=history_id,
                             labelId="INBOX",
-                            historyTypes=["messageAdded", "messageDeleted", "labelAdded"],
+                            historyTypes=[
+                                "messageAdded",
+                                "messageDeleted",
+                                "labelAdded",
+                            ],
                         )
                         .execute()
                     )
@@ -885,7 +876,11 @@ class GmailUserService:
                             userId=user_email,
                             startHistoryId=history_id,
                             labelId="SENT",
-                            historyTypes=["messageAdded", "messageDeleted", "labelAdded"],
+                            historyTypes=[
+                                "messageAdded",
+                                "messageDeleted",
+                                "labelAdded",
+                            ],
                         )
                         .execute()
                     )
@@ -961,7 +956,9 @@ class GmailUserService:
             message_id, part_id = combined_id.split("_", 1)
             user_id = user.get("userId")
 
-            self.logger.info(f"🔍 Fetching message: {message_id} to get attachment ID for part: {part_id}")
+            self.logger.info(
+                f"🔍 Fetching message: {message_id} to get attachment ID for part: {part_id}"
+            )
 
             message = (
                 self.service.users()
@@ -1001,5 +998,42 @@ class GmailUserService:
         except Exception as e:
             self.logger.exception("Error fetching attachment ID from message part")
             raise MailOperationError(
-                "Failed to fetch attachment ID", details={"error": str(e), "combined_id": combined_id}
+                "Failed to fetch attachment ID",
+                details={"error": str(e), "combined_id": combined_id},
             )
+
+    @staticmethod
+    def _extract_file_ids(html_content: str, logger) -> List[str]:
+        if not isinstance(html_content, str):
+            return []
+        try:
+            # Use memoryview to avoid creating an extra copy for decoding
+            decoded = base64.urlsafe_b64decode(html_content)
+            # Avoid unnecessary intermediate allocations
+            unencoded_data = decoded.decode("UTF-8", errors="replace")
+            return _FILE_ID_REGEX.findall(unencoded_data)
+        except Exception as e:
+            logger.warning(f"Failed to decode content: {str(e)}")
+            return []
+
+    @classmethod
+    def _process_part(cls, part: Dict, logger) -> List[str]:
+        # Use an explicit stack to avoid Python recursion overhead
+        file_ids: List[str] = []
+        if not isinstance(part, dict):
+            return file_ids
+        stack: List[Dict] = [part]
+
+        while stack:
+            current_part = stack.pop()
+            if not isinstance(current_part, dict):
+                continue
+            body = current_part.get("body", {})
+            if isinstance(body, dict) and body.get("data"):
+                mime_type = current_part.get("mimeType", "")
+                if "text/html" in mime_type or "text/plain" in mime_type:
+                    file_ids.extend(cls._extract_file_ids(body["data"], logger))
+            parts = current_part.get("parts", [])
+            if isinstance(parts, list) and parts:
+                stack.extend(parts)
+        return file_ids
