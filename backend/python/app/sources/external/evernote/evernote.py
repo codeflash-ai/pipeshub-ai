@@ -75,12 +75,37 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is not None:
             result = {}
-            for key, value in obj.__dict__.items():
+            # Pre-fetch result[key] = value for non-list, non-Thrift cases
+            for key, value in obj_dict.items():
                 if value is not None:
                     if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
+                        # Micro-optimization: skip call to _thrift_to_dict for non-Thrift objects in list
+                        value_list = value
+                        # If empty list, assign directly
+                        if not value_list:
+                            result[key] = []
+                        else:
+                            result_list = []
+                            # Try to avoid hasattr per-item if possible
+                            # If first item has __dict__, treat whole list as Thrift
+                            first_item = value_list[0]
+                            if hasattr(first_item, '__dict__'):
+                                for item in value_list:
+                                    if item is not None:
+                                        item_dict = getattr(item, '__dict__', None)
+                                        if item_dict is not None:
+                                            result_list.append(self._thrift_to_dict(item))
+                                        else:
+                                            result_list.append(item)
+                                    else:
+                                        result_list.append(None)
+                            else:
+                                # These are plain objects/primitive
+                                result_list.extend(value_list)
+                            result[key] = result_list
                     elif hasattr(value, '__dict__'):
                         result[key] = self._thrift_to_dict(value)
                     else:
@@ -4095,21 +4120,30 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if email_address is not None:
-                args.append(email_address)
-
-            # Call Thrift client method
-            result = self.user_store.inviteToBusiness(*args)
+            # Unrolled argument construction for slightly faster dispatch
+            if authentication_token is not None and email_address is not None:
+                result = self.user_store.inviteToBusiness(authentication_token, email_address)
+            elif authentication_token is not None:
+                result = self.user_store.inviteToBusiness(authentication_token)
+            elif email_address is not None:
+                result = self.user_store.inviteToBusiness(email_address)
+            else:
+                result = self.user_store.inviteToBusiness()
 
             # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            result_dict = getattr(result, '__dict__', None)
+            if result_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                if not result:
+                    data = []
+                else:
+                    # If first item is Thrift, treat as all Thrift objects
+                    first_item = result[0]
+                    if hasattr(first_item, '__dict__'):
+                        data = [self._thrift_to_dict(item) if item is not None else None for item in result]
+                    else:
+                        data = list(result)
             else:
                 data = result
 
