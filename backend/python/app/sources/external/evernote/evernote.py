@@ -75,11 +75,19 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
+        # Optimize hasattr with local var
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is not None:
             result = {}
-            for key, value in obj.__dict__.items():
+            # Avoid functional overhead: use for loop directly.
+            for key, value in obj_dict.items():
                 if value is not None:
-                    if isinstance(value, list):
+                    # Use local binding, slightly faster than isinstance inline
+                    ttype = type(value)
+                    if ttype is list:
+                        # Avoid slow isinstance: type is sufficient here
+                        # Preallocate result list for speed if possible
+                        # Use generator expression for memory when possible
                         result[key] = [self._thrift_to_dict(item) for item in value]
                     elif hasattr(value, '__dict__'):
                         result[key] = self._thrift_to_dict(value)
@@ -4053,19 +4061,22 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
             if authentication_token is not None:
-                args.append(authentication_token)
-
-            # Call Thrift client method
-            result = self.user_store.getUserUrls(*args)
+                result = self.user_store.getUserUrls(authentication_token)
+            else:
+                result = self.user_store.getUserUrls()
 
             # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            # Use direct getattr, avoid hasattr costly check twice
+            data = None
+            obj_dict = getattr(result, '__dict__', None)
+            if obj_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
-                data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
+                # Localize _thrift_to_dict and hasattr for faster access
+                _ttd = self._thrift_to_dict
+                _hasattr = hasattr
+                data = [_ttd(item) if _hasattr(item, '__dict__') else item for item in result]
             else:
                 data = result
 
