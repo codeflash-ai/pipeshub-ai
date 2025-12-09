@@ -75,19 +75,25 @@ class EvernoteDataSource:
         if obj is None:
             return None
 
-        if hasattr(obj, '__dict__'):
-            result = {}
-            for key, value in obj.__dict__.items():
-                if value is not None:
-                    if isinstance(value, list):
-                        result[key] = [self._thrift_to_dict(item) for item in value]
-                    elif hasattr(value, '__dict__'):
-                        result[key] = self._thrift_to_dict(value)
-                    else:
-                        result[key] = value
-            return result
+        # Fast path for non-Thrift objects
+        obj_dict = getattr(obj, '__dict__', None)
+        if obj_dict is None:
+            return obj
 
-        return obj
+        result = {}
+        for key, value in obj_dict.items():
+            if value is None:
+                continue
+            # Inline the type checks for better performance and less function call overhead
+            if isinstance(value, list):
+                # Only call _thrift_to_dict on items which are possibly Thrift objects
+                # Use comprehension for optimal list processing
+                result[key] = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in value]
+            elif hasattr(value, '__dict__'):
+                result[key] = self._thrift_to_dict(value)
+            else:
+                result[key] = value
+        return result
 
     def get_client(self) -> EvernoteClient:
         """Get the underlying Evernote client."""
@@ -2031,26 +2037,24 @@ class EvernoteDataSource:
             EvernoteResponse: Standardized response with success/data/error
         """
         try:
-            # Build arguments list
-            args = []
-            if authentication_token is not None:
-                args.append(authentication_token)
-            if guid is not None:
-                args.append(guid)
-            if with_data is not None:
-                args.append(with_data)
-            if with_recognition is not None:
-                args.append(with_recognition)
-            if with_attributes is not None:
-                args.append(with_attributes)
-            if with_alternate_data is not None:
-                args.append(with_alternate_data)
+            # Build arguments list. Directly pack since all arguments appear required by docstring
+            args = [
+                authentication_token,
+                guid,
+                with_data,
+                with_recognition,
+                with_attributes,
+                with_alternate_data
+            ]
+
+            # Call Thrift client method
 
             # Call Thrift client method
             result = self.note_store.getResource(*args)
 
             # Convert Thrift objects to dict for easier handling
-            if hasattr(result, '__dict__'):
+            result_dict = getattr(result, '__dict__', None)
+            if result_dict is not None:
                 data = self._thrift_to_dict(result)
             elif isinstance(result, list):
                 data = [self._thrift_to_dict(item) if hasattr(item, '__dict__') else item for item in result]
