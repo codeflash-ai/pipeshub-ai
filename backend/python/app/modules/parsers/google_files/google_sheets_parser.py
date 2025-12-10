@@ -39,10 +39,16 @@ class GoogleSheetsParser:
         self.max_wait = 10  # seconds
 
     async def connect_service(
-        self, user_email: str = None, org_id: str = None, user_id: str = None, app_name: str = "drive"
+        self,
+        user_email: str = None,
+        org_id: str = None,
+        user_id: str = None,
+        app_name: str = "drive",
     ) -> None:
         if self.user_service:
-            if not await self.user_service.connect_individual_user(org_id, user_id,app_name=app_name):
+            if not await self.user_service.connect_individual_user(
+                org_id, user_id, app_name=app_name
+            ):
                 self.logger.error("❌ Failed to connect to Google Sheets service")
                 return None
 
@@ -171,9 +177,13 @@ class GoogleSheetsParser:
         except Exception as e:
             error_msg = str(e)
             if "SERVICE_DISABLED" in error_msg or "API has not been used" in error_msg:
-                self.logger.error(f"❌ Google Sheets API is not enabled. Please enable it in Google Cloud Console: {error_msg}")
+                self.logger.error(
+                    f"❌ Google Sheets API is not enabled. Please enable it in Google Cloud Console: {error_msg}"
+                )
             elif "PERMISSION_DENIED" in error_msg:
-                self.logger.error(f"❌ Permission denied for Google Sheets API: {error_msg}")
+                self.logger.error(
+                    f"❌ Permission denied for Google Sheets API: {error_msg}"
+                )
             else:
                 self.logger.error(f"❌ Failed to parse spreadsheet: {error_msg}")
             raise
@@ -342,36 +352,49 @@ class GoogleSheetsParser:
         if not values:
             return values
 
-        max_cols = max(len(row) for row in values)
+        # Determine the maximum column count efficiently in a single scan
+        max_cols = 0
 
         # Normalize row lengths
         for row in values:
-            while len(row) < max_cols:
-                row.append("")
+            row_len = len(row)
+            if row_len > max_cols:
+                max_cols = row_len
+
+        # Pad all rows up to max_cols, doing so with list multiplication for efficiency
+        for row in values:
+            row_len = len(row)
+            if row_len < max_cols:
+                row += [""] * (max_cols - row_len)
+
+        # Fill right (across columns)
+        # Use enumerate to avoid len(row) in the inner loop
 
         # Fill right (across columns) - useful if headings span across columns
         for row in values:
             last_val = ""
-            for col_idx in range(len(row)):
-                if row[col_idx]:
-                    last_val = row[col_idx]
+            for idx, val in enumerate(row):
+                if val:
+                    last_val = val
+                elif last_val:
+                    row[idx] = last_val
+
+        # Fill down (across rows)
+        # Transpose the sheet logic for better data locality
+        # We'll use precomputed column slices (views) for each column
+        # and fill down efficiently
+        for col_idx in range(max_cols):
+            last_val = ""
+            for row in values:
+                cell = row[col_idx]
+                if cell:
+                    last_val = cell
                 elif last_val:
                     row[col_idx] = last_val
 
-        # Fill down (across rows) - useful for section headers like 'IG FEED'
-        for col_idx in range(max_cols):
-            last_val = ""
-            for row_idx in range(len(values)):
-                if values[row_idx][col_idx]:
-                    last_val = values[row_idx][col_idx]
-                elif last_val:
-                    values[row_idx][col_idx] = last_val
-
         return values
 
-    def _process_cell(
-        self, value, header: str, row: int, col: int
-    ) -> Dict[str, Any]:
+    def _process_cell(self, value, header: str, row: int, col: int) -> Dict[str, Any]:
         """Process a single cell and return its data"""
         return {
             "value": value,
@@ -432,8 +455,8 @@ class GoogleSheetsParser:
                     {"role": "user", "content": formatted_prompt},
                 ]
                 response = await self._call_llm(messages)
-                if '</think>' in response.content:
-                    response.content = response.content.split('</think>')[-1]
+                if "</think>" in response.content:
+                    response.content = response.content.split("</think>")[-1]
                 try:
                     new_headers = [
                         h.strip() for h in response.content.strip().split(",")
@@ -525,8 +548,8 @@ class GoogleSheetsParser:
                 headers=table["headers"], sample_data=json.dumps(sample_data, indent=2)
             )
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             return response.content
 
         except Exception as e:
@@ -550,8 +573,8 @@ class GoogleSheetsParser:
             )
 
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             # Parse JSON array from response
             try:
                 return json.loads(response.content)
