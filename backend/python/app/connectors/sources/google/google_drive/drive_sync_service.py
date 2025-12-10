@@ -2087,48 +2087,53 @@ class DriveSyncIndividualService(BaseDriveSyncService):
     async def resync_drive(self, org_id, user) -> bool | None:
         try:
             user_service = self.drive_user_service
-            self.logger.info(f"Resyncing drive for user {user['email']}")
-            page_token = await self.arango_service.get_page_token_db(
-                user_email=user["email"]
-            )
-
-            if not page_token:
-                self.logger.warning(f"No page token found for user {user['email']}")
-                return True
-
-            changes, new_token = await user_service.get_changes(
-                page_token=page_token["token"]
-            )
+            email = user["email"]
             user_id = user["userId"]
 
+            self.logger.info("Resyncing drive for user %s", email)
+            page_token_obj = await self.arango_service.get_page_token_db(
+                user_email=email
+            )
+
+            if not page_token_obj:
+                self.logger.warning("No page token found for user %s", email)
+                return True
+
+
+            token_str = page_token_obj["token"]
+            changes, new_token = await user_service.get_changes(
+                page_token=token_str
+            )
+
             if changes:
-                self.logger.warning(f"Changes found for user {user['email']}")
+                self.logger.warning("Changes found for user %s", email)
                 for change in changes:
                     try:
                         await self.change_handler.process_change(
                             change, user_service, org_id, user_id
                         )
                     except Exception as e:
-                        self.logger.error(f"Error processing change: {str(e)}")
+                        self.logger.error("Error processing change: %s", str(e))
                         continue
             else:
-                self.logger.info("ℹ️ No changes found for user %s", user["email"])
+                self.logger.info("ℹ️ No changes found for user %s", email)
 
-            if new_token and new_token != page_token["token"]:
+            if new_token and new_token != token_str:
                 await self.arango_service.store_page_token(
-                    channel_id=page_token["channelId"],
-                    resource_id=page_token["resourceId"],
-                    user_email=user["email"],
+                    channel_id=page_token_obj["channelId"],
+                    resource_id=page_token_obj["resourceId"],
+                    user_email=email,
                     token=new_token,
-                    expiration=page_token["expiration"],
+                    expiration=page_token_obj["expiration"],
                 )
-                self.logger.info(f"🚀 Updated token for user {user['email']}")
+                self.logger.info("🚀 Updated token for user %s", email)
+
 
             return True
 
         except Exception as e:
             self.logger.error(
-                f"Error resyncing drive for user {user['email']}: {str(e)}"
+                "Error resyncing drive for user %s: %s", user.get("email", "<no email>"), str(e)
             )
             return False
 
