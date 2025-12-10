@@ -39,10 +39,16 @@ class GoogleSheetsParser:
         self.max_wait = 10  # seconds
 
     async def connect_service(
-        self, user_email: str = None, org_id: str = None, user_id: str = None, app_name: str = "drive"
+        self,
+        user_email: str = None,
+        org_id: str = None,
+        user_id: str = None,
+        app_name: str = "drive",
     ) -> None:
         if self.user_service:
-            if not await self.user_service.connect_individual_user(org_id, user_id,app_name=app_name):
+            if not await self.user_service.connect_individual_user(
+                org_id, user_id, app_name=app_name
+            ):
                 self.logger.error("❌ Failed to connect to Google Sheets service")
                 return None
 
@@ -112,31 +118,40 @@ class GoogleSheetsParser:
 
                 # Process headers and data
                 headers = values[0] if values else []
+                headers_len = len(headers)
                 data = []
 
+                # Reduce attribute lookups and method resolutions inside the hot loop
+                col_letter = self._col_letter
+                data_type = self._data_type
+                append_text = all_text.append
+
                 for row_idx, row in enumerate(values[1:], 2):
+                    # Pad row with None values if needed (avoid repeated list += in hotpath)
+                    padded_row = row
+                    if len(row) < headers_len:
+                        padded_row = row + [None] * (headers_len - len(row))
+
                     row_data = []
-                    # Pad row with None values if needed
-                    padded_row = row + [None] * (len(headers) - len(row))
 
                     for col_idx, value in enumerate(padded_row, 1):
-                        cell_data = {
+                        header_val = (
+                            headers[col_idx - 1] if col_idx - 1 < headers_len else None
+                        )
+                        col_let = col_letter(col_idx)
+                        cell = {
                             "value": value,
-                            "header": (
-                                headers[col_idx - 1]
-                                if col_idx - 1 < len(headers)
-                                else None
-                            ),
+                            "header": header_val,
                             "row": row_idx,
                             "column": col_idx,
-                            "column_letter": self._get_column_letter(col_idx),
-                            "coordinate": f"{self._get_column_letter(col_idx)}{row_idx}",
-                            "data_type": self._get_data_type(value),
+                            "column_letter": col_let,
+                            "coordinate": f"{col_let}{row_idx}",
+                            "data_type": data_type(value),
                         }
-                        row_data.append(cell_data)
+                        row_data.append(cell)
                         if value:
                             total_cells += 1
-                            all_text.append(str(value))
+                            append_text(str(value))
 
                     data.append(row_data)
 
@@ -171,9 +186,13 @@ class GoogleSheetsParser:
         except Exception as e:
             error_msg = str(e)
             if "SERVICE_DISABLED" in error_msg or "API has not been used" in error_msg:
-                self.logger.error(f"❌ Google Sheets API is not enabled. Please enable it in Google Cloud Console: {error_msg}")
+                self.logger.error(
+                    f"❌ Google Sheets API is not enabled. Please enable it in Google Cloud Console: {error_msg}"
+                )
             elif "PERMISSION_DENIED" in error_msg:
-                self.logger.error(f"❌ Permission denied for Google Sheets API: {error_msg}")
+                self.logger.error(
+                    f"❌ Permission denied for Google Sheets API: {error_msg}"
+                )
             else:
                 self.logger.error(f"❌ Failed to parse spreadsheet: {error_msg}")
             raise
@@ -369,9 +388,7 @@ class GoogleSheetsParser:
 
         return values
 
-    def _process_cell(
-        self, value, header: str, row: int, col: int
-    ) -> Dict[str, Any]:
+    def _process_cell(self, value, header: str, row: int, col: int) -> Dict[str, Any]:
         """Process a single cell and return its data"""
         return {
             "value": value,
@@ -432,8 +449,8 @@ class GoogleSheetsParser:
                     {"role": "user", "content": formatted_prompt},
                 ]
                 response = await self._call_llm(messages)
-                if '</think>' in response.content:
-                    response.content = response.content.split('</think>')[-1]
+                if "</think>" in response.content:
+                    response.content = response.content.split("</think>")[-1]
                 try:
                     new_headers = [
                         h.strip() for h in response.content.strip().split(",")
@@ -525,8 +542,8 @@ class GoogleSheetsParser:
                 headers=table["headers"], sample_data=json.dumps(sample_data, indent=2)
             )
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             return response.content
 
         except Exception as e:
@@ -550,8 +567,8 @@ class GoogleSheetsParser:
             )
 
             response = await self._call_llm(messages)
-            if '</think>' in response.content:
-                response.content = response.content.split('</think>')[-1]
+            if "</think>" in response.content:
+                response.content = response.content.split("</think>")[-1]
             # Parse JSON array from response
             try:
                 return json.loads(response.content)
