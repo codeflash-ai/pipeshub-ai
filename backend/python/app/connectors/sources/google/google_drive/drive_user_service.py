@@ -130,7 +130,9 @@ class DriveUserService:
                             int(expiry_ms) / 1000, tz=timezone.utc
                         )
                     else:
-                        self.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+                        self.token_expiry = datetime.now(timezone.utc) + timedelta(
+                            hours=1
+                        )
                 self.logger.info("✅ Token expiry time: %s", self.token_expiry)
             except Exception as e:
                 self.logger.warning("Failed to set token expiry: %s", str(e))
@@ -173,7 +175,9 @@ class DriveUserService:
         )
 
         if time_until_refresh.total_seconds() <= 0:
-            await self.google_token_handler.refresh_token(self.org_id, self.user_id, app_name="drive")
+            await self.google_token_handler.refresh_token(
+                self.org_id, self.user_id, app_name="drive"
+            )
 
             creds_data = await self.google_token_handler.get_individual_token(
                 self.org_id, self.user_id, app_name="drive"
@@ -207,7 +211,9 @@ class DriveUserService:
                             int(expiry_ms) / 1000, tz=timezone.utc
                         )
                     else:
-                        self.token_expiry = datetime.now(timezone.utc) + timedelta(hours=1)
+                        self.token_expiry = datetime.now(timezone.utc) + timedelta(
+                            hours=1
+                        )
             except Exception as e:
                 self.logger.warning("Failed to set refreshed token expiry: %s", str(e))
 
@@ -411,7 +417,7 @@ class DriveUserService:
 
     @exponential_backoff()
     @token_refresh
-    async def create_changes_watch(self, token = None) -> Optional[Dict]:
+    async def create_changes_watch(self, token=None) -> Optional[Dict]:
         """Set up changes.watch for all changes"""
         try:
             self.logger.info("🚀 Creating changes watch")
@@ -426,7 +432,9 @@ class DriveUserService:
                         "publicEndpoint"
                     )
                     if not webhook_endpoint:
-                        webhook_endpoint = endpoints.get("connectors", {}).get("endpoint", DefaultEndpoints.CONNECTOR_ENDPOINT.value)
+                        webhook_endpoint = endpoints.get("connectors", {}).get(
+                            "endpoint", DefaultEndpoints.CONNECTOR_ENDPOINT.value
+                        )
                         if not webhook_endpoint:
                             raise DriveOperationError(
                                 "Missing webhook endpoint configuration",
@@ -529,7 +537,9 @@ class DriveUserService:
                 details={"error": str(e)},
             )
 
-    async def stop_watch(self, channel_id: Optional[str], resource_id: Optional[str]) -> bool:
+    async def stop_watch(
+        self, channel_id: Optional[str], resource_id: Optional[str]
+    ) -> bool:
         """Stop a changes watch"""
         try:
             if channel_id is None or resource_id is None:
@@ -554,7 +564,8 @@ class DriveUserService:
             changes = []
             next_token = page_token
 
-            if self.service is None:
+            service = self.service
+            if service is None:
                 self.logger.error("Service is not initialized yet")
                 return [], None
 
@@ -562,7 +573,7 @@ class DriveUserService:
                 try:
                     async with self.google_limiter:
                         response = (
-                            self.service.changes()
+                            service.changes()
                             .list(
                                 pageToken=next_token,
                                 spaces="drive",
@@ -573,7 +584,8 @@ class DriveUserService:
                             .execute()
                         )
                 except HttpError as e:
-                    if e.resp.status == HttpStatusCode.NOT_FOUND.value:  # Invalid page token
+                    status = e.resp.status
+                    if status == HttpStatusCode.NOT_FOUND.value:
                         self.logger.error("❌ Invalid page token %s", page_token)
                         new_token = await self.get_start_page_token_api()
                         if not new_token:
@@ -583,7 +595,7 @@ class DriveUserService:
                                 details={"page_token": page_token},
                             )
                         return [], new_token
-                    elif e.resp.status == HttpStatusCode.FORBIDDEN.value:
+                    elif status == HttpStatusCode.FORBIDDEN.value:
                         raise DrivePermissionError(
                             "Permission denied getting changes: " + str(e),
                             details={"page_token": page_token, "error": str(e)},
@@ -593,11 +605,13 @@ class DriveUserService:
                         details={"page_token": page_token, "error": str(e)},
                     )
 
-                changes.extend(response.get("changes", []))
+                changes_from_resp = response.get("changes", [])
+                changes.extend(changes_from_resp)
                 next_token = response.get("nextPageToken")
 
-                if "newStartPageToken" in response:
-                    return changes, response["newStartPageToken"]
+                new_start_token = response.get("newStartPageToken")
+                if new_start_token is not None:
+                    return changes, new_start_token
 
                 if not next_token:
                     break
@@ -999,7 +1013,9 @@ class DriveUserService:
                 user_permission = {
                     "id": str(uuid.uuid4()),  # Generate unique permission ID
                     "type": "user",
-                    "role": file.get("sharingUser", {}).get("me", True) and "owner" or "reader",
+                    "role": file.get("sharingUser", {}).get("me", True)
+                    and "owner"
+                    or "reader",
                     "emailAddress": user_email,
                     "displayName": file.get("sharingUser", {}).get("displayName", ""),
                     "photoLink": file.get("sharingUser", {}).get("photoLink", ""),
@@ -1008,10 +1024,12 @@ class DriveUserService:
                     "permissionDetails": [
                         {
                             "permissionType": "user",
-                            "role": file.get("sharingUser", {}).get("me", True) and "owner" or "reader",
-                            "inherited": False
+                            "role": file.get("sharingUser", {}).get("me", True)
+                            and "owner"
+                            or "reader",
+                            "inherited": False,
                         }
-                    ]
+                    ],
                 }
 
                 # Create permission entry for the owner
@@ -1025,12 +1043,8 @@ class DriveUserService:
                     "kind": "drive#permission",
                     "deleted": False,
                     "permissionDetails": [
-                        {
-                            "permissionType": "user",
-                            "role": "owner",
-                            "inherited": False
-                        }
-                    ]
+                        {"permissionType": "user", "role": "owner", "inherited": False}
+                    ],
                 }
 
                 # Add permissions array to file metadata
