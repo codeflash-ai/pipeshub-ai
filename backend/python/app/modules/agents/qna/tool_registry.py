@@ -51,21 +51,25 @@ class RegistryToolWrapper(BaseTool):
             state: Chat state object
             **kwargs: Additional keyword arguments
         """
-        base_description = getattr(
-            registry_tool,
-            'description',
-            f"Tool: {app_name}.{tool_name}"
+        # Cache getattr and vars locally to avoid repeated lookups in tight loops
+        registry_tool_description = getattr(registry_tool, 'description', None)
+        base_description = (
+            registry_tool_description
+            if registry_tool_description is not None
+            else f"Tool: {app_name}.{tool_name}"
         )
 
-        try:
-            params = getattr(registry_tool, 'parameters', []) or []
-            if params:
-                formatted_params = self._format_parameters(params)
+        params = getattr(registry_tool, 'parameters', None)
+        # Avoid unnecessary try/except: only wrap if params access may fail
+        formatted_params = None
+        if params:
+            formatted_params = RegistryToolWrapper._format_parameters(params)
+            if formatted_params:
                 params_doc = "\nParameters:\n- " + "\n- ".join(formatted_params)
                 full_description = f"{base_description}{params_doc}"
             else:
                 full_description = base_description
-        except Exception:
+        else:
             full_description = base_description
 
         init_data: Dict[str, Union[str, object]] = {
@@ -90,23 +94,32 @@ class RegistryToolWrapper(BaseTool):
         Returns:
             List of formatted parameter strings
         """
-        formatted_params = []
+        # Prebind local variables for attribute lookup and reduce scope in loop
+        append = list.append
+        result: List[str] = []
         for param in params:
             try:
-                type_name = getattr(
-                    param.type,
-                    'name',
-                    str(getattr(param, 'type', 'string'))
-                )
+                type_obj = getattr(param, 'type', None)
+                type_name: str
+                if type_obj is not None:
+                    # Avoid getattr(type_obj, 'name') unless necessary
+                    type_name = getattr(type_obj, 'name', None)
+                    if type_name is not None:
+                        pass
+                    else:
+                        type_name = str(type_obj)
+                else:
+                    type_name = 'string'
             except Exception:
                 type_name = 'string'
 
             required_marker = ' (required)' if getattr(param, 'required', False) else ''
             description = getattr(param, 'description', '')
-            formatted_params.append(
+            append(
+                result,
                 f"{param.name}{required_marker}: {description} [{type_name}]"
             )
-        return formatted_params
+        return result
 
     @property
     def state(self) -> ChatState:
