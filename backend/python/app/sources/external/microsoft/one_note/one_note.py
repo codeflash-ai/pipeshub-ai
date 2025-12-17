@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -178,35 +176,49 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Prepare query_parameters and config only if actually set, for efficiency
+            query_params = None
+            odata_present = (
+                select is not None or
+                expand is not None or
+                filter is not None or
+                orderby is not None or
+                search is not None or
+                top is not None or
+                skip is not None
+            )
+            if odata_present:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params is not None:
+                config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy() if not hasattr(headers, "copy") else headers.copy()
+            else:
+                config.headers = {}
+
+            # Add If-Match header if present
+            if If_Match is not None:
+                config.headers["If-Match"] = If_Match
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.groups.by_group_id(group_id).onenote.delete(request_configuration=config)
