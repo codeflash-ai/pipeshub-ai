@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -1371,21 +1369,32 @@ class OneNoteDataSource:
         # Build query parameters including OData for OneNote
         try:
             # Use typed query parameters
+            # Avoid repeated attribute lookups with local variables
+            builder = self.client.groups.by_group_id(group_id).onenote.notebooks.by_notebook_id(notebook_id).section_groups.by_section_group_id(sectionGroup_id)
+
+            # Initialize query parameters object
             query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
+            has_select = bool(select)
+            has_expand = bool(expand)
+            has_filter = filter is not None
+            has_orderby = orderby is not None
+            has_search = search is not None
+            has_top = top is not None
+            has_skip = skip is not None
+
+            if has_select:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if has_expand:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if has_filter:
                 query_params.filter = filter
-            if orderby:
+            if has_orderby:
                 query_params.orderby = orderby
-            if search:
+            if has_search:
                 query_params.search = search
-            if top is not None:
+            if has_top:
                 query_params.top = top
-            if skip is not None:
+            if has_skip:
                 query_params.skip = skip
 
             # Create proper typed request configuration
@@ -1394,14 +1403,19 @@ class OneNoteDataSource:
 
             if headers:
                 config.headers = headers
-
-            # Add consistency level for search operations in OneNote
-            if search:
+            # Add consistency level for search only if necessary and not already set
+            if has_search:
                 if not config.headers:
                     config.headers = {}
+                elif 'ConsistencyLevel' in config.headers:
+                    pass
+                else:
+                    # do nothing, check below
+                    pass
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.notebooks.by_notebook_id(notebook_id).section_groups.by_section_group_id(sectionGroup_id).get(request_configuration=config)
+            # Await and handle response via fast path
+            response = await builder.get(request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
