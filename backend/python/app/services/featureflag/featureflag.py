@@ -28,14 +28,15 @@ from typing import Optional
 from app.services.featureflag.interfaces.config import IConfigProvider
 from app.services.featureflag.provider.env import EnvFileProvider
 
-DEFAULT_ENV_PATH = '../../../.env'
+DEFAULT_ENV_PATH = "../../../.env"
+
 
 class FeatureFlagService:
     """
     Singleton service for managing feature flags
     """
 
-    _instance: Optional['FeatureFlagService'] = None
+    _instance: Optional["FeatureFlagService"] = None
     _lock: Lock = Lock()
 
     def __init__(self, provider: IConfigProvider) -> None:
@@ -51,7 +52,9 @@ class FeatureFlagService:
         self._provider = provider
 
     @classmethod
-    def get_service(cls, provider: Optional[IConfigProvider] = None) -> 'FeatureFlagService':
+    def get_service(
+        cls, provider: Optional[IConfigProvider] = None
+    ) -> "FeatureFlagService":
         """
         Get or create the singleton instance (thread-safe)
 
@@ -61,27 +64,28 @@ class FeatureFlagService:
         Returns:
             FeatureFlagService singleton instance
         """
-        if cls._instance is None:
-            with cls._lock:
-                if cls._instance is None:
-                    # Default to EnvFileProvider if no provider specified
-                    if provider is None:
-                        # Get default .env path relative to this file
-                        # This file is at: backend/python/app/services/featureflag/featureflag.py
-                        # .env.template is at: backend/python/.env.template
-                        default_env_path = os.path.join(
-                            os.path.dirname(os.path.abspath(__file__)),
-                            DEFAULT_ENV_PATH
-                        )
-                        env_path = os.getenv(
-                            'FEATURE_FLAG_ENV_PATH',
-                            default_env_path
-                        )
-                        provider = EnvFileProvider(env_path)
+        # Fast path: already initialized, just return immediately
+        instance = cls._instance
+        if instance is not None:
+            return instance
 
-                    cls._instance = cls(provider)
+        # Only lock and perform init if necessary (double-checked locking)
+        with cls._lock:
+            instance = cls._instance
+            if instance is None:
+                # Default to EnvFileProvider if no provider specified
+                if provider is None:
+                    # Get default .env path relative to this file
+                    default_env_path = os.path.join(
+                        os.path.dirname(os.path.abspath(__file__)), DEFAULT_ENV_PATH
+                    )
+                    env_path = os.getenv("FEATURE_FLAG_ENV_PATH", default_env_path)
+                    provider = EnvFileProvider(env_path)
 
-        return cls._instance
+                cls._instance = cls(provider)
+                instance = cls._instance
+
+        return instance
 
     @classmethod
     def reset_instance(cls) -> None:
