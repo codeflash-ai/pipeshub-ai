@@ -117,11 +117,11 @@ class ConnectorCtag:
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'ConnectorCtag':
         """Create ConnectorCtag from dictionary"""
-        return cls(
-            connector_name=data["connector_name"],
-            ctag=data["ctag"],
-            last_updated=data["last_updated"]
-        )
+        # Fast path using local variables for attribute lookup; preserves behavior and existing exception type
+        connector_name = data["connector_name"]
+        ctag = data["ctag"]
+        last_updated = data["last_updated"]
+        return cls(connector_name, ctag, last_updated)
 
     def validate(self) -> bool:
         """Validate the connector ctag"""
