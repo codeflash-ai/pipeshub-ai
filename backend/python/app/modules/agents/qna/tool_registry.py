@@ -481,20 +481,23 @@ def _format_tool_stats(tool_name: str, stats: Dict[str, object]) -> str:
     Returns:
         Formatted statistics string
     """
-    summary = f"\n{tool_name}:\n"
-    summary += f"  - Successful: {stats['success']}\n"
-    summary += f"  - Failed: {stats['error']}\n"
+    summary = f"\n{tool_name}:\n" \
+              f"  - Successful: {stats['success']}\n" \
+              f"  - Failed: {stats['error']}\n"
 
-    results = stats.get("results", [])
+    results = stats.get("results")
     if results and isinstance(results, list):
         last_result = results[-1]
-        result_str = str(last_result.get("result", ""))
-        result_preview = result_str[:RESULT_PREVIEW_MAX_LENGTH]
-
-        if len(result_str) > RESULT_PREVIEW_MAX_LENGTH:
-            result_preview += "..."
-
-        summary += f"  - Last result: {result_preview}\n"
+        result_str = last_result.get("result", "")
+        # Avoid unnecessary str() if already a string for likely faster slicing and length check
+        if isinstance(result_str, str):
+            preview = result_str
+        else:
+            preview = str(result_str)
+        truncated = preview[:RESULT_PREVIEW_MAX_LENGTH]
+        if len(preview) > RESULT_PREVIEW_MAX_LENGTH:
+            truncated += "..."
+        summary += f"  - Last result: {truncated}\n"
 
     return summary
 
