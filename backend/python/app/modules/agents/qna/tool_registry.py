@@ -368,8 +368,11 @@ def _is_essential_tool(full_tool_name: str) -> bool:
     Returns:
         True if tool is essential
     """
-    essential_patterns = ["calculator.", "web_search", "get_current_datetime"]
-    return any(pattern in full_tool_name for pattern in essential_patterns)
+    essential_patterns = ("calculator.", "web_search", "get_current_datetime")
+    for pattern in essential_patterns:
+        if pattern in full_tool_name:
+            return True
+    return False
 
 
 def _initialize_tool_state(state: ChatState) -> None:
