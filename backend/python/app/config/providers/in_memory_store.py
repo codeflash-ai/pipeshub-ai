@@ -36,14 +36,16 @@ class KeyData(Generic[T]):
     def is_expired(self) -> bool:
         """Check if the value has expired."""
         if not self.expiry:
-            logger.debug("📋 No expiry set, returning False")
+            if logger.isEnabledFor(10):  # DEBUG is 10
+                logger.debug("📋 No expiry set, returning False")
             return False
         is_expired = time.time() > self.expiry
-        logger.debug(
-            "🔍 Checking expiry: %s (expired: %s)",
-            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.expiry)),
-            is_expired,
-        )
+        if logger.isEnabledFor(10):  # DEBUG
+            logger.debug(
+                "🔍 Checking expiry: %s (expired: %s)",
+                time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.expiry)),
+                is_expired,
+            )
         return is_expired
 
 
@@ -76,23 +78,19 @@ class InMemoryKeyValueStore(KeyValueStore[T], Generic[T]):
 
     def _load_from_json(self, json_file_path: str) -> Dict[str, KeyData[T]]:
         """Load data from a JSON file."""
-        with open(json_file_path, 'r') as file:
+        with open(json_file_path, "r") as file:
             data = json.load(file)
         return {key: KeyData(value, None) for key, value in data.items()}
 
     def _cleanup_expired_keys(self) -> None:
         """Clean up expired keys synchronously."""
-        expired_keys = [
-            key for key, data in self.store.items() if data.is_expired()
-        ]
+        expired_keys = [key for key, data in self.store.items() if data.is_expired()]
         if expired_keys:
             logger.debug("📋 Found expired keys: %s", expired_keys)
             for key in expired_keys:
                 logger.debug("🔄 Removing expired key: %s", key)
                 del self.store[key]
-            logger.debug(
-                "✅ Cleanup complete, removed %d keys", len(expired_keys)
-            )
+            logger.debug("✅ Cleanup complete, removed %d keys", len(expired_keys))
 
     def _notify_watchers(self, key: str, value: Optional[T]) -> None:
         """Notify all watchers of a key about value changes."""
@@ -109,7 +107,9 @@ class InMemoryKeyValueStore(KeyValueStore[T], Generic[T]):
                     logger.error("❌ Error in watcher callback: %s", str(e))
                     logger.exception("Detailed error:")
 
-    async def create_key(self, key: str, value: T, overwrite: bool = True, ttl: Optional[int] = None) -> None:
+    async def create_key(
+        self, key: str, value: T, overwrite: bool = True, ttl: Optional[int] = None
+    ) -> None:
         """
         Create a new key-value pair in the store.
 
