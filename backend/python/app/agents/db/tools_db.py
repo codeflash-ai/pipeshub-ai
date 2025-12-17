@@ -81,15 +81,16 @@ class ToolNode:
 
     def validate(self) -> bool:
         """Validate the tool node"""
-        return all([
-            self.tool_id,
-            self.app_name,
-            self.tool_name,
-            self.description,
-            self.ctag,
-            self.created_at,
-            self.updated_at
-        ])
+        # Minor optimization: avoid creating an intermediate list, and short-circuit evaluation
+        return (
+            bool(self.tool_id) and
+            bool(self.app_name) and
+            bool(self.tool_name) and
+            bool(self.description) and
+            bool(self.ctag) and
+            bool(self.created_at) and
+            bool(self.updated_at)
+        )
 
     @property
     def key(self) -> str:
