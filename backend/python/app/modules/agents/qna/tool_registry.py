@@ -57,15 +57,17 @@ class RegistryToolWrapper(BaseTool):
             f"Tool: {app_name}.{tool_name}"
         )
 
-        try:
-            params = getattr(registry_tool, 'parameters', []) or []
-            if params:
+        # Optimize: Access .parameters and formatting only if present and not empty, to avoid unnecessary getattr/formatting
+        params = getattr(registry_tool, 'parameters', None)
+        # The original logic is correct, but this is more direct (no need for "or []", empty already means skip)
+        if params:
+            try:
                 formatted_params = self._format_parameters(params)
                 params_doc = "\nParameters:\n- " + "\n- ".join(formatted_params)
                 full_description = f"{base_description}{params_doc}"
-            else:
+            except Exception:
                 full_description = base_description
-        except Exception:
+        else:
             full_description = base_description
 
         init_data: Dict[str, Union[str, object]] = {
@@ -194,13 +196,27 @@ class RegistryToolWrapper(BaseTool):
         Raises:
             RuntimeError: If instance creation fails
         """
-        class_name = tool_function.__qualname__.split('.')[0]
+        # Optimize: factor out string splitting/lookups for class_name; cache split result for reuse
+        qualname = tool_function.__qualname__
+        class_name = qualname.split('.', 1)[0]
         module_name = tool_function.__module__
 
         try:
-            action_module = __import__(module_name, fromlist=[class_name])
+            # __import__ is expensive, so if already imported, use sys.modules
+            import sys
+            if module_name in sys.modules:
+                action_module = sys.modules[module_name]
+            else:
+                action_module = __import__(module_name, fromlist=[class_name])
             action_class = getattr(action_module, class_name)
 
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to import class '{class_name}' from module '{module_name}' "
+                f"for tool '{self.app_name}.{self.tool_name}': {str(e)}"
+            ) from e
+
+        try:
             instance = self._create_tool_instance_with_factory(action_class)
             bound_method = getattr(instance, self.tool_name)
             return bound_method(**arguments)
@@ -221,14 +237,18 @@ class RegistryToolWrapper(BaseTool):
         Raises:
             ValueError: If factory not available
         """
+        # Optimize: Bind instance variables locally since used >1
+        app_name = self.app_name
+        state = self.state
+
         try:
-            factory = ClientFactoryRegistry.get_factory(self.app_name)
+            factory = ClientFactoryRegistry.get_factory(app_name)
 
             if factory:
-                retrieval_service = self.state.get("retrieval_service")
+                retrieval_service = state.get("retrieval_service")
                 if retrieval_service and hasattr(retrieval_service, 'config_service'):
                     config_service = retrieval_service.config_service
-                    logger = self.state.get("logger")
+                    logger = state.get("logger")
 
                     client = factory.create_client_sync(config_service, logger)
                     return action_class(client)
@@ -236,10 +256,10 @@ class RegistryToolWrapper(BaseTool):
             raise ValueError("Not able to get the client from factory")
 
         except Exception as e:
-            logger = self.state.get("logger")
+            logger = state.get("logger")
             if logger:
                 logger.warning(
-                    f"Factory creation failed for {self.app_name}, using fallback: {e}"
+                    f"Factory creation failed for {app_name}, using fallback: {e}"
                 )
             raise
 
