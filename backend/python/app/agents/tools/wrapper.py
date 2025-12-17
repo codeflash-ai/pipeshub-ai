@@ -272,7 +272,9 @@ class RegistryToolWrapper(BaseTool):
         Returns:
             True if function is a class method
         """
-        return hasattr(func, '__qualname__') and '.' in func.__qualname__
+        # This optimization avoids computing __qualname__ twice for each call.
+        qualname = getattr(func, '__qualname__', None)
+        return qualname is not None and '.' in qualname
 
     def _execute_class_method(
         self,
