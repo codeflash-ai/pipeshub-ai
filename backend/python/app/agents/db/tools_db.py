@@ -125,11 +125,8 @@ class ConnectorCtag:
 
     def validate(self) -> bool:
         """Validate the connector ctag"""
-        return all([
-            self.connector_name,
-            self.ctag,
-            self.last_updated
-        ])
+        # Use direct boolean ANDs instead of all([...]) for slight speedup
+        return bool(self.connector_name and self.ctag and self.last_updated)
 
     @property
     def key(self) -> str:
