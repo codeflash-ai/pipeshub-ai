@@ -202,11 +202,13 @@ class RegistryToolWrapper(BaseTool):
         formatted_params = []
         for param in params:
             try:
-                type_name = getattr(
-                    param.type,
-                    'name',
-                    str(getattr(param, 'type', 'string'))
-                )
+                param_type = getattr(param, 'type', None)
+                if param_type is not None:
+                    type_name = getattr(param_type, 'name', None)
+                    if type_name is None:
+                        type_name = str(param_type)
+                else:
+                    type_name = 'string'
             except Exception:
                 type_name = 'string'
 
