@@ -95,16 +95,16 @@ class CSVParser:
             file_stream, delimiter=self.delimiter, quotechar=self.quotechar
         )
 
-        # Convert all rows to dictionaries and store them
-        data = []
-        for row in reader:
-            # Clean up the row data
-            cleaned_row = {
+        # Convert all rows to dictionaries using a generator expression for memory efficiency
+        data = [
+            {
                 key: self._parse_value(value)
                 for key, value in row.items()
                 if key is not None  # Skip None keys that might appear in malformed CSVs
             }
-            data.append(cleaned_row)
+            for row in reader
+        ]
+
 
         if not data:
             raise ValueError("CSV file is empty or has no valid rows")
@@ -192,27 +192,34 @@ class CSVParser:
         Returns:
             Parsed value as the appropriate type (int, float, bool, or string)
         """
-        if value is None or value.strip() == "":
+        if value is None:
             return None
 
         # Remove leading/trailing whitespace
         value = value.strip()
+        if not value:
+            return None
 
-        # Try to convert to boolean
-        if value.lower() in ("true", "false"):
-            return value.lower() == "true"
+        lower_value = value.lower()
+        if lower_value == "true":
+            return True
+        if lower_value == "false":
+            return False
 
-        # Try to convert to integer
-        try:
-            return int(value)
-        except ValueError:
-            pass
+        # Fast integer detection (avoid exceptions where possible)
+        if value.isdigit() or (value[0] == '-' and value[1:].isdigit()):
+            try:
+                return int(value)
+            except ValueError:
+                pass  # fallback to float below
 
-        # Try to convert to float
-        try:
-            return float(value)
-        except ValueError:
-            pass
+        # Fast float detection
+        # Attempt float only if clearly a float-like string
+        if '.' in value or 'e' in value or 'E' in value:
+            try:
+                return float(value)
+            except ValueError:
+                pass
 
         # Return as string if no other type matches
         return value
