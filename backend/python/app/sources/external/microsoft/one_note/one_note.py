@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -115,16 +113,16 @@ class OneNoteDataSource:
             error_msg = None
 
             # Enhanced error response handling for OneNote
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+            if isinstance(response, dict) and 'error' in response:
                 success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
                 else:
                     error_msg = str(error_info)
+            elif hasattr(response, 'error'):
+                success = False
+                error_msg = str(response.error)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
                 success = False
                 error_msg = f"{response.code}: {response.message}"
@@ -5628,36 +5626,44 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only create configuration objects if needed
+            has_params = any([select, expand, filter, orderby, search, top is not None, skip is not None])
+            has_custom_headers = headers is not None
+            
+            if not has_params and not has_custom_headers and not search:
+                config = None
+            else:
+                config = RequestConfiguration()
+                
+                if has_params:
+                    # Use typed query parameters
+                    query_params = RequestConfiguration()
+                    # Set query parameters using typed object properties
+                    if select:
+                        query_params.select = select if isinstance(select, list) else [select]
+                    if expand:
+                        query_params.expand = expand if isinstance(expand, list) else [expand]
+                    if filter:
+                        query_params.filter = filter
+                    if orderby:
+                        query_params.orderby = orderby
+                    if search:
+                        query_params.search = search
+                    if top is not None:
+                        query_params.top = top
+                    if skip is not None:
+                        query_params.skip = skip
+                    
+                    config.query_parameters = query_params
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+                if headers:
+                    config.headers = headers
 
-            if headers:
-                config.headers = headers
-
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Add consistency level for search operations in OneNote
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.me.onenote.notebooks.by_notebook_id(notebook_id).delete(request_configuration=config)
             return self._handle_onenote_response(response)
