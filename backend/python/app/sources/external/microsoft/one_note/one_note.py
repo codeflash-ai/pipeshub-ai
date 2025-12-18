@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -5407,36 +5405,41 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = SectionsRequestBuilder.SectionsRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only create query parameters if any are provided
+            query_params = None
+            if select or expand or filter or orderby or search or top is not None or skip is not None:
+                query_params = SectionsRequestBuilder.SectionsRequestBuilderGetQueryParameters()
+                # Set query parameters using typed object properties
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = SectionsRequestBuilder.SectionsRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            # Only create configuration if needed
+            config = None
+            if query_params or headers or search:
+                config = SectionsRequestBuilder.SectionsRequestBuilderGetRequestConfiguration()
+                if query_params:
+                    config.query_parameters = query_params
 
-            if headers:
-                config.headers = headers
+                if headers:
+                    config.headers = headers
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                # Add consistency level for search operations in OneNote
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.groups.by_group_id(group_id).onenote.sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).parent_notebook.get(request_configuration=config)
             return self._handle_onenote_response(response)
