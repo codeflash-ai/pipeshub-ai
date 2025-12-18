@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -2403,38 +2401,67 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Minimize attribute and object creation by consolidating assignments
+            select_val = select if select is not None else None
+            expand_val = expand if expand is not None else None
+            filter_val = filter if filter is not None else None
+            orderby_val = orderby if orderby is not None else None
+            search_val = search if search is not None else None
+            top_val = top if top is not None else None
+            skip_val = skip if skip is not None else None
 
-            # Create proper typed request configuration
-            config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            # Only instantiate query parameters/config if actually needed
+            any_query = (
+                select_val is not None or expand_val is not None or filter_val is not None or
+                orderby_val is not None or search_val is not None or top_val is not None or skip_val is not None
+            )
+            if any_query or headers:
+                query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
+                if select_val:
+                    query_params.select = select_val if isinstance(select_val, list) else [select_val]
+                if expand_val:
+                    query_params.expand = expand_val if isinstance(expand_val, list) else [expand_val]
+                if filter_val:
+                    query_params.filter = filter_val
+                if orderby_val:
+                    query_params.orderby = orderby_val
+                if search_val:
+                    query_params.search = search_val
+                if top_val is not None:
+                    query_params.top = top_val
+                if skip_val is not None:
+                    query_params.skip = skip_val
 
-            if headers:
-                config.headers = headers
+                config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
+                config.query_parameters = query_params
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                if headers:
+                    config.headers = headers.copy() if not hasattr(headers, "copy") else headers.copy()
+                if search_val:
+                    # Add ConsistencyLevel for search operations in OneNote
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None
 
-            response = await self.client.groups.by_group_id(group_id).onenote.notebooks.by_notebook_id(notebook_id).section_groups.by_section_group_id(sectionGroup_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).get(request_configuration=config)
+            # Build resource chain using variables (avoid repeated attribute chains)
+            groups = self.client.groups
+            group_resource = groups.by_group_id(group_id)
+            onenote_resource = group_resource.onenote
+            notebooks_resource = onenote_resource.notebooks
+            notebook_resource = notebooks_resource.by_notebook_id(notebook_id)
+            section_groups_resource = notebook_resource.section_groups
+            section_group_resource = section_groups_resource.by_section_group_id(sectionGroup_id)
+            sections_resource = section_group_resource.sections
+            onenote_section_resource = sections_resource.by_onenote_section_id(onenoteSection_id)
+            pages_resource = onenote_section_resource.pages
+            page_resource = pages_resource.by_onenote_page_id(onenotePage_id)
+
+            if config is not None:
+                response = await page_resource.get(request_configuration=config)
+            else:
+                response = await page_resource.get()
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
