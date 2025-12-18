@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -4862,27 +4860,32 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only create and assign query parameters if needed
+            has_odata_params = bool(select or expand or filter or orderby or search or top is not None or skip is not None)
+            query_params = None
+            if has_odata_params:
+                query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+
 
             # Create proper typed request configuration
             config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            if query_params is not None:
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
@@ -4893,7 +4896,13 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.notebooks.by_notebook_id(notebook_id).sections.by_onenote_section_id(onenoteSection_id).parent_section_group.get(request_configuration=config)
+            # Cache chained attribute lookup for efficiency/readability
+            group_ref = self.client.groups.by_group_id(group_id)
+            notebook_ref = group_ref.onenote.notebooks.by_notebook_id(notebook_id)
+            section_ref = notebook_ref.sections.by_onenote_section_id(onenoteSection_id)
+            parent_section_group_ref = section_ref.parent_section_group
+
+            response = await parent_section_group_ref.get(request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
