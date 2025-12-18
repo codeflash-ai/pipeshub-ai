@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -3994,37 +3992,51 @@ class OneNoteDataSource:
         # Build query parameters including OData for OneNote
         try:
             # Use typed query parameters
-            query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Optimization: only create and set the NotebooksRequestBuilderGetQueryParameters attributes that are needed.
+            qp = None
+            has_any_param = (
+                select or expand or filter is not None or orderby is not None or
+                search is not None or top is not None or skip is not None
+            )
+            if has_any_param:
+                qp = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
+                # Use cheap local inst checks (reducing ternary checks and redundant isinstance calls)
+                if select:
+                    qp.select = select if isinstance(select, list) else [select]
+                if expand:
+                    qp.expand = expand if isinstance(expand, list) else [expand]
+                if filter is not None:
+                    qp.filter = filter
+                if orderby is not None:
+                    qp.orderby = orderby
+                if search is not None:
+                    qp.search = search
+                if top is not None:
+                    qp.top = top
+                if skip is not None:
+                    qp.skip = skip
 
-            # Create proper typed request configuration
-            config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            # Optimization: Don't allocate a config object if not needed (e.g., no headers or query parameters)
+            config = None
+            if qp or headers or search is not None:
+                config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
+                if qp:
+                    config.query_parameters = qp
+                if headers:
+                    config.headers = headers
+                # Add consistency level for search operations in OneNote
+                if search is not None:
+                    if not getattr(config, "headers", None):
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
 
-            if headers:
-                config.headers = headers
+            # Build chained call outside try to avoid time inside except
+            get_func = self.client.groups.by_group_id(group_id)\
+                .onenote.notebooks.by_notebook_id(notebook_id)\
+                .sections.by_onenote_section_id(onenoteSection_id)\
+                .pages.by_onenote_page_id(onenotePage_id).get
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
-
-            response = await self.client.groups.by_group_id(group_id).onenote.notebooks.by_notebook_id(notebook_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).get(request_configuration=config)
+            response = await get_func(request_configuration=config) if config else await get_func()
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
