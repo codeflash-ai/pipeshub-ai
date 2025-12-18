@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -2320,38 +2318,46 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Pre-bake query parameters dictionary to minimize repetitive assignments
+            qp_select = select if select else None
+            if qp_select and not isinstance(qp_select, list):
+                qp_select = [qp_select]
+            qp_expand = expand if expand else None
+            if qp_expand and not isinstance(qp_expand, list):
+                qp_expand = [qp_expand]
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Direct object init using kwargs for minimal attribute relay
+            query_params = RequestConfiguration(
+                select=qp_select,
+                expand=qp_expand,
+                filter=filter,
+                orderby=orderby,
+                search=search,
+                top=top,
+                skip=skip
+            )
+
+            # Only set explicitly populated query_parameters
+            config = RequestConfiguration(query_parameters=query_params)
+
+            # Avoid unnecessary config.headers allocation if possible
 
             if headers:
                 config.headers = headers
-
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
+            elif search:
+                config.headers = {'ConsistencyLevel': 'eventual'}
+            # If both headers and search, add ConsistencyLevel to headers
+            if headers and search:
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.notebooks.by_notebook_id(notebook_id).section_groups.by_section_group_id(sectionGroup_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).delete(request_configuration=config)
+            response = await self.client.groups \
+                .by_group_id(group_id) \
+                .onenote.notebooks \
+                .by_notebook_id(notebook_id) \
+                .section_groups.by_section_group_id(sectionGroup_id) \
+                .sections.by_onenote_section_id(onenoteSection_id) \
+                .pages.by_onenote_page_id(onenotePage_id) \
+                .delete(request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
