@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -8708,30 +8706,34 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Efficiently build RequestConfiguration only once
+            config = RequestConfiguration()
+
+            # Use list comprehensions for select/expand conversion
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                config.query_parameters.select = (
+                    select if isinstance(select, list) else [select]
+                )
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                config.query_parameters.expand = (
+                    expand if isinstance(expand, list) else [expand]
+                )
             if filter:
-                query_params.filter = filter
+                config.query_parameters.filter = filter
             if orderby:
-                query_params.orderby = orderby
+                config.query_parameters.orderby = orderby
             if search:
-                query_params.search = search
+                config.query_parameters.search = search
             if top is not None:
-                query_params.top = top
+                config.query_parameters.top = top
             if skip is not None:
-                query_params.skip = skip
+                config.query_parameters.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Copy headers only if needed to reduce allocations
 
             if headers:
-                config.headers = headers
+                config.headers = dict(headers)
 
             # Add consistency level for search operations in OneNote
             if search:
@@ -8739,7 +8741,17 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.onenote.notebooks.by_notebook_id(notebook_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).patch(body=request_body, request_configuration=config)
+            # Await the patch call (async API)
+            response = await self.client.me.onenote.notebooks.by_notebook_id(
+                notebook_id
+            ).sections.by_onenote_section_id(
+                onenoteSection_id
+            ).pages.by_onenote_page_id(
+                onenotePage_id
+            ).patch(
+                body=request_body,
+                request_configuration=config
+            )
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
