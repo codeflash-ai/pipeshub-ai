@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -107,32 +105,41 @@ class OneNoteDataSource:
 
     def _handle_onenote_response(self, response: object) -> OneNoteResponse:
         """Handle OneNote API response with comprehensive error handling."""
+        # Fast path for None
+        if response is None:
+            return OneNoteResponse(success=False, error="Empty response from OneNote API")
         try:
-            if response is None:
-                return OneNoteResponse(success=False, error="Empty response from OneNote API")
-
-            success = True
-            error_msg = None
 
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error)
+                )
             elif isinstance(response, dict) and 'error' in response:
-                success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
                 else:
                     error_msg = str(error_info)
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
             elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}",
+                )
+            # Default success – only reach this if not an error case
 
             return OneNoteResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
@@ -9014,38 +9021,57 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only create query_params and assign fields if present.
+            need_query_params = (
+                select or expand or filter or orderby or search or top is not None or skip is not None
+            )
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
+            # Avoid constructing `RequestConfiguration` if nothing is provided.
+            if need_query_params:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
-            if headers:
-                config.headers = headers
+            config_needed = bool(headers or query_params or search)
+            if config_needed:
+                config = RequestConfiguration()
+                if query_params is not None:
+                    config.query_parameters = query_params
+                if headers:
+                    config.headers = headers
+                # Add consistency header only if search is provided
+                if search:
+                    # Guarantee headers is a dict
+                    if not hasattr(config, "headers") or config.headers is None:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+            # Pull local ref to avoid repeated attribute lookups
+            notebooks = self.client.me.onenote.notebooks
+            by_notebook = notebooks.by_notebook_id(notebook_id)
+            sections = by_notebook.sections
+            by_section = sections.by_onenote_section_id(onenoteSection_id)
+            pages = by_section.pages
+            by_page = pages.by_onenote_page_id(onenotePage_id)
+            copy_to_section_post = by_page.copy_to_section.post
 
-            response = await self.client.me.onenote.notebooks.by_notebook_id(notebook_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).copy_to_section.post(body=request_body, request_configuration=config)
+            response = await copy_to_section_post(body=request_body, request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
