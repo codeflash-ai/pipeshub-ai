@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,14 +109,23 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
+
+            # Fast path for most common, non-error, already-successful responses.
+            # Avoid repeated hasattr/isinstance checks where possible.
+            # The following block minimizes repeated checks and branches.
             error_msg = None
+            success = True
+
+            response_type = type(response)
+
+            # Check for kiota-abstractions response.error attribute first
 
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
                 success = False
                 error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+            # dict error (Microsoft Graph json error payload)
+            elif response_type is dict and 'error' in response:
                 success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
@@ -10384,27 +10391,38 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Reuse local dicts to avoid unnecessary attribute assignment churn
+            qp = {}
+            # Inline all None checks and minimize type checks
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                qp['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                qp['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                qp['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                qp['orderby'] = orderby
             if search:
-                query_params.search = search
+                qp['search'] = search
             if top is not None:
-                query_params.top = top
+                qp['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                qp['skip'] = skip
+
+            # Only instantiate request config and assign if actually needed
+            query_params_obj = None
+            if qp:
+                query_params_obj = RequestConfiguration()
+                for k, v in qp.items():
+                    setattr(query_params_obj, k, v)
+
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params_obj:
+                config.query_parameters = query_params_obj
+
 
             if headers:
                 config.headers = headers
@@ -10415,7 +10433,10 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).onenote.notebooks.by_notebook_id(notebook_id).patch(body=request_body, request_configuration=config)
+            # Destructure the chain for clarity and slight micro-optimization for attribute access
+            user_route = self.client.users.by_user_id(user_id)
+            notebook_route = user_route.onenote.notebooks.by_notebook_id(notebook_id)
+            response = await notebook_route.patch(body=request_body, request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
