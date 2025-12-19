@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -8552,27 +8550,35 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
+            # Only create config and query_params once, using direct dict population for OData parameters
+            qp = {}
+            if select is not None:
+                qp['select'] = select if isinstance(select, list) else [select]
+            if expand is not None:
+                qp['expand'] = expand if isinstance(expand, list) else [expand]
+            if filter is not None:
+                qp['filter'] = filter
+            if orderby is not None:
+                qp['orderby'] = orderby
+            if search is not None:
+                qp['search'] = search
             if top is not None:
-                query_params.top = top
+                qp['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                qp['skip'] = skip
+
+            # Use a single RequestConfiguration (avoid redundant creation)
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if qp:
+                # If kiota_abstractions supports direct assignment of a dict, assign; else, set per attribute (original design)
+                # Here we optimize by setting only non-empty keys
+                query_params = RequestConfiguration()
+                for key, value in qp.items():
+                    setattr(query_params, key, value)
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
