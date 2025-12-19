@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -114,17 +112,20 @@ class OneNoteDataSource:
             success = True
             error_msg = None
 
-            # Enhanced error response handling for OneNote
-            if hasattr(response, 'error'):
+            # All error checks: short-circuit and only parse if necessary (predicate order: cheapest first)
+            # 1. dict with 'error' key
+            if isinstance(response, dict):
+                error_info = response.get('error')
+                if error_info is not None:
+                    success = False
+                    if isinstance(error_info, dict):
+                        error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
+                    else:
+                        error_msg = str(error_info)
+            # 2. attribute 'error' (in rare dynamic client objects)
+            elif hasattr(response, 'error'):
                 success = False
                 error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
-                else:
-                    error_msg = str(error_info)
             elif hasattr(response, 'code') and hasattr(response, 'message'):
                 success = False
                 error_msg = f"{response.code}: {response.message}"
@@ -12207,38 +12208,53 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            params = {}
             # Set query parameters using typed object properties
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                params['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                params['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                params['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                params['orderby'] = orderby
             if search:
-                query_params.search = search
+                params['search'] = search
             if top is not None:
-                query_params.top = top
+                params['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                params['skip'] = skip
+
+            query_params = None
+            if params:
+                query_params = RequestConfiguration()
+                # This assignment for each property is simple and avoids unnecessary creation
+                for k, v in params.items():
+                    setattr(query_params, k, v)
+
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
+                if not getattr(config, "headers", None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.users.by_user_id(user_id).onenote.notebooks.by_notebook_id(notebook_id).section_groups.by_section_group_id(sectionGroup_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).onenote_patch_content.post(body=request_body, request_configuration=config)
+            # "kwargs" ignored intentionally, as in source (for future extension)
+            response = await self.client.users.by_user_id(user_id) \
+                .onenote.notebooks.by_notebook_id(notebook_id) \
+                .section_groups.by_section_group_id(sectionGroup_id) \
+                .sections.by_onenote_section_id(onenoteSection_id) \
+                .pages.by_onenote_page_id(onenotePage_id) \
+                .onenote_patch_content.post(body=request_body, request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
