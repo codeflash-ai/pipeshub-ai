@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -8860,38 +8858,67 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Only instantiate the builder objects when needed
+            has_query = (
+                select or expand or filter or orderby or search or
+                top is not None or skip is not None
+            )
 
-            # Create proper typed request configuration
-            config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            if has_query:
+                query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
+                # assign lists only if present
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
-            if headers:
-                config.headers = headers
+            # Only construct config if needed (headers or query params)
+            need_config = bool(headers or search or query_params is not None)
+            if need_config:
+                config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
+                if query_params is not None:
+                    config.query_parameters = query_params
+                if headers:
+                    config.headers = headers
+                # Add ConsistencyLevel for search
+                if search:
+                    if not hasattr(config, 'headers') or config.headers is None:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+            else:
+                config = None
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+            # Precompute chained attributes
+            page_content_builder = (
+                self.client.me
+                .onenote
+                .notebooks
+                .by_notebook_id(notebook_id)
+                .sections
+                .by_onenote_section_id(onenoteSection_id)
+                .pages
+                .by_onenote_page_id(onenotePage_id)
+                .content
+            )
 
-            response = await self.client.me.onenote.notebooks.by_notebook_id(notebook_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).content.get(request_configuration=config)
+            # Directly pass config if not None, else avoid passing at all (in case SDK is sensitive to this)
+            if config is not None:
+                response = await page_content_builder.get(request_configuration=config)
+            else:
+                response = await page_content_builder.get()
+
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
