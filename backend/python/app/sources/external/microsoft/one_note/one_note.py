@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -16472,16 +16470,17 @@ class OneNoteDataSource:
         try:
             # Use typed query parameters
             query_params = SectionsRequestBuilder.SectionsRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
+
+            # Only set query object attributes if arguments are actually passed, minimizing function calls and attribute lookups
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
@@ -16492,14 +16491,20 @@ class OneNoteDataSource:
             config = SectionsRequestBuilder.SectionsRequestBuilderGetRequestConfiguration()
             config.query_parameters = query_params
 
-            if headers:
+            # Set headers if present (and avoid setting config.headers if not needed)
+            if headers is not None:
                 config.headers = headers
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+            # Instead of modifying/creating headers in two steps, batch ConsistencyLevel logic
+            consistency_level_needed = search is not None
+            if consistency_level_needed:
+                if config.headers is None:
+                    config.headers = {"ConsistencyLevel": "eventual"}
+                else:
+                    # Only set if not present to avoid redundant writes
+                    if "ConsistencyLevel" not in config.headers:
+                        config.headers["ConsistencyLevel"] = "eventual"
+
 
             response = await self.client.me.onenote.sections.by_onenote_section_id(onenoteSection_id).get(request_configuration=config)
             return self._handle_onenote_response(response)
