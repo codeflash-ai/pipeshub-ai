@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,28 +109,43 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
+            # Fast-path for success
+            if not (
+                hasattr(response, 'error') or
+                (isinstance(response, dict) and 'error' in response) or
+                (hasattr(response, 'code') and hasattr(response, 'message'))
+            ):
+                # The only place success=True, error=None is assigned
+                return OneNoteResponse(
+                    success=True,
+                    data=response,
+                    error=None,
+                )
+
+            # Error paths
 
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return OneNoteResponse(success=False, data=response, error=str(response.error))
+
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return OneNoteResponse(success=False, data=response, error=error_msg)
+
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
 
+                return OneNoteResponse(success=False, data=response, error=error_msg)
+
+            # Should be unreachable, fallback
             return OneNoteResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
@@ -14600,11 +14613,16 @@ class OneNoteDataSource:
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                headers_ref = config.headers if config.headers is not None else {}
+                headers_ref['ConsistencyLevel'] = 'eventual'
+                config.headers = headers_ref
 
-            response = await self.client.users.by_user_id(user_id).onenote.section_groups.by_section_group_id(sectionGroup_id).sections.by_onenote_section_id(onenoteSection_id).parent_notebook.get(request_configuration=config)
+            # Bypass intermediate variables for the composed calls
+            response = await self.client.users.by_user_id(user_id)\
+                .onenote.section_groups.by_section_group_id(sectionGroup_id)\
+                .sections.by_onenote_section_id(onenoteSection_id)\
+                .parent_notebook.get(request_configuration=config)
+
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
