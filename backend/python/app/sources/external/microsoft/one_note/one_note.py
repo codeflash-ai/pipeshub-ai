@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -13866,38 +13864,48 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Minimize instantiations and repeated attribute lookups by using local variables.
+            notebooks_builder = self.client.users.by_user_id(user_id).onenote.notebooks
+            section_builder = notebooks_builder.by_notebook_id(notebook_id).sections
+            page_builder = section_builder.by_onenote_section_id(onenoteSection_id).pages
+            parent_notebook_builder = page_builder.by_onenote_page_id(onenotePage_id).parent_notebook
 
-            # Create proper typed request configuration
-            config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            # Only create query parameters and request configuration if needed
+            has_any_param = bool(select or expand or filter or orderby or search or top is not None or skip is not None or headers)
+            # Only costly if there are lots of calls, so we optimize to skip creating unused objects
+            if has_any_param:
+                query_params = NotebooksRequestBuilder.NotebooksRequestBuilderGetQueryParameters()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
 
-            if headers:
-                config.headers = headers
+                config = NotebooksRequestBuilder.NotebooksRequestBuilderGetRequestConfiguration()
+                config.query_parameters = query_params
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
-                    config.headers = {}
-                config.headers['ConsistencyLevel'] = 'eventual'
+                if headers:
+                    config.headers = headers
 
-            response = await self.client.users.by_user_id(user_id).onenote.notebooks.by_notebook_id(notebook_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).parent_notebook.get(request_configuration=config)
+                if search:
+                    if not config.headers:
+                        config.headers = {}
+                    config.headers['ConsistencyLevel'] = 'eventual'
+
+                request_configuration = config
+            else:
+                request_configuration = None
+
+            response = await parent_notebook_builder.get(request_configuration=request_configuration)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
