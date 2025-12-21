@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -20748,8 +20746,10 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Compose query and headers more efficiently
+            config = RequestConfiguration()
+            query_params = config.query_parameters
+
             # Set query parameters using typed object properties
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
@@ -20766,20 +20766,20 @@ class OneNoteDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+            else:
+                config.headers = {}
+
+            # Add consistency level for search operations in OneNote
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.onenote.section_groups.by_section_group_id(sectionGroup_id).delete(request_configuration=config)
+            response = await self.client.me.onenote.section_groups.by_section_group_id(
+                sectionGroup_id
+            ).delete(request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
