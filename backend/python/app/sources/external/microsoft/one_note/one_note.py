@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -19662,8 +19660,11 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # Use a single config object and set fields directly for efficiency.
+            config = RequestConfiguration()
+            query_params = config  # Use config itself for query parameter fields
+
+            # Set query parameters using direct attribute assignment
             # Set query parameters using typed object properties
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
@@ -19680,20 +19681,21 @@ class OneNoteDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
+                if not getattr(config, 'headers', None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.section_groups.by_section_group_id(sectionGroup_id).sections.by_onenote_section_id(onenoteSection_id).pages.by_onenote_page_id(onenotePage_id).delete(request_configuration=config)
+            # Compose the chain in a single step (minor efficiency)
+            client_chain = self.client.groups.by_group_id(group_id) \
+                .onenote.section_groups.by_section_group_id(sectionGroup_id) \
+                .sections.by_onenote_section_id(onenoteSection_id) \
+                .pages.by_onenote_page_id(onenotePage_id)
+            response = await client_chain.delete(request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
