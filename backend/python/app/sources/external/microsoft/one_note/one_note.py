@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -20454,10 +20452,15 @@ class OneNoteDataSource:
         try:
             # Use typed query parameters
             query_params = OnenoteRequestBuilder.OnenoteRequestBuilderGetQueryParameters()
-            # Set query parameters using typed object properties
-            if select:
+
+            # Prefer dollar_select/dollar_expand if provided
+            if dollar_select:
+                query_params.select = dollar_select
+            elif select:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if dollar_expand:
+                query_params.expand = dollar_expand
+            elif expand:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
             if filter:
                 query_params.filter = filter
@@ -20475,12 +20478,14 @@ class OneNoteDataSource:
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()
+            else:
+                config.headers = {}
+
+            # Add consistency level for search operations in OneNote
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
-                    config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
             response = await self.client.groups.by_group_id(group_id).onenote.section_groups.by_section_group_id(sectionGroup_id).sections.by_onenote_section_id(onenoteSection_id).parent_section_group.get(request_configuration=config)
