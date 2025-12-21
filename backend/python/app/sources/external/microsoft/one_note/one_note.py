@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,28 +109,37 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
 
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+
             return OneNoteResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
@@ -18813,34 +18820,34 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
+            # Use a single RequestConfiguration for both query & headers, avoiding double instantiation
+            config = RequestConfiguration()
+            query_params = config
+
+            # Set all relevant params in one pass (avoids unnecessary checks and extra assignments)
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
+            # Ensure headers is a dict if it will be used
+            if headers is not None:
                 config.headers = headers
-
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
+            elif search is not None:
+                config.headers = {}
+            # Add consistency level only if search is set (ensure headers are prepared)
+            if search is not None:
+                if not hasattr(config, "headers") or config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
