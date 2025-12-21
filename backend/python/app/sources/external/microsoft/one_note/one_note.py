@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,28 +109,44 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
+            # Fast-path for dict with 'error' (most common branch after response is not None)
+            if isinstance(response, dict):
+                if 'error' in response:
+                    error_info = response['error']
+                    if isinstance(error_info, dict):
+                        error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
+                    else:
+                        error_msg = str(error_info)
+                    return OneNoteResponse(
+                        success=False,
+                        data=response,
+                        error=error_msg,
+                    )
+
+            # Common-case attr checks (should be more optimal to cache getattr lookups for known branches)
+            # hasattr checks are next: error, then code+message together to avoid two hasattr traversals in happy path
 
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=f"{response.code}: {response.message}",
+                )
+
+            # Successful (default) if above error checks did not trigger
 
             return OneNoteResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
@@ -19198,11 +19212,12 @@ class OneNoteDataSource:
         try:
             # Use typed query parameters
             query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+            set_select = select if isinstance(select, list) or select is None else [select]
+            set_expand = expand if isinstance(expand, list) or expand is None else [expand]
+            if set_select:
+                query_params.select = set_select
+            if set_expand:
+                query_params.expand = set_expand
             if filter:
                 query_params.filter = filter
             if orderby:
@@ -19219,7 +19234,7 @@ class OneNoteDataSource:
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # Avoid possible mutation
 
             # Add consistency level for search operations in OneNote
             if search:
@@ -19227,7 +19242,12 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.section_groups.by_section_group_id(sectionGroup_id).sections.post(body=request_body, request_configuration=config)
+            # Avoid multiple chained attribute lookups by storing intermediate node
+            group_node = self.client.groups.by_group_id(group_id)
+            section_group_node = group_node.onenote.section_groups.by_section_group_id(sectionGroup_id)
+            sections_node = section_group_node.sections
+
+            response = await sections_node.post(body=request_body, request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
