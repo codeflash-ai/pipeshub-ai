@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -21144,7 +21142,9 @@ class OneNoteDataSource:
             config.query_parameters = query_params
 
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # avoid mutation of input headers
+
+            # Add consistency level for search operations, in-place update above ensures we don't mutate caller data
 
             # Add consistency level for search operations in OneNote
             if search:
@@ -21152,7 +21152,10 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.me.onenote.section_groups.by_section_group_id(sectionGroup_id).sections.post(body=request_body, request_configuration=config)
+            # Await the POST operation (the only async/IO point)
+            response = await self.client.me.onenote.section_groups.by_section_group_id(sectionGroup_id).sections.post(
+                body=request_body, request_configuration=config
+            )
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
