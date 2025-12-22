@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -24809,27 +24807,28 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
+            # Use dict for query parameters to avoid object allocation overhead
+            query_params = {}
+            # Set query parameters using dict
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                query_params['select'] = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                query_params['expand'] = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                query_params['filter'] = filter
             if orderby:
-                query_params.orderby = orderby
+                query_params['orderby'] = orderby
             if search:
-                query_params.search = search
+                query_params['search'] = search
             if top is not None:
-                query_params.top = top
+                query_params['top'] = top
             if skip is not None:
-                query_params.skip = skip
+                query_params['skip'] = skip
 
             # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
+            if query_params:
+                config.query_parameters = query_params
 
             if headers:
                 config.headers = headers
