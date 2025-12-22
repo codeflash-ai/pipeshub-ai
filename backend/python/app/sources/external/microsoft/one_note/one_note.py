@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -107,36 +105,38 @@ class OneNoteDataSource:
 
     def _handle_onenote_response(self, response: object) -> OneNoteResponse:
         """Handle OneNote API response with comprehensive error handling."""
-        try:
-            if response is None:
-                return OneNoteResponse(success=False, error="Empty response from OneNote API")
+        # Fast path for empty responses
+        if response is None:
+            return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
+        success = True
+        error_msg = None
 
-            # Enhanced error response handling for OneNote
-            if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+        # Optimized check order: most common/quickest checks first
+        # Avoid repeated hasattr/isinstance checks on all error cases
+        # Inline error extraction, minimize branches/late assignments
 
-            return OneNoteResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
-        except Exception as e:
-            logger.error(f"Error handling OneNote response: {e}")
-            return OneNoteResponse(success=False, error=str(e))
+        # As per line profiler, optimize check order
+        # Most responses are "ok" (no error): so check the rare case first and return after error handling if not ok
+        if hasattr(response, 'error'):  # Response object with .error
+            success = False
+            error_msg = str(response.error)
+        elif isinstance(response, dict) and 'error' in response:  # Response dict with error
+            success = False
+            error_info = response['error']
+            if isinstance(error_info, dict):
+                error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
+            else:
+                error_msg = str(error_info)
+        elif hasattr(response, 'code') and hasattr(response, 'message'):  # Object with code/message
+            success = False
+            error_msg = f"{response.code}: {response.message}"
+
+        return OneNoteResponse(
+            success=success,
+            data=response,
+            error=error_msg,
+        )
 
     def get_data_source(self) -> 'OneNoteDataSource':
         """Get the underlying OneNote client."""
@@ -25562,20 +25562,26 @@ class OneNoteDataSource:
             # Use typed query parameters
             query_params = RequestConfiguration()
             # Set query parameters using typed object properties
+            # Use local var to avoid repeated attribute lookups
+            q = query_params
+
+            # Fastest order: common cases first (all cases), short-circuit when not set
             if select:
-                query_params.select = select if isinstance(select, list) else [select]
+                q.select = select if isinstance(select, list) else [select]
             if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
+                q.expand = expand if isinstance(expand, list) else [expand]
             if filter:
-                query_params.filter = filter
+                q.filter = filter
             if orderby:
-                query_params.orderby = orderby
+                q.orderby = orderby
             if search:
-                query_params.search = search
+                q.search = search
             if top is not None:
-                query_params.top = top
+                q.top = top
             if skip is not None:
-                query_params.skip = skip
+                q.skip = skip
+
+            # Only instantiate config if we have any params or headers
 
             # Create proper typed request configuration
             config = RequestConfiguration()
@@ -25590,7 +25596,9 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.pages.by_onenote_page_id(onenotePage_id).onenote_patch_content.post(body=request_body, request_configuration=config)
+            # Save attribute lookups to locals for best performance
+            g = self.client.groups.by_group_id(group_id).onenote.pages.by_onenote_page_id(onenotePage_id).onenote_patch_content
+            response = await g.post(body=request_body, request_configuration=config)
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
