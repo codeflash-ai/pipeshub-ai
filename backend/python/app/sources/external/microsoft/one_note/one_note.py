@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,29 +109,20 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
+                return OneNoteResponse(success=False, data=response, error=str(response.error))
+            if isinstance(response, dict) and 'error' in response:
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return OneNoteResponse(success=False, data=response, error=error_msg)
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return OneNoteResponse(success=False, data=response, error=f"{response.code}: {response.message}")
 
-            return OneNoteResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+            return OneNoteResponse(success=True, data=response, error=None)
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
             return OneNoteResponse(success=False, error=str(e))
@@ -24659,38 +24648,54 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
-                query_params.select = select if isinstance(select, list) else [select]
-            if expand:
-                query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
-                query_params.filter = filter
-            if orderby:
-                query_params.orderby = orderby
-            if search:
-                query_params.search = search
-            if top is not None:
-                query_params.top = top
-            if skip is not None:
-                query_params.skip = skip
+            # Compose query parameters and config in minimal steps
+            needs_query_params = any([
+                select, expand, filter, orderby, search, top is not None, skip is not None
+            ])
+            if needs_query_params:
+                query_params = RequestConfiguration()
+                if select:
+                    query_params.select = select if isinstance(select, list) else [select]
+                if expand:
+                    query_params.expand = expand if isinstance(expand, list) else [expand]
+                if filter:
+                    query_params.filter = filter
+                if orderby:
+                    query_params.orderby = orderby
+                if search:
+                    query_params.search = search
+                if top is not None:
+                    query_params.top = top
+                if skip is not None:
+                    query_params.skip = skip
+            else:
+                query_params = None
 
-            # Create proper typed request configuration
             config = RequestConfiguration()
-            config.query_parameters = query_params
-
+            if query_params is not None:
+                config.query_parameters = query_params
             if headers:
-                config.headers = headers
+                config.headers = headers.copy()  # defensive copy only if provided
 
-            # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
+                if config.headers is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.employee_experience.learning_providers.by_learningProvider_id(learningProvider_id).learning_contents(external_id='{external_id}').get(request_configuration=config)
+            # Only assign **kwargs if actually needed per SDK support (left as-is, for possible extension)
+            # Prepare for correct path arg injection
+            # Replace hardcoded '{external_id}' param usage by correct formatted externalId
+            query = (
+                self.client.employee_experience
+                    .learning_providers
+                    .by_learningProvider_id(learningProvider_id)
+                    .learning_contents
+            )
+            response = await query.get_by_external_id(
+                externalId,
+                request_configuration=config,
+                **kwargs
+            )
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
