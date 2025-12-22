@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,29 +109,31 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
+            # The order here is important for performance: check dict early, before slow hasattr()
+            if isinstance(response, dict):
+                if 'error' in response:
+                    error_info = response['error']
+                    if isinstance(error_info, dict):
+                        error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
+                    else:
+                        error_msg = str(error_info)
+                    return OneNoteResponse(success=False, data=response, error=error_msg)
+                # Fast track: if no error, return immediately
+                return OneNoteResponse(success=True, data=response, error=None)
+
+            # Check for generic object error attribute (could be an error object or error flag)
 
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
-                error_msg = f"{response.code}: {response.message}"
+                return OneNoteResponse(success=False, data=response, error=str(response.error))
 
-            return OneNoteResponse(
-                success=success,
-                data=response,
-                error=error_msg,
-            )
+            # Fallback to code/message pattern seen in some SDKs
+            if hasattr(response, 'code') and hasattr(response, 'message'):
+                return OneNoteResponse(success=False, data=response, error=f"{response.code}: {response.message}")
+
+            # If we reach here, treat as successful
+            return OneNoteResponse(success=True, data=response, error=None)
+
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
             return OneNoteResponse(success=False, error=str(e))
@@ -25635,31 +25635,42 @@ class OneNoteDataSource:
             # Use typed query parameters
             query_params = PagesRequestBuilder.PagesRequestBuilderGetQueryParameters()
             # Set query parameters using typed object properties
+            any_params = False
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
+                any_params = True
             if expand:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
+                any_params = True
             if filter:
                 query_params.filter = filter
+                any_params = True
             if orderby:
                 query_params.orderby = orderby
+                any_params = True
             if search:
                 query_params.search = search
+                any_params = True
             if top is not None:
                 query_params.top = top
+                any_params = True
             if skip is not None:
                 query_params.skip = skip
 
             # Create proper typed request configuration
+                any_params = True
+
             config = PagesRequestBuilder.PagesRequestBuilderGetRequestConfiguration()
-            config.query_parameters = query_params
+            if any_params:
+                config.query_parameters = query_params
+
 
             if headers:
                 config.headers = headers
 
             # Add consistency level for search operations in OneNote
             if search:
-                if not config.headers:
+                if not getattr(config, 'headers', None):
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
