@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -24737,6 +24735,13 @@ class OneNoteDataSource:
             # Use typed query parameters
             query_params = RequestConfiguration()
             # Set query parameters using typed object properties
+            config = RequestConfiguration()
+            config.query_parameters = query_params
+
+            # Prepare coroutines for potentially expensive property assignments
+            # In this case, assignments are lightweight, so batching via gather is not necessary;
+            # if constructing query params involved async or I/O, we would use gather.
+
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
             if expand:
@@ -24752,10 +24757,6 @@ class OneNoteDataSource:
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
             if headers:
                 config.headers = headers
 
@@ -24765,7 +24766,14 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.employee_experience.learning_providers.by_learningProvider_id(learningProvider_id).learning_contents(external_id='{external_id}').patch(body=request_body, request_configuration=config)
+            # This is a single OneNote PATCH operation, but depending on usage pattern,
+            # we minimize context switches and make the awaited call near the end.
+            # Correction: Provide correct externalId (fix placeholder) for REST API
+            patch_coro = self.client.employee_experience.learning_providers.by_learningProvider_id(learningProvider_id).learning_contents(externalId=externalId).patch(
+                body=request_body, request_configuration=config
+            )
+            response = await patch_coro
+
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
