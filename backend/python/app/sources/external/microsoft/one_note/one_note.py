@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,28 +109,38 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
-                success = False
-                error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
-                success = False
-                error_info = response['error']
-                if isinstance(error_info, dict):
-                    error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
-                else:
-                    error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
-                success = False
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=str(response.error),
+                )
+            if isinstance(response, dict):
+                error_info = response.get('error')
+                if error_info is not None:
+                    if isinstance(error_info, dict):
+                        error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
+                    else:
+                        error_msg = str(error_info)
+                    return OneNoteResponse(
+                        success=False,
+                        data=response,
+                        error=error_msg,
+                    )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 error_msg = f"{response.code}: {response.message}"
 
+                return OneNoteResponse(
+                    success=False,
+                    data=response,
+                    error=error_msg,
+                )
+            # If no error detected, success
             return OneNoteResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
@@ -25484,8 +25492,12 @@ class OneNoteDataSource:
         """
         # Build query parameters including OData for OneNote
         try:
-            # Use typed query parameters
-            query_params = RequestConfiguration()
+            # The following fields rarely exist, optimize object creation
+            # Create only one RequestConfiguration, reuse for query_params and headers
+            config = RequestConfiguration()
+            query_params = config
+
+            # Direct assignment, avoiding recreation of query_params object
             # Set query parameters using typed object properties
             if select:
                 query_params.select = select if isinstance(select, list) else [select]
@@ -25501,9 +25513,6 @@ class OneNoteDataSource:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
-
-            # Create proper typed request configuration
-            config = RequestConfiguration()
             config.query_parameters = query_params
 
             if headers:
@@ -25515,7 +25524,9 @@ class OneNoteDataSource:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.pages.by_onenote_page_id(onenotePage_id).content.put(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(group_id).onenote.pages.by_onenote_page_id(onenotePage_id).content.put(
+                body=request_body, request_configuration=config
+            )
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
