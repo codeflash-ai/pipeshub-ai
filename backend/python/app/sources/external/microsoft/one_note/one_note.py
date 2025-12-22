@@ -1,5 +1,3 @@
-
-
 import json
 import logging
 from dataclasses import asdict
@@ -111,28 +109,42 @@ class OneNoteDataSource:
             if response is None:
                 return OneNoteResponse(success=False, error="Empty response from OneNote API")
 
-            success = True
-            error_msg = None
-
             # Enhanced error response handling for OneNote
             if hasattr(response, 'error'):
                 success = False
                 error_msg = str(response.error)
-            elif isinstance(response, dict) and 'error' in response:
+                return OneNoteResponse(
+                    success=success,
+                    data=response,
+                    error=error_msg,
+                )
+            if isinstance(response, dict) and 'error' in response:
                 success = False
                 error_info = response['error']
                 if isinstance(error_info, dict):
                     error_msg = f"{error_info.get('code', 'Unknown')}: {error_info.get('message', 'No message')}"
                 else:
                     error_msg = str(error_info)
-            elif hasattr(response, 'code') and hasattr(response, 'message'):
+                return OneNoteResponse(
+                    success=success,
+                    data=response,
+                    error=error_msg,
+                )
+            if hasattr(response, 'code') and hasattr(response, 'message'):
                 success = False
                 error_msg = f"{response.code}: {response.message}"
 
+                return OneNoteResponse(
+                    success=success,
+                    data=response,
+                    error=error_msg,
+                )
+
+            # Only success path needs these defaults now
             return OneNoteResponse(
-                success=success,
+                success=True,
                 data=response,
-                error=error_msg,
+                error=None,
             )
         except Exception as e:
             logger.error(f"Error handling OneNote response: {e}")
@@ -25857,36 +25869,36 @@ class OneNoteDataSource:
         try:
             # Use typed query parameters
             query_params = RequestConfiguration()
-            # Set query parameters using typed object properties
-            if select:
+            # Fast-path property assignment - more readable and avoids extra list wrappings if already correct type.
+            if select is not None:
                 query_params.select = select if isinstance(select, list) else [select]
-            if expand:
+            if expand is not None:
                 query_params.expand = expand if isinstance(expand, list) else [expand]
-            if filter:
+            if filter is not None:
                 query_params.filter = filter
-            if orderby:
+            if orderby is not None:
                 query_params.orderby = orderby
-            if search:
+            if search is not None:
                 query_params.search = search
             if top is not None:
                 query_params.top = top
             if skip is not None:
                 query_params.skip = skip
 
-            # Create proper typed request configuration
-            config = RequestConfiguration()
-            config.query_parameters = query_params
-
-            if headers:
+            config = query_params  # Reuse the object instead of a second RequestConfiguration()
+            if headers is not None:
                 config.headers = headers
 
-            # Add consistency level for search operations in OneNote
-            if search:
-                if not config.headers:
+            # Add consistency level header only if search exists and as efficiently as possible
+            if search is not None:
+                if getattr(config, "headers", None) is None:
                     config.headers = {}
                 config.headers['ConsistencyLevel'] = 'eventual'
 
-            response = await self.client.groups.by_group_id(group_id).onenote.resources.by_resource_id(onenoteResource_id).content.put(body=request_body, request_configuration=config)
+            response = await self.client.groups.by_group_id(group_id).onenote.resources.by_resource_id(onenoteResource_id).content.put(
+                body=request_body,
+                request_configuration=config
+            )
             return self._handle_onenote_response(response)
         except Exception as e:
             return OneNoteResponse(
